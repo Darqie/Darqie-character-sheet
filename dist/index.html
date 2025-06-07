@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Лист Персонажа</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" />
+    <link href="https://fonts.googleapis.com/css2?family=Kurale&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==>" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    
+    
+  <script type="module" crossorigin src="/assets/index-CNUekboi.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-CoGOJ35u.css">
+</head>
+<body>
+    <div class="main-container">
+        <div class="left-panel">
+            <div class="character-controls">
+                <div class="character-select-group">
+                    <select id="characterSelect"></select>
+                    <button id="addCharacterButton" title="Додати персонажа"><i class="fas fa-plus"></i></button>
+                    <button id="deleteCharacterButton" title="Видалити персонажа"><i class="fas fa-trash-alt"></i></button>
+                </div>
+                <div class="player-name-block">
+                    <div class="name-input-group">
+                        <i class="fas fa-user" title="Ім'я гравця"></i>
+                        <select id="playerNameSelect"></select>
+                    </div>
+                </div>
+            </div>
+
+            <div id="characterSheetContainer" class="character-sheet">
+	
+                <div class="header-block">
+                    <div>
+                        <div class="block"><h2>КЛАС ТА РІВЕНЬ</h2></div>
+                        <input type="text" id="characterClassLevel" placeholder="Введіть клас та рівень...">
+                    </div>
+                    <div>
+                        <div class="block"><h2>ПЕРЕДИСТОРІЯ</h2></div>
+                        <input type="text" id="background" placeholder="Введіть передісторію...">
+                    </div>
+                </div>
+                
+                <div class="header-block">
+                    <div>
+                        <div class="block"><h2>РАСА</h2></div>
+                        <input type="text" id="characterRace" placeholder="Введіть расу...">
+                    </div>
+                    <div>
+                        <div class="block"><h2>СВІТОГЛЯД</h2></div>
+                        <input type="text" id="alignment" placeholder="Введіть світогляд...">
+                    </div>
+                </div>
+
+                <div class="block"><h2>ХАРАКТЕРИСТИКИ</h2></div>
+                <div class="ability-scores">
+                    <div class="ability-score-item">
+                        <label for="strengthScore">Сила</label>
+                        <input type="number" id="strengthScore" placeholder="0">
+                    </div>
+                    <div class="ability-score-item">
+                        <label for="dexterityScore">Спритність</label>
+                        <input type="number" id="dexterityScore" placeholder="0">
+                    </div>
+                    <div class="ability-score-item">
+                        <label for="constitutionScore">Статура</label>
+                        <input type="number" id="constitutionScore" placeholder="0">
+                    </div>
+                    <div class="ability-score-item">
+                        <label for="intelligenceScore">Інтелект</label>
+                        <input type="number" id="intelligenceScore" placeholder="0">
+                    </div>
+                    <div class="ability-score-item">
+                        <label for="wisdomScore">Мудрість</label>
+                        <input type="number" id="wisdomScore" placeholder="0">
+                    </div>
+                    <div class="ability-score-item">
+                        <label for="charismaScore">Харизма</label>
+                        <input type="number" id="charismaScore" placeholder="0">
+                    </div>
+                </div>
+
+                <div class="combat-stats">
+                    </div>
+
+                <div class="block"><h2>РЯТУВАЛЬНІ КИДКИ ВІД СМЕРТІ</h2></div>
+                <div class="death-saves">
+                    <div>
+                        <label>Успіхи</label>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="deathSavesSuccess1">
+                            <input type="checkbox" id="deathSavesSuccess2">
+                            <input type="checkbox" id="deathSavesSuccess3">
+                        </div>
+                    </div>
+                    <div>
+                        <label>Провали</label>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="deathSavesFailure1">
+                            <input type="checkbox" id="deathSavesFailure2">
+                            <input type="checkbox" id="deathSavesFailure3">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="block"><h2>ВОЛОДІННЯ ТА МОВИ</h2></div>
+                <textarea id="proficienciesAndLanguages" placeholder="Перерахуйте володіння та мови..."></textarea>
+
+                <div class="block"><h2>СПОСНАРЯЖЕННЯ</h2></div>
+                <textarea id="equipment" placeholder="Перерахуйте спорядження..."></textarea>
+
+                <div class="block"><h2>СОЮЗНИКИ ТА ОРГАНІЗАЦІЇ</h2></div>
+                <textarea id="alliesAndOrganizations" placeholder="Опишіть союзників та організації..."></textarea>
+
+                <div class="block"><h2>ІСТОРІЯ ПЕРСОНАЖА</h2></div>
+                <textarea id="characterHistory" placeholder="Напишіть історію персонажа..."></textarea>
+
+                <div class="block"><h2>ДОДАТКОВІ ОСОБЛИВОСТІ ТА ТАЛАНТИ</h2></div>
+                <textarea id="additionalFeatures" placeholder="Опишіть додаткові особливості..."></textarea>
+
+                <div class="block"><h2>НОТАТКИ</h2></div>
+                <textarea id="notes" placeholder="Додаткові нотатки..."></textarea>
+            </div>
+        </div>
+
+        <div class="right-panel">
+            <div id="photoBlock" class="photo-block">
+                <!-- Поле Ім’я персонажа без іконки, без відступів -->
+                <div style="margin: 0; padding: 0;">
+                    <input type="text" id="characterName" placeholder="Ім'я персонажа" style="width: 100%; margin: 0; padding: 2px;">
+                </div>
+
+                <div class="photo-container">
+                    <img id="characterPhotoImg" src="data:image/svg+xml,%3c?xml%20version='1.0'%20?%3e%3c!--%20Uploaded%20to:%20SVG%20Repo,%20www.svgrepo.com,%20Generator:%20SVG%20Repo%20Mixer%20Tools%20--%3e%3csvg%20fill='%23000000'%20width='800px'%20height='800px'%20viewBox='0%200%2032%2032'%20data-name='Layer%201'%20id='Layer_1'%20xmlns='http://www.w3.org/2000/svg'%3e%3crect%20height='1'%20width='12'%20x='10'%20y='2'/%3e%3crect%20height='1'%20width='12'%20x='10'%20y='2'/%3e%3crect%20height='1'%20transform='translate(-9.5%2022.5)%20rotate(-90)'%20width='20'%20x='-3.5'%20y='15.5'/%3e%3crect%20height='1'%20transform='translate(11.5%2039.5)%20rotate(-90)'%20width='16'%20x='17.5'%20y='13.5'/%3e%3crect%20height='1'%20width='6'%20x='17'%20y='6'/%3e%3crect%20height='1'%20width='14'%20x='9'%20y='9'/%3e%3crect%20height='1'%20width='14'%20x='9'%20y='12'/%3e%3crect%20height='1'%20width='14'%20x='9'%20y='15'/%3e%3crect%20height='1'%20width='14'%20x='9'%20y='18'/%3e%3crect%20height='1'%20width='10'%20x='9'%20y='21'/%3e%3crect%20height='1'%20width='7'%20x='9'%20y='24'/%3e%3cpath%20d='M22,2V3h2a1,1,0,0,1,1,1V6h1V4a2,2,0,0,0-2-2Z'/%3e%3cpath%20d='M10,2V3H8A1,1,0,0,0,7,4V6H6V4A2,2,0,0,1,8,2Z'/%3e%3cpath%20d='M8,30V29H8a1,1,0,0,1-1-1V26H6v2a2,2,0,0,0,2,2Z'/%3e%3cpath%20d='M21.91,21.15c-.57-.32-.91-.72-.91-1.15a6.09,6.09,0,0,1-.21,1.59c-1,4.07-6,7.18-12.12,7.4H8v1h.72c8.86-.15,16.07-3.15,17.14-7A3.77,3.77,0,0,0,26,22,8.72,8.72,0,0,1,21.91,21.15Zm-5.78,7a10.5,10.5,0,0,0,5.54-6,8.94,8.94,0,0,0,3.15.79C24.07,25,20.91,27,16.13,28.13Z'/%3e%3c/svg%3e" alt="Натисніть для завантаження фотографії" title="Натисніть для завантаження фотографії">
+                    <div id="photoControls">
+                        <button id="replacePhotoButton" title="Завантажити фотографію"><i class="fas fa-upload"></i></button>
+                        <button id="deletePhotoButton" title="Видалити фотографію"><i class="fas fa-trash-alt"></i></button>
+                    </div>
+                </div>
+                <div class="quick-stats-block">
+                    <div class="quick-stat-item">
+                        <i class="fas fa-heart" title="ХП"></i>
+                        <input type="number" id="healthPoints" placeholder="0">
+                    </div>
+                    <div class="quick-stat-item">
+                        <i class="fas fa-shield-alt" title="Клас Броні"></i>
+                        <input type="number" id="armorClass" placeholder="0">
+                    </div>
+                    <div class="quick-stat-item">
+                        <i class="fas fa-running" title="Швидкість"></i>
+                        <input type="number" id="speed" placeholder="0">
+                    </div>
+                    <div class="quick-stat-item">
+                        <i class="fas fa-dice" title="Ініціатива"></i>
+                        <input type="number" id="initiative" placeholder="0">
+                    </div>
+                </div>
+                <input type="file" id="photoFileInput" accept="image/*" style="display: none;">
+            </div>
+        </div>
+    </div>
+<div id="noCharacterMessage" style="display: none; text-align: center; margin-top: 20px;">
+  У вас ще немає персонажів.
+</div>
+</body>
+</html>

@@ -1,0 +1,4 @@
+[[headers]]
+  for = "/*" # Застосовуємо ці заголовки для всіх файлів на сайті
+  [headers.values]
+    Access-Control-Allow-Origin = "https://www.owlbear.rodeo" # Дозволяємо доступ з домену Owlbear Rodeo
