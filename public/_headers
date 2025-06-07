@@ -1,3 +1,7 @@
 /manifest.json
   Content-Type: application/json
   Access-Control-Allow-Origin: *
+
+/icon.svg
+  Content-Type: image/svg+xml
+  Access-Control-Allow-Origin: *
