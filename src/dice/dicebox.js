@@ -1,8 +1,8 @@
 import { DiceBox } from 'dice-box'
 import { Howl } from 'howler'
 
-let diceBox: DiceBox | null = null
-let sound: Howl | null = null
+let diceBox = null
+let sound = null
 
 export async function initDiceBox() {
   const canvas = document.createElement('canvas')
@@ -28,7 +28,7 @@ export async function initDiceBox() {
   })
 }
 
-export function rollDie(type: string) {
+export function rollDie(type) {
   if (diceBox && sound) {
     sound.play()
     diceBox.roll(type)
