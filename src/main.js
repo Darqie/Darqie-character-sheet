@@ -3,7 +3,19 @@ import javascriptLogo from './javascript.svg'
 import viteLogo from '/vite.svg'
 import { initDiceBox, rollDie } from './dice/dicebox.js'
 import { setupCounter } from './counter.js'
+window.addEventListener('DOMContentLoaded', async () => {
+  const button = document.createElement('button')
+  button.textContent = '🎲 Кинути D20'
+  button.style.padding = '1rem'
+  button.style.fontSize = '1.2rem'
+  document.body.appendChild(button)
 
+  await initDiceBox()
+
+  button.addEventListener('click', () => {
+    rollDie('d20')
+  })
+})
 document.querySelector('#app').innerHTML = `
   <div>
     <a href="https://vite.dev" target="_blank">
