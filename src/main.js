@@ -1,6 +1,7 @@
 import './style.css'
 import javascriptLogo from './javascript.svg'
 import viteLogo from '/vite.svg'
+import { initDiceBox, rollDie } from './dice/dicebox.js'
 import { setupCounter } from './counter.js'
 
 document.querySelector('#app').innerHTML = `
