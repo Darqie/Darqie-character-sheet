@@ -5,3 +5,7 @@
 /icon.svg
   Content-Type: image/svg+xml
   Access-Control-Allow-Origin: *
+
+/no-image-placeholder.svg
+  Content-Type: image/svg+xml
+  Access-Control-Allow-Origin: *

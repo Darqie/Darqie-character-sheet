@@ -1,14 +1,15 @@
 {
   "name": "Darqie character sheet",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "manifest_version": 3,
   "description": "Розширення для створення листів персонажів",
   "author": "darqie",
+  "icon": "/icon.svg",
   "action": {
     "title": "Darqie character sheet",
     "icon": "/icon.svg",
     "popover": "/index.html",
-    "height": 820,
-    "width": 1000
+    "height": 700,
+    "width": 1060
   }
 }

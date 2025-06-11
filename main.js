@@ -90,13 +90,23 @@ async function populatePlayerSelect() {
 
   const assignedName = currentSheet.playerName;
 
-  if (!isGM) {
-    select.value = assignedName || '';
-    select.setAttribute('disabled', 'true');
-  } else {
-    select.value = assignedName || '';
-    select.removeAttribute('disabled');
+if (!isGM) {
+  // Якщо гравець отримав лист — показуємо лише його ім’я
+  const ownOption = [...select.options].find(o => o.value === currentPlayerName);
+  if (!ownOption) {
+    const option = document.createElement('option');
+    option.value = currentPlayerName;
+    option.textContent = currentPlayerName;
+    select.appendChild(option);
   }
+
+  select.value = assignedName || currentPlayerName || '';
+  select.setAttribute('disabled', 'true');
+} else {
+  select.value = assignedName || '';
+  select.removeAttribute('disabled');
+}
+
 }
 
 async function saveSheetData() {
@@ -273,17 +283,29 @@ function setupCharacterButtons() {
     });
   }
 
-  if (delBtn && isGM) {
-    delBtn.addEventListener('click', async () => {
-      if (!confirm('Ви дійсно хочете видалити цього персонажа?')) return;
-      characterSheets.splice(activeSheetIndex, 1);
-      activeSheetIndex = Math.max(0, activeSheetIndex - 1);
-      await saveSheetData();
-      updateCharacterDropdown();
-      loadSheetData();
-      populatePlayerSelect();
-    });
-  }
+if (delBtn && isGM) {
+  delBtn.addEventListener('click', async () => {
+    if (!confirm('Ви дійсно хочете видалити цього персонажа?')) return;
+
+    // Видаляємо активного персонажа
+    characterSheets.splice(activeSheetIndex, 1);
+
+    // Оновлюємо індекс активного персонажа
+    if (characterSheets.length === 0) {
+      activeSheetIndex = 0;
+    } else {
+      activeSheetIndex = Math.min(activeSheetIndex, characterSheets.length - 1);
+    }
+
+    // Оновлення інтерфейсу перед збереженням
+    updateCharacterDropdown();
+    loadSheetData();
+    populatePlayerSelect();
+
+    // Збереження лише після оновлення
+    await saveSheetData();
+  });
+}
 
   if (photoBtn && photoInput && photoImg && deletePhotoBtn) {
     photoBtn.addEventListener('click', () => {
@@ -361,6 +383,11 @@ window.addEventListener('load', async () => {
       }
     });
 
+    OBR.party.onChange(() => {
+      populatePlayerSelect(); // оновлює select із гравцями
+    });
+
+
     OBR.broadcast.onMessage("character-assignment", async (data) => {
       if (data.playerName === currentPlayerName) {
         const metadata = await OBR.room.getMetadata();
@@ -378,5 +405,21 @@ window.addEventListener('load', async () => {
         connectInputsToSave();
       }
     });
+  });
+});
+
+document.querySelectorAll('.stat-input-wrapper').forEach(wrapper => {
+  const input = wrapper.querySelector('input');
+  const minus = wrapper.querySelector('.stat-btn.minus');
+  const plus = wrapper.querySelector('.stat-btn.plus');
+
+  minus?.addEventListener('click', () => {
+    input.stepDown();
+    input.dispatchEvent(new Event('input'));
+  });
+
+  plus?.addEventListener('click', () => {
+    input.stepUp();
+    input.dispatchEvent(new Event('input'));
   });
 });

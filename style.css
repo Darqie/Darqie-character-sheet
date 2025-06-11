@@ -42,15 +42,12 @@ body {
   max-width: 700px;
 }
 
+
 .right-panel {
-  display: flex;
-  flex-direction: column;
-  width: 220px;
-  flex-shrink: 0;
-  gap: 20px;
-  position: sticky;
-  top: 20px;
+  flex: 1;
+  max-width: 100%;
 }
+
 
 /* ------------------------ */
 /* КЕРУВАННЯ ПЕРСОНАЖАМИ   */
@@ -69,6 +66,17 @@ body {
   position: sticky;
   top: 0;
   z-index: 1000;
+  background-color: rgba(33, 37, 51, 0.5);
+  border: 1px solid #ffffff0;
+  border-radius: 8px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(10px);
+  padding: 15px;
+  color: #e0e0e0;
+  font-size: 1em;
+  resize: vertical;
+  width: 100%;
+  margin-bottom: 15px;
 }
 
 
@@ -188,16 +196,18 @@ textarea::placeholder {
 /* ЗАГОЛОВКИ ТА БЛОКИ      */
 /* ------------------------ */
 .block {
-  background-color: #3f445c;
-  padding: 8px 15px;
-  border-radius: 5px;
-  margin-bottom: 10px;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  padding: 15px;
+  margin-bottom: 15px;
+  border-radius: 8px;
+  border: 1px solid #3f445c;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
+  background-color: rgba(33, 37, 51, 0.5);
+  backdrop-filter: blur(10px);
 }
 
 .block h2 {
   margin: 0;
-  font-size: 1.1em;
+  font-size: 1.em;
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -218,18 +228,20 @@ textarea::placeholder {
   display: flex;
   flex-direction: column;
   align-items: center;
-  background-color: #2b3044;
   padding: 10px;
   border-radius: 8px;
-  border: 1px solid #3f445c;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(33, 37, 51, 0.5);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
+  background-color: rgba(33, 37, 51, 0.5);
+  backdrop-filter: blur(10px);
 }
 
 .ability-score-item label {
-  font-size: 0.9em;
-  font-weight: 500;
+  font-family: 'Kurale', serif;
+  font-size: 1.4em;
+  font-weight: 1000;
   margin-bottom: 5px;
-  color: #b0b0b0;
+  color: #f0f0f0;
   text-transform: uppercase;
 }
 
@@ -238,8 +250,8 @@ textarea::placeholder {
   text-align: center;
   font-size: 1em;
   font-weight: bold;
-  background-color: #2b3044;
-  border: 1px solid #5a607c;
+  background-color: #f0f0f0;
+  border: 1px solid #f0f0f0;
   border-radius: 5px;
   padding: 10px;
 }
@@ -248,6 +260,8 @@ textarea::placeholder {
 /* ФОТО ТА ШВИДКІ СТАТИСТИКИ */
 /* ------------------------ */
 #photoBlock {
+  
+  
   width: 100%;
   padding: 15px;
   border-radius: 8px;
@@ -256,22 +270,13 @@ textarea::placeholder {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 15px;
+  gap: 5px;
 }
 
-.photo-container {
-  width: 100%;
-  height: 550px;
-  overflow: hidden;
-  background-color: #212533;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  position: relative;
-  cursor: pointer;
-}
+
 
 #characterPhotoImg {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -366,16 +371,14 @@ textarea::placeholder {
     align-items: center;
   }
 
-  .right-panel {
-    width: 100%;
-    position: static;
-    margin-top: 20px;
-    gap: 15px;
-  }
+  
+.right-panel {
+  flex: 1;
+  max-width: 100%;
+}
 
-  .photo-container {
-    height: 250px;
-  }
+
+  
 
   .quick-stats-block {
     grid-template-columns: repeat(4, 1fr);
@@ -396,4 +399,239 @@ textarea::placeholder {
   background-position: right 10px center;
   background-size: 12px;
   color: #e0e0e0;
+}
+
+
+
+
+.stat-input-wrapper input[type=number] {
+  -webkit-appearance: none;
+  -moz-appearance: textfield;
+  appearance: textfield;
+  padding: 6px 30px;
+  width: 100%;
+  font-size: 1em;
+  box-sizing: border-box;
+  text-align: center;
+  border: 1px solid rgba(100, 100, 100, 2);
+
+}
+
+
+
+.stat-btn.minus {
+  left: 4px;
+}
+
+.stat-btn.plus {
+  right: 4px;
+}
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type=number] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+
+
+
+
+
+
+.stat-btn.minus {
+  left: 4px;
+}
+
+.stat-btn.plus {
+  right: 4px;
+}
+
+.character-photo-wrapper {
+  width: 340px;
+}
+
+
+.photo-wrapper {
+  width: 300px;
+}
+
+
+.stat-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 26px;
+  height: 26px;
+  background: transparent;
+  border: 1px solid #c0c0c0;
+  color: #c0c0c0;
+  font-size: 16px;
+  font-weight: bold;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+
+.stat-input-wrapper {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+  height: 36px;
+}
+
+.stat-input-wrapper input {
+  width: 100%;
+  height: 100%;
+  padding: 6px 32px;
+  box-sizing: border-box;
+  font-size: 16px;
+  text-align: center;
+  background-color: transparent;
+  border: 1px solid #5a607c;
+  color: white;
+  border-radius: 4px;
+}
+
+.quick-stats-block i.fa-heart {
+  color: rgba(231, 76, 60, 0.8) !important;
+  text-shadow: 0 0 3px rgba(231, 76, 60, 0.2);
+}
+
+
+.quick-stats-block i.fa-shield-halved {
+  color: rgba(52, 152, 219, 0.75) !important;
+  text-shadow: 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+
+.quick-stats-block i.fa-person-running {
+  color: rgba(52, 152, 219, 0.75) !important;
+  text-shadow: 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.quick-stats-block i.fa-shield,
+.quick-stats-block i.fa-shield-halved {
+  color: rgba(52, 152, 219, 0.75) !important;
+  text-shadow: 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.quick-stats-block i.fa-shield-alt {
+  color: rgba(52, 152, 219, 0.8);
+  text-shadow: 0 0 3px rgba(52, 152, 219, 0.2);
+}
+
+@media (max-height: 900px) {
+  
+}
+
+@media (max-height: 700px) {
+  
+}
+
+
+html, body {
+  height: 100%;
+}
+
+.right-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+#photoBlock {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  border: none;
+  
+  
+}
+
+
+.photo-container {
+  width: 100%;
+  height: calc(80vh - 100px);
+  min-height: calc(80vh -100px);
+  max-height: calc(80vh - 100px);
+  overflow: hidden;
+  background-color: #212533;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  cursor: pointer;
+}
+
+
+
+#addCharacterButton,
+#deleteCharacterButton {
+  background-color: rgba(63, 68, 92, 0.8);
+  color: white;
+  border: 1px solid #5a607c;
+  border-radius: 5px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 1em;
+  backdrop-filter: blur(5px);
+  transition: background-color 0.2s ease;
+}
+
+#addCharacterButton:hover,
+#deleteCharacterButton:hover {
+  background-color: #6a90ff;
+  border-color: #6a90ff;
+}
+
+
+
+/* Єдиний стиль для блоків правої панелі */
+.right-panel section,
+.right-panel .info-block,
+.right-panel .stat-block,
+.right-panel .class-level,
+.right-panel .history,
+.right-panel .traits,
+.right-panel .skills {
+  width: 100%;
+  padding: 15px;
+  margin-bottom: 15px;
+  background-color: rgba(33, 37, 51, 0.5);
+  border-radius: 8px;
+  border: 1px solid #3f445c;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(10px);
+}
+
+
+/* Уніфікований стиль textarea */
+textarea {
+  background-color: rgba(33, 37, 51, 0.5);
+  border: 1px solid #3f445c;
+  border-radius: 8px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(10px);
+  padding: 15px;
+  color: #e0e0e0;
+  font-size: 1em;
+  resize: vertical;
+  width: 100%;
+  margin-bottom: 15px;
+}
+
+
+
+#abilityScoresBlock {
+
+
 }
