@@ -1,6 +1,3 @@
-/* ------------------------ */
-/* ОСНОВНІ СТИЛІ СТОРІНКИ  */
-/* ------------------------ */
 body {
   font-family: 'Roboto', sans-serif;
   margin: 0;
@@ -22,9 +19,6 @@ body {
   box-sizing: border-box;
 }
 
-/* ------------------------ */
-/* КОНТЕЙНЕРИ / РОЗТАШУВАННЯ */
-/* ------------------------ */
 .main-container {
   display: flex;
   gap: 20px;
@@ -42,43 +36,30 @@ body {
   max-width: 700px;
 }
 
-
 .right-panel {
-  flex: 1;
-  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  width: 220px;
+  flex-shrink: 0;
+  gap: 20px;
+  position: sticky;
+  top: 20px;
 }
 
-
-/* ------------------------ */
-/* КЕРУВАННЯ ПЕРСОНАЖАМИ   */
-/* ------------------------ */
 .character-controls {
   display: flex;
   gap: 20px;
   margin-bottom: 20px;
-  background-color: #2b3044;
-  padding: 10px;
-  border-radius: 8px;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  padding-bottom: 10px;
+  border-bottom: 1px solid white;
   align-items: center;
   justify-content: space-between;
-
-  position: sticky;
+  background-color: transparent;
+  border-radius: 0;
+  box-shadow: none;
   top: 0;
   z-index: 1000;
-  background-color: rgba(33, 37, 51, 0.5);
-  border: 1px solid #ffffff0;
-  border-radius: 8px;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(10px);
-  padding: 15px;
-  color: #e0e0e0;
-  font-size: 1em;
-  resize: vertical;
-  width: 100%;
-  margin-bottom: 15px;
 }
-
 
 .character-select-group {
   display: flex;
@@ -88,41 +69,33 @@ body {
   max-width: 65%;
 }
 
-#characterSelect {
+#characterSelect,
+#playerNameSelect {
   flex-grow: 1;
   padding: 8px 10px;
   border: 1px solid #5a607c;
-  border-radius: 5px;
-  background-color: #212533;
+  border-radius: 6px;
+  background-color: rgba(33, 37, 51, 0.2);
   font-size: 1em;
   appearance: none;
+  backdrop-filter: blur(6px);
   background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292%22%20height%3D%22292%22%3E%3Cpath%20fill%3D%22%23e0e0e0%22%20d%3D%22M287%2069L146%20208%205%2069z%22%2F%3E%3C%2Fsvg%3E');
   background-repeat: no-repeat;
   background-position: right 10px center;
   background-size: 12px;
   color: #e0e0e0;
+  border: none !important;
+  color: inherit !important;
+  max-width: 220px;
 }
 
-.character-controls button {
-  background-color: #6a90ff;
-  color: white;
-  border: none;
-  padding: 10px 15px;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 1em;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  transition: background-color 0.2s ease;
-}
+#characterSelect option,
+#playerNameSelect option {
+background-color: rgba(67, 45, 51, 0.7);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  color: #e0e0e0;
 
-.character-controls button:hover {
-  background-color: #4a6bff;
-}
-
-.character-controls button i {
-  color: white;
 }
 
 .player-name-block {
@@ -130,6 +103,7 @@ body {
   min-width: 150px;
   display: flex;
   align-items: center;
+  gap: 8px;
   height: 100%;
 }
 
@@ -137,29 +111,37 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  background-color: #212533;
-  border: 1px solid #5a607c;
-  border-radius: 5px;
-  padding: 0 10px;
-  height: 40px;
+  height: 30px;
+  position: relative;
+  left: -50px;
+  flex-grow: 1;
 }
 
 .player-name-block .name-input-group i {
+  position: absolute;
+  left: -35px;
+  top: 50%;
+  transform: translateY(-50%);
   font-size: 1.2em;
   color: #e0e0e0;
-  flex-shrink: 0;
+  pointer-events: none;
 }
 
-#playerName {
-  padding: 0;
-  margin: 0;
-  height: 100%;
-  border: none;
-  background: transparent;
-  text-align: left;
+.character-controls button {
+  background-color: rgba(63, 68, 92, 0.8);
+  color: white;
+  border: 1px solid #5a607c;
+  border-radius: 5px;
+  padding: 8px 12px;
+  cursor: pointer;
   font-size: 1em;
-  width: 100%;
-  color: #e0e0e0;
+  backdrop-filter: blur(5px);
+  transition: background-color 0.2s ease;
+}
+
+.character-controls button:hover {
+  background-color: #6a90ff;
+  border-color: #6a90ff;
 }
 
 /* ------------------------ */
@@ -221,7 +203,7 @@ textarea::placeholder {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 15px;
-  margin-bottom: 20px;
+  margin-bottom: 10px;
 }
 
 .ability-score-item {
@@ -230,9 +212,9 @@ textarea::placeholder {
   align-items: center;
   padding: 10px;
   border-radius: 8px;
-  border: 1px solid rgba(33, 37, 51, 0.5);
+  
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
-  background-color: rgba(33, 37, 51, 0.5);
+  background-color: transparent;
   backdrop-filter: blur(10px);
 }
 
@@ -324,7 +306,7 @@ textarea::placeholder {
   font-weight: bold;
   padding: 5px 0;
   width: 100%;
-  color: #a0a0a0; /* оновлений колір */
+  color: white; /* оновлений колір */
 }
 
 
@@ -388,20 +370,6 @@ textarea::placeholder {
     height: 45px;
   }
 }
-#playerNameSelect {
-  flex-grow: 1;
-  padding: 8px 10px;
-  border: none;
-  background-color: #212533;
-  font-size: 1em;
-  appearance: none;
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-  background-size: 12px;
-  color: #e0e0e0;
-}
-
-
 
 
 .stat-input-wrapper input[type=number] {
@@ -553,23 +521,20 @@ html, body {
   display: flex;
   flex-direction: column;
   border: none;
-  
+  width: 120%;
   
 }
 
 
 .photo-container {
   width: 100%;
-  height: calc(80vh - 100px);
-  min-height: calc(80vh -100px);
-  max-height: calc(80vh - 100px);
+  height: calc(90vh - 160px );
   overflow: hidden;
-  background-color: #212533;
+  background-color: transparent;
   display: flex;
   justify-content: center;
   align-items: center;
   position: relative;
-  cursor: pointer;
 }
 
 
@@ -614,24 +579,4 @@ html, body {
 }
 
 
-/* Уніфікований стиль textarea */
-textarea {
-  background-color: rgba(33, 37, 51, 0.5);
-  border: 1px solid #3f445c;
-  border-radius: 8px;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(10px);
-  padding: 15px;
-  color: #e0e0e0;
-  font-size: 1em;
-  resize: vertical;
-  width: 100%;
-  margin-bottom: 15px;
-}
 
-
-
-#abilityScoresBlock {
-
-
-}

@@ -2,7 +2,7 @@
   "name": "Darqie character sheet",
   "version": "1.1.0",
   "manifest_version": 3,
-  "description": "Розширення для створення листів персонажів",
+  "description": "Розширення для створення листів персонажів local",
   "author": "darqie",
   "icon": "/icon.svg",
   "action": {

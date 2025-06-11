@@ -1,7 +1,6 @@
 import OBR from '@owlbear-rodeo/sdk';
 
 const DARQIE_SHEETS_KEY = 'darqie.characterSheets';
-const MAX_SHEETS = 10;
 const DEBOUNCE_DELAY = 300;
 const UPLOADCARE_PUBLIC_KEY = '7d0fa9d84ac0680d6d83';
 
@@ -141,7 +140,10 @@ async function saveSheetData() {
     document.getElementById('deathSavesFailure3').checked
   ];
 
-  await OBR.room.setMetadata({ [DARQIE_SHEETS_KEY]: characterSheets });
+  
+    const currentMetadata = await OBR.room.getMetadata();
+    await OBR.room.setMetadata({ ...currentMetadata, [DARQIE_SHEETS_KEY]: characterSheets });
+    
   console.log(`Лист "${sheet.characterName || 'Без назви'}" збережено.`);
 
   if (isGM && sheet.playerName && sheet.playerName !== previousPlayerName) {
@@ -162,7 +164,7 @@ function loadSheetData() {
   for (const key in elements) {
     if (elements[key]) {
       if (key === 'characterPhoto') {
-        elements[key].src = sheet[key] || '/icon.svg';
+        elements[key].src = sheet[key] || '/no-image-placeholder.svg';
       } else {
         elements[key].value = sheet[key] || '';
       }
@@ -181,7 +183,7 @@ function loadSheetData() {
   });
 }
 
-function updateCharacterDropdown() {
+async function updateCharacterDropdown() {
   const characterSelect = document.getElementById('characterSelect');
   if (!characterSelect) return;
 
@@ -200,11 +202,10 @@ function updateCharacterDropdown() {
   });
 
   const sheetContainer = document.getElementById('characterSheetContainer');
-  const noCharMsg = document.getElementById('noCharacterMessage');
 
   if (visibleSheets.length === 0) {
     if (sheetContainer) sheetContainer.style.display = 'none';
-    if (noCharMsg) noCharMsg.style.display = 'block';
+    await OBR.notification.show("У вас ще немає персонажів.", "info");
     return;
   }
 
@@ -213,7 +214,6 @@ function updateCharacterDropdown() {
 
   characterSelect.value = activeSheetIndex;
   if (sheetContainer) sheetContainer.style.display = 'block';
-  if (noCharMsg) noCharMsg.style.display = 'none';
 
   loadSheetData();
   populatePlayerSelect();
@@ -240,10 +240,7 @@ function setupCharacterButtons() {
 
   if (addBtn && isGM) {
     addBtn.addEventListener('click', async () => {
-      if (characterSheets.length >= MAX_SHEETS) {
-        alert(`Досягнуто максимум (${MAX_SHEETS}) персонажів`);
-        return;
-      }
+      
 
       const newSheet = {
         characterName: '',
@@ -268,7 +265,7 @@ function setupCharacterButtons() {
         characterHistory: '',
         additionalFeatures: '',
         notes: '',
-        characterPhoto: '/icon.svg',
+        characterPhoto: '/no-image-placeholder.svg',
         deathSavesSuccess: [false, false, false],
         deathSavesFailure: [false, false, false],
       };
@@ -351,10 +348,10 @@ if (delBtn && isGM) {
       if (!confirm('Ви дійсно хочете видалити фото персонажа?')) return;
 
       const sheet = characterSheets[activeSheetIndex];
-      sheet.characterPhoto = '/icon.svg';
+      sheet.characterPhoto = '/no-image-placeholder.svg';
 
       if (photoImg) {
-        photoImg.src = '/icon.svg';
+        photoImg.src = '/no-image-placeholder.svg';
       }
 
       await saveSheetData();
@@ -368,7 +365,13 @@ window.addEventListener('load', async () => {
     isGM = (await OBR.player.getRole()) === 'GM';
 
     const metadata = await OBR.room.getMetadata();
-    characterSheets = metadata[DARQIE_SHEETS_KEY] || [];
+    
+    
+    const raw = metadata[DARQIE_SHEETS_KEY];
+    characterSheets = Array.isArray(raw) ? raw : [];
+    
+    console.log('Loaded character sheets:', characterSheets.length);
+    
 
     setupCharacterButtons();
     updateCharacterDropdown();
@@ -391,7 +394,13 @@ window.addEventListener('load', async () => {
     OBR.broadcast.onMessage("character-assignment", async (data) => {
       if (data.playerName === currentPlayerName) {
         const metadata = await OBR.room.getMetadata();
-        characterSheets = metadata[DARQIE_SHEETS_KEY] || [];
+        
+    
+    const raw = metadata[DARQIE_SHEETS_KEY];
+    characterSheets = Array.isArray(raw) ? raw : [];
+    
+    console.log('Loaded character sheets:', characterSheets.length);
+    
 
         const visibleSheets = characterSheets
           .map((sheet, index) => ({ ...sheet, index }))
