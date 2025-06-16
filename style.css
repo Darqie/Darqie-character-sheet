@@ -14,11 +14,16 @@ body {
   -webkit-backdrop-filter: blur(20px);
 }
 
+html, body {
+  height: 100%;
+}
+
 * {
   color: #e0e0e0;
   box-sizing: border-box;
 }
 
+/* Основна структура */
 .main-container {
   display: flex;
   gap: 20px;
@@ -44,8 +49,10 @@ body {
   gap: 20px;
   position: sticky;
   top: 20px;
+  height: 100%;
 }
 
+/* Контроли персонажа */
 .character-controls {
   display: flex;
   gap: 20px;
@@ -89,64 +96,20 @@ body {
   max-width: 220px;
 }
 
+#playerNameSelect {
+  width: 240px;
+  max-width: 100%;
+}
+
 #characterSelect option,
 #playerNameSelect option {
-background-color: rgba(67, 45, 51, 0.7);
+  background-color: rgba(67, 45, 51, 0.7);
   backdrop-filter: blur(5px);
   -webkit-backdrop-filter: blur(5px);
   color: #e0e0e0;
-
 }
 
-.player-name-block {
-  flex-grow: 1;
-  min-width: 150px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 100%;
-}
-
-.player-name-block .name-input-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 30px;
-  position: relative;
-  left: -50px;
-  flex-grow: 1;
-}
-
-.player-name-block .name-input-group i {
-  position: absolute;
-  left: -35px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 1.2em;
-  color: #e0e0e0;
-  pointer-events: none;
-}
-
-.character-controls button {
-  background-color: rgba(63, 68, 92, 0.8);
-  color: white;
-  border: 1px solid #5a607c;
-  border-radius: 5px;
-  padding: 8px 12px;
-  cursor: pointer;
-  font-size: 1em;
-  backdrop-filter: blur(5px);
-  transition: background-color 0.2s ease;
-}
-
-.character-controls button:hover {
-  background-color: #6a90ff;
-  border-color: #6a90ff;
-}
-
-/* ------------------------ */
-/* ПОЛЯ ВВОДУ / INPUT      */
-/* ------------------------ */
+/* Поля вводу */
 input[type="text"],
 input[type="number"],
 textarea {
@@ -164,8 +127,8 @@ textarea {
 input:focus,
 textarea:focus {
   outline: none;
-  border-color: #6a90ff;
-  box-shadow: 0 0 0 2px rgba(106, 144, 255, 0.3);
+  border-color: #fff !important;
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.3);
 }
 
 input::placeholder,
@@ -174,15 +137,21 @@ textarea::placeholder {
   opacity: 0.7;
 }
 
-/* ------------------------ */
-/* ЗАГОЛОВКИ ТА БЛОКИ      */
-/* ------------------------ */
-.block {
+/* Блоки та заголовки */
+.block,
+.ability-score-item,
+.right-panel section,
+.right-panel .info-block,
+.right-panel .stat-block,
+.right-panel .class-level,
+.right-panel .history,
+.right-panel .traits,
+.right-panel .skills {
   padding: 15px;
   margin-bottom: 15px;
   border-radius: 8px;
-  border: 1px solid #3f445c;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
+  border: none !important;
+  box-shadow: 0 2px 12px 0 rgba(0,0,0,0.18), 0 1.5px 6px 0 rgba(0,0,0,0.12);
   background-color: rgba(33, 37, 51, 0.5);
   backdrop-filter: blur(10px);
 }
@@ -196,9 +165,7 @@ textarea::placeholder {
   color: #f0f0f0;
 }
 
-/* ------------------------ */
-/* ХАРАКТЕРИСТИКИ          */
-/* ------------------------ */
+/* Характеристики */
 .ability-scores {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -207,43 +174,82 @@ textarea::placeholder {
 }
 
 .ability-score-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 1fr 56px;
+  grid-template-rows: 1fr;
+  align-items: stretch;
+  gap: 0 12px;
   padding: 10px;
   border-radius: 8px;
-  
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
   background-color: transparent;
   backdrop-filter: blur(10px);
 }
 
-.ability-score-item label {
-  font-family: 'Kurale', serif;
+.ability-score-left {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.ability-score-label-row {
+  width: 100%;
+  text-align: left;
+}
+
+.ability-score-label-row label {
+  font-family: 'MedievalSharp', cursive !important;
   font-size: 1.4em;
   font-weight: 1000;
-  margin-bottom: 5px;
   color: #f0f0f0;
   text-transform: uppercase;
+  margin-bottom: 0;
+  line-height: 1.1;
 }
 
-.ability-score-item input {
+.ability-score-input-row {
   width: 100%;
-  text-align: center;
-  font-size: 1em;
-  font-weight: bold;
-  background-color: #f0f0f0;
-  border: 1px solid #f0f0f0;
+  margin-top: 8px;
+}
+
+.ability-score-mod-col {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.modifier-box {
+  background-color: rgba(43,48,68,0.2);
+  border: none;
+  outline: 1px solid rgba(255,255,255,0.3);
   border-radius: 5px;
   padding: 10px;
+  color: #e0e0e0;
+  font-size: 2.6em;
+  font-weight: 900;
+  text-align: center;
+  line-height: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: none;
+  text-shadow: none;
+  cursor: pointer;
+  transition: outline 0.15s;
 }
 
-/* ------------------------ */
-/* ФОТО ТА ШВИДКІ СТАТИСТИКИ */
-/* ------------------------ */
+.modifier-box:hover {
+  outline: 1.5px solid #fff;
+  outline-offset: 2px;
+}
+
+/* Фото та швидкі статистики */
 #photoBlock {
-  
-  
   width: 100%;
   padding: 15px;
   border-radius: 8px;
@@ -253,9 +259,40 @@ textarea::placeholder {
   flex-direction: column;
   align-items: center;
   gap: 5px;
+  flex-grow: 1;
+  border: none;
+  width: 120%;
 }
 
+.photo-container {
+  width: 100%;
+  height: calc(90vh - 160px);
+  overflow: hidden;
+  background-color: transparent;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
 
+#deathOverlay {
+  z-index: 10;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+#deathOverlay i.fa-skull {
+  color: red !important;
+  opacity: 0.5;
+}
 
 #characterPhotoImg {
   display: block;
@@ -272,47 +309,28 @@ textarea::placeholder {
   gap: 5px;
   opacity: 0;
   transition: opacity 0.3s ease;
+  z-index: 20;
 }
 
 .photo-container:hover #photoControls {
   opacity: 1;
 }
 
-#photoControls button {
-  background-color: rgba(63, 68, 92, 0.8);
-  border: 1px solid #5a607c;
-  border-radius: 5px;
-  padding: 8px 12px;
-  cursor: pointer;
-  font-size: 1em;
-  backdrop-filter: blur(5px);
-  color: #e0e0e0;
-}
-
-#photoControls button:hover {
-  background-color: #6a90ff;
-  border-color: #6a90ff;
-}
-
-/* ------------------------ */
-/* ІМ’Я ПЕРСОНАЖА           */
-/* ------------------------ */
+/* Ім'я персонажа */
 #characterName {
-  font-family: 'Kurale', serif;
+  font-family: 'Cormorant Unicase', serif !important;
   font-size: 1.6em;
   background: none;
   border: none;
   text-align: center;
   font-weight: bold;
-  padding: 5px 0;
+  padding: 0;
+  margin: 0;
   width: 100%;
-  color: white; /* оновлений колір */
+  color: white;
 }
 
-
-/* ------------------------ */
-/* QUICK STATS              */
-/* ------------------------ */
+/* Швидкі статистики */
 .quick-stats-block {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -326,12 +344,18 @@ textarea::placeholder {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 4px;
+  height: 45px;
 }
 
 .quick-stat-item i {
-  font-size: 1.4em;
-  margin-right: 5px;
-  color: #e0e0e0;
+  width: 24px;
+  height: 24px;
+  font-size: 20px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .quick-stat-item input {
@@ -344,90 +368,51 @@ textarea::placeholder {
   text-align: right;
 }
 
-/* ------------------------ */
-/* АДАПТИВНІСТЬ             */
-/* ------------------------ */
-@media (max-width: 900px) {
-  .main-container {
-    flex-direction: column;
-    align-items: center;
-  }
-
-  
-.right-panel {
-  flex: 1;
-  max-width: 100%;
-}
-
-
-  
-
-  .quick-stats-block {
-    grid-template-columns: repeat(4, 1fr);
-  }
-
-  .quick-stat-item {
-    height: 45px;
-  }
-}
-
-
-.stat-input-wrapper input[type=number] {
-  -webkit-appearance: none;
-  -moz-appearance: textfield;
-  appearance: textfield;
-  padding: 6px 30px;
-  width: 100%;
+/* Кнопки та елементи керування */
+.character-controls button,
+#photoControls button,
+#addCharacterButton,
+#deleteCharacterButton {
+  background-color: rgba(63, 68, 92, 0.8);
+  color: white;
+  border: 1px solid #5a607c;
+  border-radius: 5px;
+  padding: 8px 12px;
+  cursor: pointer;
   font-size: 1em;
+  backdrop-filter: blur(5px);
+  transition: background-color 0.2s ease;
+}
+
+.character-controls button:hover,
+#photoControls button:hover,
+#addCharacterButton:hover,
+#deleteCharacterButton:hover {
+  background-color: #6a90ff;
+  border-color: #fff;
+}
+
+/* Статистики та модифікатори */
+.stat-input-wrapper {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+  height: 36px;
+}
+
+.stat-input-wrapper input {
+  width: 100%;
+  height: 100%;
+  padding: 6px 32px;
   box-sizing: border-box;
+  font-size: 16px;
   text-align: center;
-  border: 1px solid rgba(100, 100, 100, 2);
-
+  background-color: transparent;
+  border: none;
+  outline: 1px solid rgba(255,255,255,0.3);
+  color: white;
+  border-radius: 4px;
 }
-
-
-
-.stat-btn.minus {
-  left: 4px;
-}
-
-.stat-btn.plus {
-  right: 4px;
-}
-input[type=number]::-webkit-outer-spin-button,
-input[type=number]::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-input[type=number] {
-  -moz-appearance: textfield;
-  appearance: textfield;
-}
-
-
-
-
-
-
-
-.stat-btn.minus {
-  left: 4px;
-}
-
-.stat-btn.plus {
-  right: 4px;
-}
-
-.character-photo-wrapper {
-  width: 340px;
-}
-
-
-.photo-wrapper {
-  width: 300px;
-}
-
 
 .stat-btn {
   position: absolute;
@@ -448,135 +433,370 @@ input[type=number] {
   padding: 0;
 }
 
-
-.stat-input-wrapper {
-  position: relative;
-  display: inline-block;
-  width: 100%;
-  height: 36px;
+.stat-btn.minus {
+  left: 4px;
 }
 
-.stat-input-wrapper input {
-  width: 100%;
-  height: 100%;
-  padding: 6px 32px;
-  box-sizing: border-box;
-  font-size: 16px;
-  text-align: center;
-  background-color: transparent;
-  border: 1px solid #5a607c;
-  color: white;
-  border-radius: 4px;
+.stat-btn.plus {
+  right: 4px;
 }
 
-.quick-stats-block i.fa-heart {
-  color: rgba(231, 76, 60, 0.8) !important;
-  text-shadow: 0 0 3px rgba(231, 76, 60, 0.2);
-}
-
-
-.quick-stats-block i.fa-shield-halved {
-  color: rgba(52, 152, 219, 0.75) !important;
-  text-shadow: 0 0 2px rgba(52, 152, 219, 0.2);
-}
-
-
-.quick-stats-block i.fa-person-running {
-  color: rgba(52, 152, 219, 0.75) !important;
-  text-shadow: 0 0 2px rgba(52, 152, 219, 0.2);
-}
-
+/* Іконки */
+.quick-stats-block i.fa-heart,
+.quick-stats-block i.fa-shield-halved,
 .quick-stats-block i.fa-shield,
-.quick-stats-block i.fa-shield-halved {
-  color: rgba(52, 152, 219, 0.75) !important;
-  text-shadow: 0 0 2px rgba(52, 152, 219, 0.2);
+.quick-stats-block i.fa-shield-alt,
+.quick-stats-block i.fa-person-running {
+  color: #fff !important;
+  fill: #fff !important;
+  text-shadow: none !important;
 }
 
-.quick-stats-block i.fa-shield-alt {
-  color: rgba(52, 152, 219, 0.8);
-  text-shadow: 0 0 3px rgba(52, 152, 219, 0.2);
+/* Адаптивність */
+@media (max-width: 900px) {
+  .main-container {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .right-panel {
+    flex: 1;
+    max-width: 100%;
+  }
+
+  .quick-stats-block {
+    grid-template-columns: repeat(4, 1fr);
+  }
 }
 
-@media (max-height: 900px) {
-  
+/* Приховування стрілок для числових полів */
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
-@media (max-height: 700px) {
-  
+input[type=number] {
+  -moz-appearance: textfield;
+  appearance: textfield;
 }
 
-
-html, body {
-  height: 100%;
+.modifier-box:focus,
+input:focus,
+textarea:focus {
+  border-color: #fff !important;
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.3);
 }
 
-.right-panel {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
+.stat-input-wrapper input:focus {
+  border-color: #fff !important;
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.3);
 }
 
-#photoBlock {
-  flex-grow: 1;
-  display: flex;
-  flex-direction: column;
-  border: none;
-  width: 120%;
-  
-}
-
-
-.photo-container {
-  width: 100%;
-  height: calc(90vh - 160px );
-  overflow: hidden;
-  background-color: transparent;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  position: relative;
-}
-
-
-
-#addCharacterButton,
-#deleteCharacterButton {
-  background-color: rgba(63, 68, 92, 0.8);
-  color: white;
-  border: 1px solid #5a607c;
-  border-radius: 5px;
-  padding: 8px 12px;
-  cursor: pointer;
-  font-size: 1em;
-  backdrop-filter: blur(5px);
-  transition: background-color 0.2s ease;
-}
-
+.character-controls button:hover,
+#photoControls button:hover,
 #addCharacterButton:hover,
 #deleteCharacterButton:hover {
   background-color: #6a90ff;
-  border-color: #6a90ff;
+  border-color: #fff;
 }
 
+.stat-btn:focus,
+.stat-btn:active {
+  border-color: #fff !important;
+}
 
+.ability-score-label-row label,
+.modifier-box,
+#characterName,
+.ability-score-item,
+.ability-score-mod-col,
+.ability-score-left,
+.ability-score-input-row,
+.ability-score-label-row,
+.ability-score-right,
+.block h2,
+.block label,
+.block-title,
+.stat-group label,
+.stat-group .modifier-box,
+.stat-group input,
+.stat-group .stat-btn {
+  font-family: 'Cormorant Unicase', serif !important;
+}
 
-/* Єдиний стиль для блоків правої панелі */
-.right-panel section,
-.right-panel .info-block,
-.right-panel .stat-block,
-.right-panel .class-level,
-.right-panel .history,
-.right-panel .traits,
-.right-panel .skills {
+.fa, .fas, .far, .fal, .fab, [class^='fa-'], [class*=' fa-'] {
+  color: #fff !important;
+  fill: #fff !important;
+}
+
+.death-saves {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 6px;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px 0 rgba(0,0,0,0.10), 0 1px 2px 0 rgba(0,0,0,0.08);
+  background: transparent;
+  margin-bottom: 4px;
+  justify-content: flex-start;
+  min-width: 0;
+  align-self: flex-end;
+}
+
+.death-saves-group {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  margin-left: 0;
+}
+
+.death-saves-label {
+  font-family: 'Cormorant Unicase', serif !important;
+  font-size: 1em;
+  color: #f0f0f0;
+  font-weight: 700;
+  margin-bottom: 0;
+  text-align: left;
+  min-width: 40px;
+  padding: 0 2px 0 0;
+}
+
+.checkbox-group {
+  display: flex;
+  flex-direction: row;
+  gap: 2px;
+}
+
+.death-saves input[type="checkbox"] {
+  width: 26px;
+  height: 26px;
+  accent-color: transparent;
+  background: transparent;
+  border: 2px solid rgba(255,255,255,0.5);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px 0 rgba(0,0,0,0.18);
+  transition: border 0.18s, box-shadow 0.18s, background 0.18s;
+  appearance: none;
+  outline: none;
+  position: relative;
+  cursor: pointer;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 60% 60%;
+}
+
+.death-saves input[id^="deathSavesFailure"]:checked {
+  background: transparent;
+  border-color: #fff;
+  box-shadow: 0 0 8px 2px rgba(255,255,255,0.18);
+  background-image: url('data:image/svg+xml;utf8,<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><g><ellipse cx="16" cy="18" rx="11.5" ry="10" fill="white"/><g stroke="black" stroke-width="1.6" stroke-linecap="round"><line x1="12" y1="16" x2="14.5" y2="18.5"/><line x1="14.5" y1="16" x2="12" y2="18.5"/><line x1="18" y1="16" x2="20.5" y2="18.5"/><line x1="20.5" y1="16" x2="18" y2="18.5"/></g><rect x="13.5" y="23" width="5" height="1.8" rx="0.9" fill="black"/><rect x="8" y="28" width="7" height="1.6" rx="0.8" fill="white" transform="rotate(-20 8 28)"/><rect x="17" y="28" width="7" height="1.6" rx="0.8" fill="white" transform="rotate(20 17 28)"/></g></svg>');
+}
+
+.death-saves input[id^="deathSavesSuccess"]:checked {
+  background: transparent;
+  border-color: #fff;
+  box-shadow: 0 0 8px 2px rgba(255,255,255,0.18);
+  background-image: url('data:image/svg+xml;utf8,<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16 29C16 29 4 20 4 12C4 7.03 8.03 3 13 3C15.39 3 17.61 4.22 19 6.22C20.39 4.22 22.61 3 25 3C29.97 3 34 7.03 34 12C34 20 22 29 22 29H16Z" fill="white"/></svg>');
+}
+
+.death-saves input[type="checkbox"]:checked::after {
+  content: '';
+  display: none;
+}
+
+.death-saves-row {
+  display: flex;
+  flex-direction: row;
+  gap: 24px;
+  align-items: stretch;
+  margin-bottom: 18px;
+}
+
+.inspiration-advantage-block {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  box-shadow: 0 1px 4px 0 rgba(0,0,0,0.10), 0 1px 2px 0 rgba(0,0,0,0.08);
+  border-radius: 4px;
+  padding: 2px 6px;
+  min-width: 0;
+  margin: 0;
+}
+
+.advantage-label,
+.disadvantage-label {
+  margin: 0;
+  font-size: 1em;
+}
+
+.inspiration-advantage-block label,
+.disadvantage-label {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  font-family: 'Cormorant Unicase', serif !important;
+  font-size: 1.1em;
+  color: #f0f0f0;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+  gap: 10px;
+}
+
+.inspiration-advantage-block input[type="checkbox"],
+#disadvantageCheckbox {
+  margin-left: auto;
+}
+
+.inspiration-advantage-block input[type="checkbox"] {
+  width: 26px;
+  height: 26px;
+  accent-color: transparent;
+  background: transparent;
+  border: 2px solid rgba(255,255,255,0.5);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px 0 rgba(0,0,0,0.18);
+  transition: border 0.18s, box-shadow 0.18s, background 0.18s;
+  appearance: none;
+  outline: none;
+  position: relative;
+  cursor: pointer;
+}
+
+#inspirationCheckbox:checked,
+#advantageCheckbox:checked,
+#disadvantageCheckbox:checked {
+  background: transparent;
+  border-color: #fff;
+  box-shadow: 0 0 8px 2px rgba(255,255,255,0.18);
+}
+
+#inspirationCheckbox {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-radius: 6px;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin: 0;
+  padding: 0;
+  flex-shrink: 0;
+  background-image: none !important;
+  background: transparent !important;
+}
+
+#inspirationCheckbox:checked {
+  background: transparent !important;
+  border-color: #fff;
+  box-shadow: 0 0 8px 2px rgba(255,255,255,0.18);
+  animation: inspirationPulse 2s infinite;
+  background-image: none !important;
+}
+
+#inspirationCheckbox:checked::after {
+  content: '\f521';  /* Font Awesome код для crown */
+  font-family: 'Font Awesome 5 Free';
+  font-weight: 900;
+  color: white;
+  font-size: 1.2em;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+@keyframes inspirationPulse {
+  0% {
+    box-shadow: 0 0 8px 2px rgba(255,255,255,0.18);
+  }
+  50% {
+    box-shadow: 0 0 12px 4px rgba(255,255,255,0.3);
+  }
+  100% {
+    box-shadow: 0 0 8px 2px rgba(255,255,255,0.18);
+  }
+}
+
+.inspiration-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9em;
+  color: #e0e0e0;
+  margin: 0;
+  padding: 0;
+  line-height: 1;
+}
+
+.inspiration-crown {
+  font-size: 1.2em;
+  color: #e0e0e0;
+}
+
+.saves-and-advantages-block {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
   width: 100%;
-  padding: 15px;
-  margin-bottom: 15px;
-  background-color: rgba(33, 37, 51, 0.5);
-  border-radius: 8px;
-  border: 1px solid #3f445c;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(10px);
+  height: 44px;
 }
 
+.death-saves,
+.inspiration-block,
+.inspiration-advantage-block {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  background: transparent;
+  box-shadow: 0 1px 4px 0 rgba(0,0,0,0.10), 0 1px 2px 0 rgba(0,0,0,0.08);
+  border-radius: 4px;
+  padding: 2px 6px;
+  min-width: 0;
+  margin: 0;
+  box-sizing: border-box;
+}
 
+.death-saves-label,
+.inspiration-label,
+.advantage-label,
+.disadvantage-label {
+  font-size: 1em;
+}
 
+.saves-and-advantages-block,
+.saves-and-advantages-block * {
+  font-size: clamp(0.85em, 2vw, 1em);
+}
+
+.saves-and-advantages-block input[type="checkbox"] {
+  width: clamp(18px, 4vw, 26px);
+  height: clamp(18px, 4vw, 26px);
+}
+
+@media (max-width: 600px) {
+  .saves-and-advantages-block {
+    height: auto;
+  }
+  .death-saves,
+  .inspiration-block,
+  .inspiration-advantage-block {
+    height: auto;
+  }
+  .saves-and-advantages-block,
+  .saves-and-advantages-block * {
+    font-size: 0.85em;
+  }
+  .saves-and-advantages-block input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+  }
+}

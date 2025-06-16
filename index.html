@@ -1,147 +1,302 @@
 <!DOCTYPE html>
-
 <html lang="uk">
 <head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Лист Персонажа</title>
-<link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&amp;display=swap" rel="stylesheet"/>
-<link href="style.css" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Kurale&amp;display=swap" rel="stylesheet"/>
-<link crossorigin="anonymous" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==&gt;" referrerpolicy="no-referrer" rel="stylesheet"/></head>
+  <meta charset="utf-8" />
+  <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+  <title>Лист Персонажа</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Unicase:wght@700&display=swap" rel="stylesheet" />
+  <link crossorigin="anonymous" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" referrerpolicy="no-referrer" rel="stylesheet" />
+  <link href="style.css" rel="stylesheet" />
+</head>
 <body>
-<div class="main-container">
-<div class="left-panel"><div class="character-controls">
-<div class="character-select-group"><i class="fa-solid fa-user-shield character-icon character-icon" style="margin-left: 4px; margin-right: 8px;"></i><select id="characterSelect"></select>
-<button id="addCharacterButton" title="Додати персонажа"><i class="fas fa-plus"></i></button>
-<button id="deleteCharacterButton" title="Видалити персонажа"><i class="fas fa-trash-alt"></i></button>
-</div>
-<div class="player-name-block">
-<div class="name-input-group">
-<i class="fas fa-user" title="Ім'я гравця"></i>
-<select id="playerNameSelect"></select>
-</div>
-</div>
-</div><div id="abilityScoresBlock"><div class="ability-scores">
-<div class="ability-score-item">
-<label for="strengthScore">Сила</label>
-<div class="stat-input-wrapper"><button class="stat-btn minus">−</button><input id="strengthScore" placeholder="0" type="number"/><button class="stat-btn plus">+</button></div>
-</div>
-<div class="ability-score-item">
-<label for="dexterityScore">Спритність</label>
-<div class="stat-input-wrapper"><button class="stat-btn minus">−</button><input id="dexterityScore" placeholder="0" type="number"/><button class="stat-btn plus">+</button></div>
-</div>
-<div class="ability-score-item">
-<label for="constitutionScore">Статура</label>
-<div class="stat-input-wrapper"><button class="stat-btn minus">−</button><input id="constitutionScore" placeholder="0" type="number"/><button class="stat-btn plus">+</button></div>
-</div>
-<div class="ability-score-item">
-<label for="intelligenceScore">Інтелект</label>
-<div class="stat-input-wrapper"><button class="stat-btn minus">−</button><input id="intelligenceScore" placeholder="0" type="number"/><button class="stat-btn plus">+</button></div>
-</div>
-<div class="ability-score-item">
-<label for="wisdomScore">Мудрість</label>
-<div class="stat-input-wrapper"><button class="stat-btn minus">−</button><input id="wisdomScore" placeholder="0" type="number"/><button class="stat-btn plus">+</button></div>
-</div>
-<div class="ability-score-item">
-<label for="charismaScore">Харизма</label>
-<div class="stat-input-wrapper"><button class="stat-btn minus">−</button><input id="charismaScore" placeholder="0" type="number"/><button class="stat-btn plus">+</button></div>
-</div>
-</div></div>
-<div class="character-sheet" id="characterSheetContainer">
-<div class="header-block">
-<div>
-<div class="block"><h2>КЛАС ТА РІВЕНЬ</h2></div>
-<input id="characterClassLevel" placeholder="Введіть клас та рівень..." type="text"/>
-</div>
-<div>
-<div class="block"><h2>ПЕРЕДИСТОРІЯ</h2></div>
-<input id="background" placeholder="Введіть передісторію..." type="text"/>
-</div>
-</div>
-<div class="header-block">
-<div>
-<div class="block"><h2>РАСА</h2></div>
-<input id="characterRace" placeholder="Введіть расу..." type="text"/>
-</div>
-<div>
-<div class="block"><h2>СВІТОГЛЯД</h2></div>
-<input id="alignment" placeholder="Введіть світогляд..." type="text"/>
-</div>
-</div>
-<div class="combat-stats">
-</div>
-<div class="block"><h2>РЯТУВАЛЬНІ КИДКИ ВІД СМЕРТІ</h2></div>
-<div class="death-saves">
-<div>
-<label>Успіхи</label>
-<div class="checkbox-group">
-<input id="deathSavesSuccess1" type="checkbox"/>
-<input id="deathSavesSuccess2" type="checkbox"/>
-<input id="deathSavesSuccess3" type="checkbox"/>
-</div>
-</div>
-<div>
-<label>Провали</label>
-<div class="checkbox-group">
-<input id="deathSavesFailure1" type="checkbox"/>
-<input id="deathSavesFailure2" type="checkbox"/>
-<input id="deathSavesFailure3" type="checkbox"/>
-</div>
-</div>
-</div>
-<div class="block"><h2>ВОЛОДІННЯ ТА МОВИ</h2></div>
-<textarea id="proficienciesAndLanguages" placeholder="Перерахуйте володіння та мови..."></textarea>
-<div class="block"><h2>СПОСНАРЯЖЕННЯ</h2></div>
-<textarea id="equipment" placeholder="Перерахуйте спорядження..."></textarea>
-<div class="block"><h2>СОЮЗНИКИ ТА ОРГАНІЗАЦІЇ</h2></div>
-<textarea id="alliesAndOrganizations" placeholder="Опишіть союзників та організації..."></textarea>
-<div class="block"><h2>ІСТОРІЯ ПЕРСОНАЖА</h2></div>
-<textarea id="characterHistory" placeholder="Напишіть історію персонажа..."></textarea>
-<div class="block"><h2>ДОДАТКОВІ ОСОБЛИВОСТІ ТА ТАЛАНТИ</h2></div>
-<textarea id="additionalFeatures" placeholder="Опишіть додаткові особливості..."></textarea>
-<div class="block"><h2>НОТАТКИ</h2></div>
-<textarea id="notes" placeholder="Додаткові нотатки..."></textarea>
-</div>
-</div>
-<div class="right-panel">
-<div class="photo-block" id="photoBlock">
-<!-- Поле Ім’я персонажа без іконки, без відступів -->
-<div style="margin: 0; padding: 0;">
-<input id="characterName" placeholder="Ім'я персонажа" style="width: 100%; margin: 0; padding: 2px;" type="text"/>
-</div>
-<div class="photo-container">
-<img alt="Натисніть для завантаження фотографії" id="characterPhotoImg" src="/no-image-placeholder.svg" title="Натисніть для завантаження фотографії"/>
-<div id="photoControls">
-<button id="replacePhotoButton" title="Завантажити фотографію"><i class="fas fa-upload"></i></button>
-<button id="deletePhotoButton" title="Видалити фотографію"><i class="fas fa-trash-alt"></i></button>
-</div>
-</div>
-<div class="quick-stats-block">
-<div class="quick-stat-item">
-<i class="fas fa-heart" title="ХП"></i>
-<div class="stat-input-wrapper"><button class="stat-btn minus">−</button><input id="healthPoints" placeholder="0" type="number"/><button class="stat-btn plus">+</button></div>
-</div>
-<div class="quick-stat-item">
-<i class="fas fa-shield-alt" title="Клас Броні"></i>
-<div class="stat-input-wrapper"><button class="stat-btn minus">−</button><input id="armorClass" placeholder="0" type="number"/><button class="stat-btn plus">+</button></div>
-</div>
-<div class="quick-stat-item">
-<i class="fas fa-running" title="Швидкість"></i>
-<div class="stat-input-wrapper"><button class="stat-btn minus">−</button><input id="speed" placeholder="0" type="number"/><button class="stat-btn plus">+</button></div>
-</div>
-<div class="quick-stat-item">
-<i class="fas fa-dice-one" title="Ініціатива"></i>
-<div class="stat-input-wrapper"><button class="stat-btn minus">−</button><input id="initiative" placeholder="0" type="number"/><button class="stat-btn plus">+</button></div>
-</div>
-</div>
-<input accept="image/*" id="photoFileInput" style="display: none;" type="file"/>
-</div>
-</div>
-</div>
-<div id="noCharacterMessage" style="display: none; text-align: center; margin-top: 20px;">
-  У вас ще немає персонажів.
-</div>
-<script src="/main.js" type="module"></script>
+  <div class="main-container">
+    <!-- Ліва панель -->
+    <div class="left-panel">
+      <!-- Керування персонажами -->
+      <div class="character-controls">
+        <div class="character-select-group">
+          <i class="fa-solid fa-user-shield character-icon"></i>
+          <select id="characterSelect"></select>
+          <button id="addCharacterButton" title="Додати персонажа">
+            <i class="fas fa-plus"></i>
+          </button>
+          <button id="deleteCharacterButton" title="Видалити персонажа">
+            <i class="fas fa-trash-alt"></i>
+          </button>
+        </div>
+        <div class="player-name-block">
+          <div class="name-input-group">
+            <i class="fas fa-user" title="Ім'я гравця"></i>
+            <select id="playerNameSelect"></select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Характеристики -->
+      <div id="abilityScoresBlock">
+        <div class="ability-scores">
+          <div class="ability-score-item">
+            <div class="ability-score-left">
+              <div class="ability-score-label-row">
+                <label for="strengthScore">Сила</label>
+              </div>
+              <div class="ability-score-input-row">
+                <div class="stat-input-wrapper">
+                  <button class="stat-btn minus">−</button>
+                  <input id="strengthScore" type="number" placeholder="10" />
+                  <button class="stat-btn plus">+</button>
+                </div>
+              </div>
+            </div>
+            <div class="ability-score-mod-col">
+              <div class="modifier-box" id="strengthModifier">+0</div>
+            </div>
+          </div>
+          <div class="ability-score-item">
+            <div class="ability-score-left">
+              <div class="ability-score-label-row">
+                <label for="dexterityScore">Спритність</label>
+              </div>
+              <div class="ability-score-input-row">
+                <div class="stat-input-wrapper">
+                  <button class="stat-btn minus">−</button>
+                  <input id="dexterityScore" type="number" placeholder="10" />
+                  <button class="stat-btn plus">+</button>
+                </div>
+              </div>
+            </div>
+            <div class="ability-score-mod-col">
+              <div class="modifier-box" id="dexterityModifier">+0</div>
+            </div>
+          </div>
+          <div class="ability-score-item">
+            <div class="ability-score-left">
+              <div class="ability-score-label-row">
+                <label for="constitutionScore">Статура</label>
+              </div>
+              <div class="ability-score-input-row">
+                <div class="stat-input-wrapper">
+                  <button class="stat-btn minus">−</button>
+                  <input id="constitutionScore" type="number" placeholder="10" />
+                  <button class="stat-btn plus">+</button>
+                </div>
+              </div>
+            </div>
+            <div class="ability-score-mod-col">
+              <div class="modifier-box" id="constitutionModifier">+0</div>
+            </div>
+          </div>
+          <div class="ability-score-item">
+            <div class="ability-score-left">
+              <div class="ability-score-label-row">
+                <label for="intelligenceScore">Інтелект</label>
+              </div>
+              <div class="ability-score-input-row">
+                <div class="stat-input-wrapper">
+                  <button class="stat-btn minus">−</button>
+                  <input id="intelligenceScore" type="number" placeholder="10" />
+                  <button class="stat-btn plus">+</button>
+                </div>
+              </div>
+            </div>
+            <div class="ability-score-mod-col">
+              <div class="modifier-box" id="intelligenceModifier">+0</div>
+            </div>
+          </div>
+          <div class="ability-score-item">
+            <div class="ability-score-left">
+              <div class="ability-score-label-row">
+                <label for="wisdomScore">Мудрість</label>
+              </div>
+              <div class="ability-score-input-row">
+                <div class="stat-input-wrapper">
+                  <button class="stat-btn minus">−</button>
+                  <input id="wisdomScore" type="number" placeholder="10" />
+                  <button class="stat-btn plus">+</button>
+                </div>
+              </div>
+            </div>
+            <div class="ability-score-mod-col">
+              <div class="modifier-box" id="wisdomModifier">+0</div>
+            </div>
+          </div>
+          <div class="ability-score-item">
+            <div class="ability-score-left">
+              <div class="ability-score-label-row">
+                <label for="charismaScore">Харизма</label>
+              </div>
+              <div class="ability-score-input-row">
+                <div class="stat-input-wrapper">
+                  <button class="stat-btn minus">−</button>
+                  <input id="charismaScore" type="number" placeholder="10" />
+                  <button class="stat-btn plus">+</button>
+                </div>
+              </div>
+            </div>
+            <div class="ability-score-mod-col">
+              <div class="modifier-box" id="charismaModifier">+0</div>
+            </div>
+          </div>
+        </div>
+        <div class="death-saves-row">
+          <div class="saves-and-advantages-block">
+            <div class="death-saves">
+              <div class="death-saves-group">
+                <div class="death-saves-label">Успіхи</div>
+                <div class="checkbox-group">
+                  <input id="deathSavesSuccess1" type="checkbox" />
+                  <input id="deathSavesSuccess2" type="checkbox" />
+                  <input id="deathSavesSuccess3" type="checkbox" />
+                </div>
+              </div>
+              <div class="death-saves-group">
+                <div class="death-saves-label">Провали</div>
+                <div class="checkbox-group">
+                  <input id="deathSavesFailure1" type="checkbox" />
+                  <input id="deathSavesFailure2" type="checkbox" />
+                  <input id="deathSavesFailure3" type="checkbox" />
+                </div>
+              </div>
+            </div>
+            <div class="inspiration-block">
+              <label class="inspiration-label"><span class="inspiration-crown" aria-label="Натхнення"><i class="fas fa-gem"></i></span> <input id="inspirationCheckbox" type="checkbox" /></label>
+            </div>
+            <div class="inspiration-advantage-block">
+              <label class="advantage-label">Перевага <input id="advantageCheckbox" type="checkbox" /></label>
+              <label class="disadvantage-label">Похибка <input id="disadvantageCheckbox" type="checkbox" /></label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Лист персонажа -->
+      <div class="character-sheet" id="characterSheetContainer">
+        <div class="header-block">
+          <div>
+            <div class="block">
+              <h2>Клас та рівень</h2>
+            </div>
+            <input id="characterClassLevel" placeholder="Воїн 1" type="text" />
+          </div>
+          <div>
+            <div class="block">
+              <h2>Передісторія</h2>
+            </div>
+            <input id="background" placeholder="Солдат" type="text" />
+          </div>
+        </div>
+        
+        <div class="header-block">
+          <div>
+            <div class="block">
+              <h2>Раса</h2>
+            </div>
+            <input id="characterRace" placeholder="Людина" type="text" />
+          </div>
+          <div>
+            <div class="block">
+              <h2>Світогляд</h2>
+            </div>
+            <input id="alignment" placeholder="Законослухняний добрий" type="text" />
+          </div>
+        </div>
+
+        <div class="block">
+          <h2>Володіння та мови</h2>
+        </div>
+        <textarea id="proficienciesAndLanguages" placeholder="Довга зброя, короткова зброя, щити..."></textarea>
+
+        <div class="block">
+          <h2>Спорядження</h2>
+        </div>
+        <textarea id="equipment" placeholder="Кольчуга, щит, довгий меч..."></textarea>
+
+        <div class="block">
+          <h2>Союзники та організації</h2>
+        </div>
+        <textarea id="alliesAndOrganizations" placeholder="Опишіть ваших союзників..."></textarea>
+
+        <div class="block">
+          <h2>Історія персонажа</h2>
+        </div>
+        <textarea id="characterHistory" placeholder="Розкажіть історію вашого персонажа..."></textarea>
+
+        <div class="block">
+          <h2>Додаткові особливості та таланти</h2>
+        </div>
+        <textarea id="additionalFeatures" placeholder="Особливості класу, раси, передісторії..."></textarea>
+
+        <div class="block">
+          <h2>Нотатки</h2>
+        </div>
+        <textarea id="notes" placeholder="Додаткові нотатки..."></textarea>
+      </div>
+    </div>
+
+    <!-- Права панель -->
+    <div class="right-panel">
+      <div class="photo-block" id="photoBlock">
+        <input id="characterName" placeholder="Ім'я персонажа" type="text" />
+        
+        <div class="photo-container">
+          <img alt="Натисніть для завантаження фотографії" 
+               id="characterPhotoImg" 
+               src="/no-image-placeholder.svg"
+               title="Натисніть для завантаження фотографії" />
+          <div id="photoControls">
+            <button id="replacePhotoButton" title="Завантажити фотографію">
+              <i class="fas fa-upload"></i>
+            </button>
+            <button id="deletePhotoButton" title="Видалити фотографію">
+              <i class="fas fa-trash-alt"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="quick-stats-block">
+          <div class="quick-stat-item">
+            <i class="fas fa-heart" title="ХП"></i>
+            <div class="stat-input-wrapper">
+              <button class="stat-btn minus">−</button>
+              <input id="healthPoints" placeholder="8" type="number" />
+              <button class="stat-btn plus">+</button>
+            </div>
+          </div>
+          <div class="quick-stat-item">
+            <i class="fas fa-shield-alt" title="Клас Броні"></i>
+            <div class="stat-input-wrapper">
+              <button class="stat-btn minus">−</button>
+              <input id="armorClass" placeholder="16" type="number" />
+              <button class="stat-btn plus">+</button>
+            </div>
+          </div>
+          <div class="quick-stat-item">
+            <i class="fas fa-running" title="Швидкість"></i>
+            <div class="stat-input-wrapper">
+              <button class="stat-btn minus">−</button>
+              <input id="speed" placeholder="30" type="number" />
+              <button class="stat-btn plus">+</button>
+            </div>
+          </div>
+          <div class="quick-stat-item">
+            <i class="fas fa-spa" title="Ініціатива"></i>
+            <div class="stat-input-wrapper">
+              <button class="stat-btn minus">−</button>
+              <input id="initiative" placeholder="0" type="number" />
+              <button class="stat-btn plus">+</button>
+            </div>
+          </div>
+        </div>
+
+        <input accept="image/*" id="photoFileInput" style="display: none;" type="file" />
+      </div>
+    </div>
+  </div>
+
+  <div id="noCharacterMessage" style="display: none; text-align: center; margin-top: 20px;">
+    У вас ще немає персонажів.
+  </div>
+
+  <script src="/main.js" type="module"></script>
 </body>
 </html>
