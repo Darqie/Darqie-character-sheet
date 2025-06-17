@@ -287,11 +287,14 @@ textarea::placeholder {
   justify-content: center;
   pointer-events: none;
   opacity: 0.7;
+  background-color: rgba(255, 0, 0, 0.2);
 }
 
-#deathOverlay i.fa-skull {
+#deathOverlay i.fa-ghost {
   color: red !important;
+  font-size: 5em;
   opacity: 0.5;
+  filter: blur(2px);
 }
 
 #characterPhotoImg {
@@ -555,7 +558,7 @@ textarea:focus {
 
 .death-saves-label {
   font-family: 'Cormorant Unicase', serif !important;
-  font-size: 1em;
+  font-size: 1.2em;
   color: #f0f0f0;
   font-weight: 700;
   margin-bottom: 0;
@@ -571,38 +574,53 @@ textarea:focus {
 }
 
 .death-saves input[type="checkbox"] {
-  width: 26px;
-  height: 26px;
-  accent-color: transparent;
-  background: transparent;
-  border: 2px solid rgba(255,255,255,0.5);
-  border-radius: 6px;
-  box-shadow: 0 2px 8px 0 rgba(0,0,0,0.18);
-  transition: border 0.18s, box-shadow 0.18s, background 0.18s;
-  appearance: none;
-  outline: none;
   position: relative;
+  width: 28px;
+  height: 28px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-radius: 6px;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
   cursor: pointer;
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: 60% 60%;
+  transition: all 0.2s ease;
+  margin: 0;
+  padding: 0;
+  flex-shrink: 0;
 }
 
-.death-saves input[id^="deathSavesFailure"]:checked {
-  background: transparent;
+.death-saves input[type="checkbox"]:checked {
+  background: transparent !important;
   border-color: #fff;
   box-shadow: 0 0 8px 2px rgba(255,255,255,0.18);
-  background-image: url('data:image/svg+xml;utf8,<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><g><ellipse cx="16" cy="18" rx="11.5" ry="10" fill="white"/><g stroke="black" stroke-width="1.6" stroke-linecap="round"><line x1="12" y1="16" x2="14.5" y2="18.5"/><line x1="14.5" y1="16" x2="12" y2="18.5"/><line x1="18" y1="16" x2="20.5" y2="18.5"/><line x1="20.5" y1="16" x2="18" y2="18.5"/></g><rect x="13.5" y="23" width="5" height="1.8" rx="0.9" fill="black"/><rect x="8" y="28" width="7" height="1.6" rx="0.8" fill="white" transform="rotate(-20 8 28)"/><rect x="17" y="28" width="7" height="1.6" rx="0.8" fill="white" transform="rotate(20 17 28)"/></g></svg>');
+  animation: inspirationPulse 2s infinite;
 }
 
-.death-saves input[id^="deathSavesSuccess"]:checked {
-  background: transparent;
-  border-color: #fff;
-  box-shadow: 0 0 8px 2px rgba(255,255,255,0.18);
-  background-image: url('data:image/svg+xml;utf8,<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16 29C16 29 4 20 4 12C4 7.03 8.03 3 13 3C15.39 3 17.61 4.22 19 6.22C20.39 4.22 22.61 3 25 3C29.97 3 34 7.03 34 12C34 20 22 29 22 29H16Z" fill="white"/></svg>');
+.death-saves input[id^="deathSavesFailure"]:checked::after {
+  content: '\f54c';  /* Font Awesome код для черепа */
+  font-family: 'Font Awesome 5 Free';
+  font-weight: 900;
+  color: white;
+  font-size: 1.2em;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 }
 
-.death-saves input[type="checkbox"]:checked::after {
+.death-saves input[id^="deathSavesSuccess"]:checked::after {
+  content: '\f004';  /* Font Awesome код для серця */
+  font-family: 'Font Awesome 5 Free';
+  font-weight: 900;
+  color: white;
+  font-size: 1.2em;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.death-saves input[type="checkbox"]:not(:checked)::after {
   content: '';
   display: none;
 }
@@ -628,10 +646,67 @@ textarea:focus {
   margin: 0;
 }
 
+.inspiration-advantage-block input[type="checkbox"] {
+  width: 26px;
+  height: 26px;
+  accent-color: transparent;
+  background: transparent;
+  border: 2px solid rgba(255,255,255,0.5);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px 0 rgba(0,0,0,0.18);
+  appearance: none;
+  outline: none;
+  position: relative;
+  cursor: pointer;
+  margin: 0;
+  padding: 0;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.inspiration-advantage-block input[type="checkbox"]:checked {
+  border-color: #fff;
+  box-shadow: 0 0 8px 2px rgba(255,255,255,0.18);
+}
+
+.inspiration-advantage-block input[type="checkbox"]::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  width: 14px;
+  height: 14px;
+  background-color: transparent;
+  transition: transform 0.2s ease;
+}
+
+#advantageCheckbox:checked::before {
+  content: '\f00c';
+  font-family: 'Font Awesome 5 Free';
+  font-weight: 900;
+  color: white;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+#disadvantageCheckbox:checked::before {
+  content: '\f00d';
+  font-family: 'Font Awesome 5 Free';
+  font-weight: 900;
+  color: white;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.inspiration-advantage-block input[type="checkbox"]:not(:checked)::before {
+  transform: translate(-50%, -50%) scale(0);
+}
+
 .advantage-label,
 .disadvantage-label {
   margin: 0;
   font-size: 1em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .inspiration-advantage-block label,
@@ -652,19 +727,9 @@ textarea:focus {
   margin-left: auto;
 }
 
-.inspiration-advantage-block input[type="checkbox"] {
-  width: 26px;
-  height: 26px;
-  accent-color: transparent;
-  background: transparent;
-  border: 2px solid rgba(255,255,255,0.5);
-  border-radius: 6px;
-  box-shadow: 0 2px 8px 0 rgba(0,0,0,0.18);
-  transition: border 0.18s, box-shadow 0.18s, background 0.18s;
-  appearance: none;
-  outline: none;
-  position: relative;
-  cursor: pointer;
+.inspiration-advantage-block input[type="checkbox"]:not(:checked)::after {
+  content: '';
+  display: none;
 }
 
 #inspirationCheckbox:checked,
@@ -737,7 +802,7 @@ textarea:focus {
 }
 
 .inspiration-crown {
-  font-size: 1.2em;
+  font-size: 2.4em;
   color: #e0e0e0;
 }
 
@@ -798,5 +863,300 @@ textarea:focus {
   .saves-and-advantages-block input[type="checkbox"] {
     width: 18px;
     height: 18px;
+  }
+}
+
+#advantageCheckbox:checked::after {
+  content: '\f00c';  /* Font Awesome код для галочки */
+  font-family: 'Font Awesome 5 Free';
+  font-weight: 900;
+  color: white;
+  font-size: 1.2em;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: block;
+}
+
+#disadvantageCheckbox:checked::after {
+  content: '\f00d';  /* Font Awesome код для хрестика */
+  font-family: 'Font Awesome 5 Free';
+  font-weight: 900;
+  color: white;
+  font-size: 1.2em;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: block;
+}
+
+/* Видаляємо стилі для waitingpage */
+.player-waiting-screen,
+.player-waiting-screen h1,
+.player-waiting-screen p,
+.player-waiting-screen .loading-spinner,
+.waiting-screen,
+.waiting-content,
+.waiting-icon,
+.waiting-screen h2,
+.waiting-screen p {
+    display: none;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.waiting-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  background-color: rgba(33, 37, 51, 0.5);
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+}
+
+.waiting-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.waiting-icon {
+  font-size: 4em;
+  color: #e0e0e0;
+  animation: pulse 2s infinite;
+}
+
+.waiting-screen h2 {
+  font-family: 'Cormorant Unicase', serif;
+  font-size: 2em;
+  color: #f0f0f0;
+  margin: 0;
+}
+
+.waiting-screen p {
+  font-size: 1.2em;
+  color: #e0e0e0;
+  margin: 0;
+  max-width: 400px;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.5;
+  }
+}
+
+.refresh-button {
+  margin-top: 20px;
+  padding: 10px 20px;
+  background-color: #6a90ff;
+  border: none;
+  border-radius: 5px;
+  color: white;
+  cursor: pointer;
+  font-size: 1.1em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background-color 0.2s ease;
+}
+
+.refresh-button:hover {
+  background-color: #5a80ff;
+}
+
+.refresh-button i {
+  font-size: 1em;
+}
+
+/* Стилі для блоку очікування */
+.waiting-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background-color: rgba(30, 34, 49, 0.1);
+  color: #e0e0e0;
+  text-align: center;
+  padding: 20px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.waiting-block h2 {
+  font-family: 'Cormorant Unicase', serif;
+  font-size: 2em;
+  margin: 20px 0;
+  color: #f0f0f0;
+}
+
+.waiting-block .waiting-icon {
+  font-size: 4em;
+  color: #e0e0e0;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes healingPulse {
+  0% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(1.2);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+}
+
+.help-block {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  height: 100%;
+}
+
+.help-block i {
+  font-size: 2em;
+  color: #e0e0e0;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.help-block i:hover {
+  color: #fff;
+}
+
+/* Стилі для модального вікна */
+.modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.7);
+  z-index: 1000;
+  backdrop-filter: blur(5px);
+}
+
+.modal-content {
+  position: relative;
+  background-color: rgba(33, 37, 51, 0.95);
+  margin: 10% auto;
+  padding: 20px;
+  width: 80%;
+  max-width: 600px;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  animation: modalFadeIn 0.3s ease;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-family: 'Cormorant Unicase', serif;
+  font-size: 1.8em;
+  color: #f0f0f0;
+}
+
+.close-modal {
+  color: #e0e0e0;
+  font-size: 2em;
+  font-weight: bold;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.close-modal:hover {
+  color: #fff;
+}
+
+.modal-body {
+  color: #e0e0e0;
+}
+
+.info-grid {
+  display: grid;
+  gap: 15px;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.info-item label {
+  font-family: 'Cormorant Unicase', serif;
+  font-size: 1.1em;
+  color: #f0f0f0;
+  font-weight: bold;
+}
+
+.info-item span {
+  font-size: 1.1em;
+  color: #e0e0e0;
+}
+
+.modal-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 5px;
+}
+
+.modal-stats div {
+  font-family: 'Cormorant Unicase', serif;
+  font-size: 1.1em;
+  color: #e0e0e0;
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }

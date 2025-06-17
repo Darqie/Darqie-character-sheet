@@ -11,6 +11,7 @@ let activeSheetIndex = 0;
 let saveTimer = null;
 let currentPlayerName = '';
 let isGM = false;
+let isRedirecting = false;
 
 // === УТИЛІТИ ===
 function debounce(func, delay) {
@@ -19,6 +20,12 @@ function debounce(func, delay) {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => func.apply(context, args), delay);
   };
+}
+
+async function getMetadata() {
+  const metadata = await OBR.room.getMetadata();
+  const raw = metadata[DARQIE_SHEETS_KEY];
+  return Array.isArray(raw) ? raw : [];
 }
 
 function getSheetInputElements() {
@@ -117,23 +124,35 @@ async function saveSheetData() {
   sheet.advantage = document.getElementById('advantageCheckbox')?.checked || false;
   sheet.disadvantage = document.getElementById('disadvantageCheckbox')?.checked || false;
 
-  // Збереження в OBR
-  const currentMetadata = await OBR.room.getMetadata();
-  await OBR.room.setMetadata({ 
-    ...currentMetadata, 
-    [DARQIE_SHEETS_KEY]: characterSheets 
-  });
-
-  // Повідомлення про призначення персонажа
-  if (isGM && sheet.playerName && sheet.playerName !== previousPlayerName) {
-    await OBR.broadcast.sendMessage("character-assignment", {
-      playerName: sheet.playerName,
-      characterName: sheet.characterName || 'Без назви'
+  try {
+    // Отримуємо поточні метадані
+    const currentMetadata = await OBR.room.getMetadata();
+    const currentSheets = currentMetadata[DARQIE_SHEETS_KEY] || [];
+    
+    // Оновлюємо лист персонажа в масиві
+    currentSheets[activeSheetIndex] = { ...sheet };
+    
+    // Зберігаємо оновлені дані
+    await OBR.room.setMetadata({ 
+      ...currentMetadata, 
+      [DARQIE_SHEETS_KEY]: currentSheets 
     });
-  }
 
-  updateCharacterDropdown();
-  updateDeathOverlay();
+    // Оновлюємо локальні дані
+    characterSheets = currentSheets;
+
+    // Повідомлення про призначення персонажа
+    if (isGM && sheet.playerName && sheet.playerName !== previousPlayerName) {
+      await OBR.broadcast.sendMessage("character-assignment", {
+        playerName: sheet.playerName,
+        characterName: sheet.characterName || 'Без назви'
+      });
+    }
+
+    updateDeathOverlay();
+  } catch (error) {
+    console.error('Помилка при збереженні даних:', error);
+  }
 }
 
 function loadSheetData() {
@@ -185,8 +204,12 @@ function loadSheetData() {
 // === ІНТЕРФЕЙС ===
 async function updateCharacterDropdown() {
   const characterSelect = document.getElementById('characterSelect');
+  const waitingBlock = document.getElementById('waitingBlock');
+  const mainContent = document.getElementById('mainContent');
+  
   if (!characterSelect) return;
 
+  characterSheets = await getMetadata();
   const visibleSheets = characterSheets
     .map((sheet, index) => ({ ...sheet, index }))
     .filter(sheet => isGM || sheet.playerName === currentPlayerName);
@@ -201,19 +224,25 @@ async function updateCharacterDropdown() {
     characterSelect.appendChild(option);
   });
 
-  const sheetContainer = document.getElementById('characterSheetContainer');
-
   if (visibleSheets.length === 0) {
-    if (sheetContainer) sheetContainer.style.display = 'none';
-    await OBR.notification.show("У вас ще немає персонажів.", "info");
+    if (!isGM) {
+      if (waitingBlock) waitingBlock.style.display = 'flex';
+      if (mainContent) mainContent.style.display = 'none';
+    } else {
+      if (waitingBlock) waitingBlock.style.display = 'none';
+      if (mainContent) mainContent.style.display = 'flex';
+      await OBR.notification.show("У вас ще немає персонажів.", "info");
+    }
     return;
   }
+
+  if (waitingBlock) waitingBlock.style.display = 'none';
+  if (mainContent) mainContent.style.display = 'flex';
 
   const isActiveVisible = visibleSheets.some(sheet => sheet.index === previousIndex);
   activeSheetIndex = isActiveVisible ? previousIndex : visibleSheets[0].index;
 
   characterSelect.value = activeSheetIndex;
-  if (sheetContainer) sheetContainer.style.display = 'block';
 
   loadSheetData();
   populatePlayerSelect();
@@ -340,61 +369,101 @@ function setupCharacterButtons() {
   // Додавання персонажа
   if (addBtn && isGM) {
     addBtn.addEventListener('click', async () => {
-      const newSheet = {
-        characterName: '',
-        playerName: '',
-        characterClassLevel: '',
-        background: '',
-        characterRace: '',
-        alignment: '',
-        strengthScore: '10',
-        dexterityScore: '10',
-        constitutionScore: '10',
-        intelligenceScore: '10',
-        wisdomScore: '10',
-        charismaScore: '10',
-        healthPoints: '',
-        armorClass: '',
-        initiative: '',
-        speed: '',
-        proficienciesAndLanguages: '',
-        equipment: '',
-        alliesAndOrganizations: '',
-        characterHistory: '',
-        additionalFeatures: '',
-        notes: '',
-        characterPhoto: '/no-image-placeholder.svg',
-        deathSavesSuccess: [false, false, false],
-        deathSavesFailure: [false, false, false],
-      };
+      try {
+        console.log('Створення нового персонажа');
+        const newSheet = {
+          characterName: '',
+          playerName: '',
+          characterClassLevel: '',
+          background: '',
+          characterRace: '',
+          alignment: '',
+          strengthScore: '10',
+          dexterityScore: '10',
+          constitutionScore: '10',
+          intelligenceScore: '10',
+          wisdomScore: '10',
+          charismaScore: '10',
+          healthPoints: '',
+          armorClass: '',
+          initiative: '',
+          speed: '',
+          proficienciesAndLanguages: '',
+          equipment: '',
+          alliesAndOrganizations: '',
+          characterHistory: '',
+          additionalFeatures: '',
+          notes: '',
+          characterPhoto: '/no-image-placeholder.svg',
+          deathSavesSuccess: [false, false, false],
+          deathSavesFailure: [false, false, false],
+        };
 
-      characterSheets.push(newSheet);
-      activeSheetIndex = characterSheets.length - 1;
+        // Отримуємо поточні дані
+        const currentMetadata = await OBR.room.getMetadata();
+        const currentSheets = currentMetadata[DARQIE_SHEETS_KEY] || [];
+        
+        // Додаємо нового персонажа
+        const updatedSheets = [...currentSheets, newSheet];
+        
+        // Зберігаємо оновлені дані
+        await OBR.room.setMetadata({
+          ...currentMetadata,
+          [DARQIE_SHEETS_KEY]: updatedSheets
+        });
 
-      updateCharacterDropdown();
-      loadSheetData();
-      populatePlayerSelect();
-      await saveSheetData();
+        // Оновлюємо локальні дані
+        characterSheets = updatedSheets;
+        activeSheetIndex = characterSheets.length - 1;
+
+        // Оновлюємо інтерфейс
+        updateCharacterDropdown();
+        loadSheetData();
+        populatePlayerSelect();
+        
+        console.log('Новий персонаж створено успішно');
+      } catch (error) {
+        console.error('Помилка при створенні персонажа:', error);
+      }
     });
   }
 
   // Видалення персонажа
   if (delBtn && isGM) {
     delBtn.addEventListener('click', async () => {
-      if (!confirm('Ви дійсно хочете видалити цього персонажа?')) return;
+      try {
+        if (!confirm('Ви дійсно хочете видалити цього персонажа?')) return;
 
-      characterSheets.splice(activeSheetIndex, 1);
+        // Отримуємо поточні дані
+        const currentMetadata = await OBR.room.getMetadata();
+        const currentSheets = currentMetadata[DARQIE_SHEETS_KEY] || [];
+        
+        // Видаляємо персонажа
+        const updatedSheets = currentSheets.filter((_, index) => index !== activeSheetIndex);
+        
+        // Зберігаємо оновлені дані
+        await OBR.room.setMetadata({
+          ...currentMetadata,
+          [DARQIE_SHEETS_KEY]: updatedSheets
+        });
 
-      if (characterSheets.length === 0) {
-        activeSheetIndex = 0;
-      } else {
-        activeSheetIndex = Math.min(activeSheetIndex, characterSheets.length - 1);
+        // Оновлюємо локальні дані
+        characterSheets = updatedSheets;
+        if (characterSheets.length === 0) {
+          activeSheetIndex = 0;
+        } else {
+          activeSheetIndex = Math.min(activeSheetIndex, characterSheets.length - 1);
+        }
+
+        // Оновлюємо інтерфейс
+        updateCharacterDropdown();
+        loadSheetData();
+        populatePlayerSelect();
+        
+        console.log('Персонаж видалено успішно');
+      } catch (error) {
+        console.error('Помилка при видаленні персонажа:', error);
       }
-
-      updateCharacterDropdown();
-      loadSheetData();
-      populatePlayerSelect();
-      await saveSheetData();
     });
   }
 }
@@ -460,12 +529,41 @@ function setupPhotoButtons() {
 }
 
 function updateDeathOverlay() {
+  const success1 = document.getElementById('deathSavesSuccess1')?.checked;
+  const success2 = document.getElementById('deathSavesSuccess2')?.checked;
+  const success3 = document.getElementById('deathSavesSuccess3')?.checked;
   const fail1 = document.getElementById('deathSavesFailure1')?.checked;
   const fail2 = document.getElementById('deathSavesFailure2')?.checked;
   const fail3 = document.getElementById('deathSavesFailure3')?.checked;
   const photoContainer = document.querySelector('.photo-container');
   let overlay = document.getElementById('deathOverlay');
 
+  // Перевіряємо на три успіхи
+  if (success1 && success2 && success3) {
+    // Створюємо ефект лікування
+    const healingOverlay = document.createElement('div');
+    healingOverlay.id = 'healingOverlay';
+    healingOverlay.style.position = 'absolute';
+    healingOverlay.style.top = '0';
+    healingOverlay.style.left = '0';
+    healingOverlay.style.width = '100%';
+    healingOverlay.style.height = '100%';
+    healingOverlay.style.display = 'flex';
+    healingOverlay.style.alignItems = 'center';
+    healingOverlay.style.justifyContent = 'center';
+    healingOverlay.style.pointerEvents = 'none';
+    healingOverlay.style.backgroundColor = 'rgba(0, 255, 0, 0.2)';
+    healingOverlay.style.animation = 'healingPulse 5s ease-out';
+    healingOverlay.innerHTML = `<i class="fas fa-heart" style="font-size: 15em; color: #00ff00; opacity: 0.5;"></i>`;
+    photoContainer.appendChild(healingOverlay);
+
+    // Видаляємо ефект через 5 секунд
+    setTimeout(() => {
+      healingOverlay.remove();
+    }, 5000);
+  }
+
+  // Перевіряємо на три невдачі
   if (fail1 && fail2 && fail3) {
     if (!overlay) {
       overlay = document.createElement('div');
@@ -479,7 +577,8 @@ function updateDeathOverlay() {
       overlay.style.alignItems = 'center';
       overlay.style.justifyContent = 'center';
       overlay.style.pointerEvents = 'none';
-      overlay.innerHTML = `<i class="fas fa-thumbs-down" style="font-size: 15em; color: red; opacity: 0.5;"></i>`;
+      overlay.style.backgroundColor = 'rgba(255, 0, 0, 0.2)';
+      overlay.innerHTML = `<i class="fas fa-ghost" style="font-size: 15em; color: red; opacity: 0.5;"></i>`;
       photoContainer.appendChild(overlay);
     }
   } else {
@@ -487,57 +586,162 @@ function updateDeathOverlay() {
   }
 }
 
-// === ІНІЦІАЛІЗАЦІЯ ===
-window.addEventListener('load', async () => {
-  await OBR.onReady(async () => {
-    // Отримання інформації про гравця
-    currentPlayerName = await OBR.player.getName();
-    isGM = (await OBR.player.getRole()) === 'GM';
+// Модифікуємо функцію checkCharacterAndRedirect
+async function checkCharacterAndRedirect() {
+    try {
+        const metadata = await OBR.room.getMetadata();
+        const sheets = metadata[DARQIE_SHEETS_KEY] || [];
+        const currentPlayerName = await OBR.player.getName();
+        
+        const hasCharacter = sheets.some(sheet => sheet.playerName === currentPlayerName);
+        const waitingBlock = document.getElementById('waitingBlock');
+        const mainContent = document.getElementById('mainContent');
 
-    // Завантаження даних
-    const metadata = await OBR.room.getMetadata();
-    const raw = metadata[DARQIE_SHEETS_KEY];
-    characterSheets = Array.isArray(raw) ? raw : [];
+        if (!isGM) {
+            if (hasCharacter) {
+                if (waitingBlock) waitingBlock.style.display = 'none';
+                if (mainContent) mainContent.style.display = 'flex';
+                // Оновлюємо дані тільки якщо вони змінились
+                if (JSON.stringify(characterSheets) !== JSON.stringify(sheets)) {
+                    characterSheets = sheets;
+                    await updateCharacterDropdown();
+                }
+            } else {
+                if (waitingBlock) waitingBlock.style.display = 'flex';
+                if (mainContent) mainContent.style.display = 'none';
+            }
+        } else {
+            if (waitingBlock) waitingBlock.style.display = 'none';
+            if (mainContent) mainContent.style.display = 'flex';
+            // Для ГМ також оновлюємо тільки при зміні
+            if (JSON.stringify(characterSheets) !== JSON.stringify(sheets)) {
+                characterSheets = sheets;
+                await updateCharacterDropdown();
+            }
+        }
+    } catch (error) {
+        console.error('Помилка при перевірці стану персонажа:', error);
+    }
+}
 
-    // Налаштування інтерфейсу
+// Модифікуємо функцію setupInterface
+function setupInterface() {
     setupCharacterButtons();
     setupPhotoButtons();
     setupStatButtons();
     updateCharacterDropdown();
     connectInputsToSave();
 
-    // Підписка на зміни
+    // Додаємо підписку на зміни метаданих
     OBR.room.onMetadataChange(async (metadata) => {
-      const newSheets = metadata[DARQIE_SHEETS_KEY] || [];
-      if (JSON.stringify(newSheets) !== JSON.stringify(characterSheets)) {
-        characterSheets = newSheets;
-        updateCharacterDropdown();
-        connectInputsToSave();
-      }
-    });
-
-    OBR.party.onChange(() => {
-      populatePlayerSelect();
-    });
-
-    // Обробка призначення персонажів
-    OBR.broadcast.onMessage("character-assignment", async (data) => {
-      if (data.playerName === currentPlayerName) {
-        const metadata = await OBR.room.getMetadata();
-        const raw = metadata[DARQIE_SHEETS_KEY];
-        characterSheets = Array.isArray(raw) ? raw : [];
-
-        const visibleSheets = characterSheets
-          .map((sheet, index) => ({ ...sheet, index }))
-          .filter(sheet => sheet.playerName === currentPlayerName);
-
-        if (visibleSheets.length > 0) {
-          activeSheetIndex = visibleSheets[0].index;
+        const sheets = metadata[DARQIE_SHEETS_KEY] || [];
+        // Оновлюємо тільки якщо дані дійсно змінились
+        if (JSON.stringify(characterSheets) !== JSON.stringify(sheets)) {
+            await checkCharacterAndRedirect();
         }
-
-        updateCharacterDropdown();
-        connectInputsToSave();
-      }
     });
+
+    // Додаємо підписку на повідомлення про призначення персонажа
+    OBR.broadcast.onMessage("character-assignment", async (data) => {
+        if (data.playerName === currentPlayerName) {
+            await checkCharacterAndRedirect();
+        }
+    });
+}
+
+// === ІНІЦІАЛІЗАЦІЯ ===
+window.addEventListener('load', async () => {
+    await OBR.onReady(async () => {
+        // Отримання інформації про гравця
+        currentPlayerName = await OBR.player.getName();
+        isGM = (await OBR.player.getRole()) === 'GM';
+
+        // Налаштування інтерфейсу
+        setupInterface();
+
+        // Підписка на зміни в партії
+        OBR.party.onChange(() => {
+            populatePlayerSelect();
+        });
+
+        // Періодична перевірка наявності персонажа
+        setInterval(async () => {
+            await checkCharacterAndRedirect();
+        }, 1000);
+    });
+});
+
+// Функція для отримання поточного персонажа
+async function getCurrentCharacter() {
+  const metadata = await OBR.scene.getMetadata();
+  const characters = metadata.characters || {};
+  const selectedCharacterId = document.getElementById('characterSelect').value;
+  
+  if (!selectedCharacterId) return null;
+  return characters[selectedCharacterId] || null;
+}
+
+// Функція для оновлення інформації в модальному вікні
+function updateModalInfo(character) {
+  if (!character) return;
+  
+  document.getElementById('modalCharacterName').textContent = document.getElementById('characterName').value || 'Не вказано';
+  document.getElementById('modalCharacterRace').textContent = document.getElementById('characterRace').value || 'Не вказано';
+  document.getElementById('modalCharacterClass').textContent = document.getElementById('characterClassLevel').value || 'Не вказано';
+  document.getElementById('modalBackground').textContent = document.getElementById('background').value || 'Не вказано';
+  document.getElementById('modalAlignment').textContent = document.getElementById('alignment').value || 'Не вказано';
+  
+  // Оновлення характеристик
+  document.getElementById('modalStrength').textContent = document.getElementById('strengthScore').value || '10';
+  document.getElementById('modalDexterity').textContent = document.getElementById('dexterityScore').value || '10';
+  document.getElementById('modalConstitution').textContent = document.getElementById('constitutionScore').value || '10';
+  document.getElementById('modalIntelligence').textContent = document.getElementById('intelligenceScore').value || '10';
+  document.getElementById('modalWisdom').textContent = document.getElementById('wisdomScore').value || '10';
+  document.getElementById('modalCharisma').textContent = document.getElementById('charismaScore').value || '10';
+}
+
+// Функція для відкриття модального вікна
+async function openCharacterInfoModal() {
+  const modal = document.getElementById('characterInfoModal');
+  const currentCharacter = await getCurrentCharacter();
+  
+  if (currentCharacter) {
+    updateModalInfo(currentCharacter);
+    modal.style.display = 'block';
+  } else {
+    // Якщо персонаж не вибраний, показуємо повідомлення
+    const modalBody = document.querySelector('.modal-body');
+    modalBody.innerHTML = '<p style="text-align: center; font-size: 1.2em;">Будь ласка, виберіть персонажа</p>';
+    modal.style.display = 'block';
+  }
+}
+
+// Функція для закриття модального вікна
+function closeCharacterInfoModal() {
+  const modal = document.getElementById('characterInfoModal');
+  modal.style.display = 'none';
+}
+
+// Додаємо обробники подій для модального вікна
+document.addEventListener('DOMContentLoaded', () => {
+  const helpIcon = document.querySelector('.help-block i');
+  const closeButton = document.querySelector('.close-modal');
+  const modal = document.getElementById('characterInfoModal');
+
+  helpIcon.addEventListener('click', openCharacterInfoModal);
+  closeButton.addEventListener('click', closeCharacterInfoModal);
+
+  // Закриття модального вікна при кліку поза ним
+  window.addEventListener('click', (event) => {
+    if (event.target === modal) {
+      closeCharacterInfoModal();
+    }
+  });
+
+  // Закриття модального вікна при натисканні Escape
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && modal.style.display === 'block') {
+      closeCharacterInfoModal();
+    }
   });
 });

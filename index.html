@@ -9,7 +9,14 @@
   <link href="style.css" rel="stylesheet" />
 </head>
 <body>
-  <div class="main-container">
+  <!-- Блок очікування -->
+  <div id="waitingBlock" class="waiting-block">
+    <i class="fas fa-hourglass-half waiting-icon"></i>
+    <h2>Зачекайте, поки ГМ не видасть вам персонажа</h2>
+  </div>
+
+  <!-- Основний контент -->
+  <div id="mainContent" class="main-container" style="display: none;">
     <!-- Ліва панель -->
     <div class="left-panel">
       <!-- Керування персонажами -->
@@ -158,12 +165,15 @@
                 </div>
               </div>
             </div>
-            <div class="inspiration-block">
-              <label class="inspiration-label"><span class="inspiration-crown" aria-label="Натхнення"><i class="fas fa-gem"></i></span> <input id="inspirationCheckbox" type="checkbox" /></label>
-            </div>
             <div class="inspiration-advantage-block">
               <label class="advantage-label">Перевага <input id="advantageCheckbox" type="checkbox" /></label>
               <label class="disadvantage-label">Похибка <input id="disadvantageCheckbox" type="checkbox" /></label>
+            </div>
+            <div class="inspiration-block">
+              <label class="inspiration-label"><span class="inspiration-crown" aria-label="Натхнення"><i class="fas fa-dice-d20"></i></span> <input id="inspirationCheckbox" type="checkbox" /></label>
+            </div>
+            <div class="help-block">
+              <i class="fas fa-info-circle" title="Довідка"></i>
             </div>
           </div>
         </div>
@@ -297,6 +307,52 @@
     У вас ще немає персонажів.
   </div>
 
-  <script src="/main.js" type="module"></script>
+  <!-- Модальне вікно з інформацією -->
+  <div id="characterInfoModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Інформація про персонажа</h2>
+        <span class="close-modal">&times;</span>
+      </div>
+      <div class="modal-body">
+        <div class="info-grid">
+          <div class="info-item">
+            <label>Ім'я:</label>
+            <span id="modalCharacterName"></span>
+          </div>
+          <div class="info-item">
+            <label>Раса:</label>
+            <span id="modalCharacterRace"></span>
+          </div>
+          <div class="info-item">
+            <label>Клас та рівень:</label>
+            <span id="modalCharacterClass"></span>
+          </div>
+          <div class="info-item">
+            <label>Передісторія:</label>
+            <span id="modalBackground"></span>
+          </div>
+          <div class="info-item">
+            <label>Світогляд:</label>
+            <span id="modalAlignment"></span>
+          </div>
+          <div class="info-item">
+            <label>Характеристики:</label>
+            <div class="modal-stats">
+              <div>СИЛ: <span id="modalStrength"></span></div>
+              <div>СПР: <span id="modalDexterity"></span></div>
+              <div>СТА: <span id="modalConstitution"></span></div>
+              <div>ІНТ: <span id="modalIntelligence"></span></div>
+              <div>МУД: <span id="modalWisdom"></span></div>
+              <div>ХАР: <span id="modalCharisma"></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/@owlbear-rodeo/sdk@latest/dist/owlbear-sdk.js"></script>
+  <script src="main.js" type="module"></script>
 </body>
 </html>
