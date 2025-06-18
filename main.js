@@ -690,8 +690,6 @@ function setupInterface() {
         let msg = `Навичка: ${data.name}`;
         if (data.desc) msg += `\n${data.desc}`;
         OBR.notification.show(msg, 'info');
-        // Додаю дублювання через alert
-        alert(msg);
       }
     });
 }
@@ -715,22 +713,10 @@ OBR.onReady(async () => {
         await checkCharacterAndRedirect();
     }, 1000);
 
-    // Тестова кнопка
-    const btn = document.createElement('button');
-    btn.textContent = 'Тест broadcast';
-    btn.style.position = 'fixed';
-    btn.style.top = '10px';
-    btn.style.right = '10px';
-    btn.style.zIndex = 9999;
-    btn.onclick = () => {
-      OBR.broadcast.sendMessage('test-broadcast', { test: 'hello', time: Date.now() });
-    };
-    document.body.appendChild(btn);
-
     // Підписка на test-broadcast
     OBR.broadcast.onMessage('test-broadcast', (data) => {
       console.log('Отримано test-broadcast:', data);
-      alert('Отримано test-broadcast: ' + JSON.stringify(data));
+      OBR.notification.show(`Отримано test-broadcast: ${JSON.stringify(data)}`, 'info');
     });
 
     // Підписка на skill-chat
@@ -740,9 +726,13 @@ OBR.onReady(async () => {
         let msg = `Навичка: ${data.name}`;
         if (data.desc) msg += `\n${data.desc}`;
         OBR.notification.show(msg, 'info');
-        alert(msg);
       }
     });
+
+    // --- Додаю надсилання broadcast для іконки чату навички ---
+    window.sendSkillChat = async function(name, desc) {
+      await OBR.broadcast.sendMessage('skill-chat', { name, desc });
+    };
 });
 
 // Функція для отримання поточного персонажа
@@ -885,13 +875,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Додаю перевірку, що подія ініційована користувачем
   const abilityScoresBlock = document.querySelector('.ability-scores');
   if (abilityScoresBlock) {
-    abilityScoresBlock.addEventListener('click', function(event) {
+    abilityScoresBlock.addEventListener('click', async function(event) {
       const box = event.target.closest('.modifier-box');
       if (!box || !abilityScoresBlock.contains(box)) return;
       if (weaponEditing || skillEditing) return;
-      // Переконуємось, що клік був саме по .modifier-box, а не по дочірньому елементу
       if (event.target !== box) return;
-      // Додаю перевірку, що подія ініційована користувачем
       if (!event.isTrusted) return;
       let label = '';
       switch (box.id) {
@@ -904,6 +892,10 @@ document.addEventListener('DOMContentLoaded', () => {
         default: label = 'Характеристика';
       }
       alert(label + ': ' + box.textContent.trim());
+      await OBR.broadcast.sendMessage('ability-score-change', {
+        label: label,
+        value: box.textContent.trim()
+      });
       event.stopPropagation();
     });
   }
