@@ -12,8 +12,8 @@
     "width": 400
   },
   "permissions": [
-    "SCENE",
-    "NOTIFICATION",
-    "BROADCAST"
+    { "name": "SCENE" },
+    { "name": "NOTIFICATION" },
+    { "name": "BROADCAST" }
   ]
 }
