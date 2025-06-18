@@ -13,14 +13,14 @@
     "width": 1060
   },
   "panel": {
-    "title": "Darqie character sheet",
-    "icon": "/icon.svg",
-    "url": "/index.html",
-    "height": 700,
-    "width": 1060
+    "title": "Darqie Character Sheet",
+    "icon": "icon.svg",
+    "height": 600,
+    "width": 400
   },
   "permissions": [
-    "broadcast",
-    "notification"
+    { "name": "SCENE" },
+    { "name": "NOTIFICATION" },
+    { "name": "BROADCAST" }
   ]
 }
