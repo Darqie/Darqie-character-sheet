@@ -1,4 +1,5 @@
 {
+  "manifest_version": 1,
   "id": "darqie-character-sheet",
   "name": "DarqieSheet",
   "title": "Darqie Character Sheet",
