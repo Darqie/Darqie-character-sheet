@@ -1376,8 +1376,15 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// === Додаю функцію для тимчасової нотатки на сцені ===
+// === Додаю функцію для тимчасової нотатки на сцені з перевіркою існування методу ===
 async function showSkillNote(skillName, skillDescription) {
+  console.log('OBR.scene:', OBR.scene);
+  console.log('OBR.scene.items:', OBR.scene?.items);
+  console.log('OBR.scene.items.add:', OBR.scene?.items?.add);
+  if (!OBR.scene || !OBR.scene.items || typeof OBR.scene.items.add !== 'function') {
+    alert('OBR.scene.items.add недоступний! Перевірте підключення SDK та режим запуску.');
+    return;
+  }
   const noteId = "skill-chat-" + Date.now();
   await OBR.scene.items.add([
     {
