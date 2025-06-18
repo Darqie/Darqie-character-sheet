@@ -1,9 +1,10 @@
 {
   "id": "darqie-character-sheet",
+  "name": "DarqieSheet",
   "title": "Darqie Character Sheet",
   "icon": "icon.svg",
   "version": "1.0.0",
-  "action": {
+  "panel": {
     "title": "Darqie Character Sheet",
     "icon": "icon.svg",
     "height": 600,
