@@ -1,21 +1,22 @@
+html, body {
+  height: 100%;
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
 body {
   font-family: 'Roboto', sans-serif;
   margin: 0;
-  padding: 20px;
+  padding: 0;
   display: flex;
   justify-content: center;
   align-items: flex-start;
   min-height: 100vh;
-  background-color: rgba(30, 34, 49, 0.1);
-  color: #e0e0e0;
-  font-size: 16px;
-  line-height: 1.4;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-}
-
-html, body {
-  height: 100%;
+  color: #000000;
+  font-size: 16px;
+  line-height: 1.4;
 }
 
 * {
@@ -29,8 +30,15 @@ html, body {
   gap: 20px;
   width: 100%;
   max-width: 1000px;
-  padding: 0 10px;
+  padding: 0;
   align-items: flex-start;
+  background: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  margin-top: 0;
 }
 
 .left-panel {
@@ -56,9 +64,8 @@ html, body {
 .character-controls {
   display: flex;
   gap: 20px;
-  margin-bottom: 20px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid white;
+  border-bottom: 1px solid rgba(255,255,255,0.3);
+  padding-bottom: 8px;
   align-items: center;
   justify-content: space-between;
   background-color: transparent;
@@ -66,6 +73,7 @@ html, body {
   box-shadow: none;
   top: 0;
   z-index: 1000;
+  margin-top: 16px;
 }
 
 .character-select-group {
@@ -152,7 +160,7 @@ textarea::placeholder {
   border-radius: 8px;
   border: none !important;
   box-shadow: 0 2px 12px 0 rgba(0,0,0,0.18), 0 1.5px 6px 0 rgba(0,0,0,0.12);
-  background-color: rgba(33, 37, 51, 0.5);
+  background-color: rgba(33, 37, 51, 0.10);
   backdrop-filter: blur(10px);
 }
 
@@ -170,6 +178,11 @@ textarea::placeholder {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 15px;
+  margin-bottom: 10px;
+}
+
+#abilityScoresBlock {
+  border-bottom: 1px solid rgba(255,255,255,0.3);
   margin-bottom: 10px;
 }
 
@@ -340,7 +353,7 @@ textarea::placeholder {
   gap: 10px;
   width: 100%;
   padding-top: 15px;
-  border-top: 1px solid #3f445c;
+  border-top: 1px solid rgba(255,255,255,0.3);
 }
 
 .quick-stat-item {
@@ -376,23 +389,32 @@ textarea::placeholder {
 #photoControls button,
 #addCharacterButton,
 #deleteCharacterButton {
-  background-color: rgba(63, 68, 92, 0.8);
-  color: white;
-  border: 1px solid #5a607c;
-  border-radius: 5px;
-  padding: 8px 12px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
+  background-color: rgba(33, 37, 51, 0.5);
+  backdrop-filter: blur(10px);
+  border: none;
+  outline: 1px solid rgba(255,255,255,0.3);
+  color: #e0e0e0;
+  font-family: 'Cormorant Unicase', serif !important;
+  font-size: 1.1em;
+  font-weight: 700;
   cursor: pointer;
-  font-size: 1em;
-  backdrop-filter: blur(5px);
-  transition: background-color 0.2s ease;
+  transition: outline 0.15s, background 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .character-controls button:hover,
 #photoControls button:hover,
 #addCharacterButton:hover,
 #deleteCharacterButton:hover {
-  background-color: #6a90ff;
-  border-color: #fff;
+  outline: 1.5px solid #fff;
+  outline-offset: 2px;
+  background-color: transparent;
+  color: #fff;
 }
 
 /* Статистики та модифікатори */
@@ -496,13 +518,6 @@ textarea:focus {
   box-shadow: 0 0 0 2px rgba(255,255,255,0.3);
 }
 
-.character-controls button:hover,
-#photoControls button:hover,
-#addCharacterButton:hover,
-#deleteCharacterButton:hover {
-  background-color: #6a90ff;
-  border-color: #fff;
-}
 
 .stat-btn:focus,
 .stat-btn:active {
@@ -533,19 +548,19 @@ textarea:focus {
   fill: #fff !important;
 }
 
-.death-saves {
+.death-saves,
+.inspiration-block,
+.inspiration-advantage-block {
+  height: 100%;
   display: flex;
-  flex-direction: row;
   align-items: center;
-  gap: 4px;
-  padding: 6px 6px;
-  border-radius: 4px;
-  box-shadow: 0 1px 4px 0 rgba(0,0,0,0.10), 0 1px 2px 0 rgba(0,0,0,0.08);
   background: transparent;
-  margin-bottom: 4px;
-  justify-content: flex-start;
+  box-shadow: 0 1px 4px 0 rgba(0,0,0,0.10), 0 1px 2px 0 rgba(0,0,0,0.08);
+  border-radius: 4px;
+  padding: 2px 6px;
   min-width: 0;
-  align-self: flex-end;
+  margin: 0;
+  box-sizing: border-box;
 }
 
 .death-saves-group {
@@ -625,25 +640,11 @@ textarea:focus {
   display: none;
 }
 
-.death-saves-row {
+.quick-actions-row {
   display: flex;
   flex-direction: row;
   gap: 24px;
   align-items: stretch;
-  margin-bottom: 18px;
-}
-
-.inspiration-advantage-block {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  background: transparent;
-  box-shadow: 0 1px 4px 0 rgba(0,0,0,0.10), 0 1px 2px 0 rgba(0,0,0,0.08);
-  border-radius: 4px;
-  padding: 2px 6px;
-  min-width: 0;
-  margin: 0;
 }
 
 .inspiration-advantage-block input[type="checkbox"] {
@@ -810,24 +811,11 @@ textarea:focus {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 8px;
+  gap: 16px;
   width: 100%;
   height: 44px;
-}
-
-.death-saves,
-.inspiration-block,
-.inspiration-advantage-block {
-  height: 100%;
-  display: flex;
-  align-items: center;
-  background: transparent;
-  box-shadow: 0 1px 4px 0 rgba(0,0,0,0.10), 0 1px 2px 0 rgba(0,0,0,0.08);
-  border-radius: 4px;
-  padding: 2px 6px;
-  min-width: 0;
-  margin: 0;
-  box-sizing: border-box;
+  margin-top: 0;
+  margin-bottom: 0;
 }
 
 .death-saves-label,
@@ -1042,8 +1030,14 @@ textarea:focus {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 8px;
+  padding: 2px 6px;
   height: 100%;
+  background: transparent;
+  box-shadow: 0 1px 4px 0 rgba(0,0,0,0.10), 0 1px 2px 0 rgba(0,0,0,0.08);
+  border-radius: 4px;
+  min-width: 0;
+  margin: 0;
+  box-sizing: border-box;
 }
 
 .help-block i {
@@ -1065,20 +1059,22 @@ textarea:focus {
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.7);
+  background: transparent;
   z-index: 1000;
   backdrop-filter: blur(5px);
 }
 
 .modal-content {
   position: relative;
-  background-color: rgba(33, 37, 51, 0.95);
+  background-color: rgba(33, 37, 51, 1);
   margin: 10% auto;
   padding: 20px;
   width: 80%;
   max-width: 600px;
   border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 12px 0 rgba(0,0,0,0.18), 0 1.5px 6px 0 rgba(0,0,0,0.12);
+  backdrop-filter: blur(10px);
+  border: none;
   animation: modalFadeIn 0.3s ease;
 }
 
@@ -1159,4 +1155,723 @@ textarea:focus {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+.sheet-columns {
+  display: flex;
+  gap: 20px;
+}
+
+.sheet-col-left, .sheet-col-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sheet-col-left textarea,
+.sheet-col-right textarea {
+  background-color: transparent;
+  border: none;
+  outline: 1px solid rgba(255,255,255,0.3);
+  border-radius: 8px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.2);
+  color: #e0e0e0;
+  font-family: 'Cormorant Unicase', serif !important;
+  font-size: 1.1em;
+  padding: 12px;
+  min-height: 80px;
+  resize: vertical;
+  transition: outline 0.15s;
+}
+
+.sheet-col-left textarea:focus,
+.sheet-col-right textarea:focus {
+  outline: 1.5px solid #fff;
+  outline-offset: 2px;
+}
+
+.weapon-block {
+  background: transparent;
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px 0 rgba(0,0,0,0.18), 0 1.5px 6px 0 rgba(0,0,0,0.12);
+  padding: 4px 18px 12px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.weapon-label {
+  font-family: 'Cormorant Unicase', serif !important;
+  font-size: 1.4em;
+  font-weight: 1000;
+  color: #f0f0f0;
+  text-transform: uppercase;
+  margin-bottom: 0;
+  margin-top: 0;
+  line-height: 1.1;
+  letter-spacing: 0.04em;
+  align-self: flex-start;
+  position: relative;
+  cursor: default !important;
+  user-select: none !important;
+  pointer-events: auto;
+}
+
+.weapon-label::after {
+  display: none !important;
+}
+
+.weapon-block textarea {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #e0e0e0;
+  font-family: inherit;
+  font-size: 1.1em;
+  resize: vertical;
+  min-height: 70px;
+  padding: 0;
+  box-shadow: none;
+}
+
+.weapon-block textarea:focus {
+  outline: none;
+}
+
+.weapon-edit-btn {
+  background: transparent;
+  border: none;
+  color: #f0f0f0;
+  font-size: 1.1em;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 5px;
+  transition: background 0.15s;
+  display: flex;
+  align-items: center;
+}
+.weapon-edit-btn:hover {
+  background: rgba(255,255,255,0.10);
+}
+.weapon-edit-btn i {
+  color: inherit;
+  font-size: 1em;
+}
+
+.weapon-label-row {
+  margin-top: 2px;
+  position: relative;
+  display: block;
+}
+.weapon-label-row .weapon-label-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0;
+}
+.weapon-label-row::after {
+  content: '';
+  display: block;
+  width: 100%;
+  height: 0;
+  border-bottom: 1.5px solid rgba(255,255,255,0.35);
+  margin-top: 0;
+}
+
+.weapon-table {
+  width: 100%;
+  border-collapse: separate;
+  margin-top: 0;
+}
+.weapon-table tr {
+  height: 26px !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+}
+.weapon-table td, .weapon-table th {
+  padding: 0 !important;
+  line-height: 1 !important;
+  vertical-align: middle !important;
+}
+.weapon-table th:nth-child(1), .weapon-table td:nth-child(1) {
+  width: 60%;
+}
+.weapon-table th:nth-child(2), .weapon-table td:nth-child(2) {
+  width: 20%;
+}
+.weapon-table th:nth-child(3), .weapon-table td:nth-child(3) {
+  width: 20%;
+}
+.weapon-table th {
+  font-family: 'Cormorant Unicase', serif !important;
+  font-size: 1em;
+  color: #f0f0f0;
+  font-weight: 700;
+  text-align: left;
+  padding-bottom: 0;
+  opacity: 0.85;
+  padding-left: 2px;
+  padding-right: 2px;
+}
+.weapon-table td:nth-child(2) input,
+.weapon-table td:nth-child(3) input {
+  text-align: center;
+}
+.weapon-table td {
+  padding: 0 2px 0 0;
+}
+.weapon-table input[type="text"] {
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  min-height: 0 !important;
+  outline: none !important;
+  border-width: 1px !important;
+  border-radius: 3px !important;
+  padding: 0 4px !important;
+  height: 24px !important;
+  line-height: 1 !important;
+  width: 100%;
+  background: rgba(33,37,51,0.25);
+  border: none;
+  outline: 1px solid rgba(255,255,255,0.25);
+  color: #e0e0e0;
+  font-family: 'Cormorant Unicase', serif !important;
+  font-size: 1em;
+  transition: outline 0.15s;
+}
+.weapon-table input[type="text"]:focus {
+  outline: 1.5px solid #fff;
+  background: rgba(33,37,51,0.35);
+}
+
+.weapon-accept-btn, .weapon-cancel-btn {
+  background: transparent;
+  border: none;
+  color: #f0f0f0;
+  font-size: 1.1em;
+  cursor: pointer;
+  padding: 0;
+  border-radius: 5px;
+  transition: background 0.15s;
+  display: flex;
+  align-items: center;
+}
+.weapon-accept-btn:hover {
+  background: rgba(0,255,0,0.10);
+  color: #7fff7f;
+}
+.weapon-cancel-btn:hover {
+  background: rgba(255,0,0,0.10);
+  color: #ff7f7f;
+}
+.weapon-accept-btn i, .weapon-cancel-btn i {
+  font-size: 1.4em;
+  color: inherit;
+}
+
+.weapon-label-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0;
+}
+
+.weapon-edit-group {
+  display: flex;
+  gap: 6px;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+}
+
+.weapon-edit-group button:not(:last-child) {
+  margin-bottom: 2px;
+}
+
+.weapon-edit-group button {
+  padding: 0 4px;
+  font-weight: 400;
+}
+.weapon-edit-group button i {
+  font-size: 1.1em;
+  font-weight: 400;
+}
+
+.weapon-add-row-btn, .weapon-delete-row-btn {
+  background: transparent;
+  border: none;
+  color: #f0f0f0;
+  font-size: 1.2em;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 5px;
+  transition: background 0.15s;
+  display: flex;
+  align-items: center;
+}
+.weapon-add-row-btn:hover {
+  background: rgba(0,255,0,0.10);
+  color: #7fff7f;
+}
+.weapon-delete-row-btn:hover {
+  background: rgba(255,0,0,0.10);
+  color: #ff7f7f;
+}
+.weapon-add-row-btn i {
+  font-size: 1.2em;
+  color: inherit;
+  font-weight: 900;
+}
+
+.weapon-delete-row-btn {
+  background: transparent;
+  border: none;
+  color: #ff3b3b !important;
+  font-size: 1.2em;
+  cursor: pointer;
+  padding: 0;
+  border-radius: 5px;
+  transition: background 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  height: 100%;
+}
+.weapon-delete-row-btn i {
+  font-size: 0.85em;
+  color: #ff3b3b !important;
+  margin-top: -13px;
+}
+.weapon-table td:last-child {
+  vertical-align: middle;
+}
+
+.weapon-damage[readonly] {
+  cursor: pointer;
+}
+
+.skill-block {
+  background: transparent;
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px 0 rgba(0,0,0,0.18), 0 1.5px 6px 0 rgba(0,0,0,0.12);
+  padding: 4px 18px 12px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skill-label {
+  font-family: 'Cormorant Unicase', serif !important;
+  font-size: 1.4em;
+  font-weight: 1000;
+  color: #f0f0f0;
+  text-transform: uppercase;
+  margin-bottom: 0;
+  margin-top: 0;
+  line-height: 1.1;
+  letter-spacing: 0.04em;
+  align-self: flex-start;
+  position: relative;
+  cursor: default !important;
+  user-select: none !important;
+  pointer-events: auto;
+}
+
+.skill-label::after {
+  display: none !important;
+}
+
+.skill-label-row {
+  margin-top: 2px;
+  position: relative;
+  display: block;
+}
+.skill-label-row .skill-label-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0;
+}
+.skill-label-row::after {
+  content: '';
+  display: block;
+  width: 100%;
+  height: 0;
+  border-bottom: 1.5px solid rgba(255,255,255,0.35);
+  margin-top: 0;
+}
+
+.skill-table {
+  width: 100%;
+  border-collapse: separate;
+  margin-top: 0;
+}
+.skill-table th:nth-child(1), .skill-table td:nth-child(1) {
+  width: 40%;
+}
+.skill-table th:nth-child(2), .skill-table td:nth-child(2) {
+  width: 20%;
+}
+.skill-table th:nth-child(3), .skill-table td:nth-child(3) {
+  width: 40%;
+}
+.skill-table th {
+  font-family: 'Cormorant Unicase', serif !important;
+  font-size: 1em;
+  color: #f0f0f0;
+  font-weight: 700;
+  text-align: left;
+  padding-bottom: 0;
+  opacity: 0.85;
+}
+.skill-table td:nth-child(2) input {
+  text-align: center;
+}
+.skill-table td {
+  padding: 0 6px 0 0;
+}
+.skill-table input[type="text"] {
+  width: 100%;
+  background: rgba(33,37,51,0.25);
+  border: none;
+  outline: 1px solid rgba(255,255,255,0.25);
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-family: 'Cormorant Unicase', serif !important;
+  font-size: 1em;
+  padding: 4px 2px;
+  transition: outline 0.15s;
+}
+.skill-table input[type="text"]:focus {
+  outline: 1.5px solid #fff;
+  background: rgba(33,37,51,0.35);
+}
+
+.skill-edit-btn {
+  background: transparent;
+  border: none;
+  color: #f0f0f0;
+  font-size: 1.1em;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 5px;
+  transition: background 0.15s;
+  display: flex;
+  align-items: center;
+}
+.skill-edit-btn:hover {
+  background: rgba(255,255,255,0.10);
+}
+.skill-edit-btn i {
+  color: inherit;
+  font-size: 1em;
+}
+
+.skill-accept-btn, .skill-cancel-btn {
+  background: transparent;
+  border: none;
+  color: #f0f0f0;
+  font-size: 1.1em;
+  cursor: pointer;
+  padding: 0;
+  border-radius: 5px;
+  transition: background 0.15s;
+  display: flex;
+  align-items: center;
+}
+.skill-accept-btn:hover {
+  background: rgba(0,255,0,0.10);
+  color: #7fff7f;
+}
+.skill-cancel-btn:hover {
+  background: rgba(255,0,0,0.10);
+  color: #ff7f7f;
+}
+.skill-accept-btn i, .skill-cancel-btn i {
+  font-size: 1.4em;
+  color: inherit;
+}
+
+.skill-label-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0;
+}
+
+.skill-edit-group {
+  display: flex;
+  gap: 6px;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+}
+
+.skill-edit-group button:not(:last-child) {
+  margin-bottom: 2px;
+}
+
+.skill-edit-group button {
+  padding: 0 4px;
+  font-weight: 400;
+}
+.skill-edit-group button i {
+  font-size: 1.1em;
+  font-weight: 400;
+}
+
+.skill-add-row-btn, .skill-delete-row-btn {
+  background: transparent;
+  border: none;
+  color: #f0f0f0;
+  font-size: 1.2em;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 5px;
+  transition: background 0.15s;
+  display: flex;
+  align-items: center;
+}
+.skill-add-row-btn:hover {
+  background: rgba(0,255,0,0.10);
+  color: #7fff7f;
+}
+.skill-delete-row-btn:hover {
+  background: rgba(255,0,0,0.10);
+  color: #ff7f7f;
+}
+.skill-add-row-btn i {
+  font-size: 1.2em;
+  color: inherit;
+  font-weight: 900;
+}
+
+.skill-delete-row-btn {
+  background: transparent;
+  border: none;
+  color: #ff3b3b !important;
+  font-size: 1.2em;
+  cursor: pointer;
+  padding: 0;
+  border-radius: 5px;
+  transition: background 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  height: 100%;
+}
+.skill-delete-row-btn i {
+  font-size: 0.85em;
+  color: #ff3b3b !important;
+  margin-top: -13px;
+}
+.skill-table td:last-child {
+  vertical-align: middle;
+}
+
+.skill-table tbody tr.skill-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  margin-bottom: 0px;
+  position: relative;
+}
+.skill-name-label {
+  font-family: 'Cormorant Unicase', serif !important;
+  font-size: 1.2em;
+  color: #fffefe;
+  font-weight: 600;
+  margin-bottom: 0px;
+  margin-left: 2px;
+  margin-top: 0px;
+  text-align: left;
+}
+.skill-name-input {
+  width: 60%;
+  min-width: 120px;
+  max-width: 320px;
+  background: rgba(33,37,51,0.18);
+  border: none;
+  outline: 1px solid rgba(255,255,255,0.18);
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-family: 'Cormorant Unicase', serif !important;
+  font-size: 1em;
+  padding: 4px 8px;
+  margin-bottom: 2px;
+  margin-left: 0;
+  transition: outline 0.15s;
+}
+.skill-name-input:focus {
+  outline: 1.5px solid #fff;
+  background: rgba(33,37,51,0.28);
+}
+.skill-name-input[readonly] {
+  cursor: default !important;
+  pointer-events: none !important;
+  background: rgba(33,37,51,0.18);
+}
+.skill-name-input:not([readonly]) {
+  cursor: text;
+  pointer-events: auto;
+}
+.skill-desc-textarea {
+  width: 100%;
+  min-height: 30px;
+  background: rgba(33,37,51,0.25);
+  border: none;
+  outline: 1px solid rgba(255,255,255,0.18);
+  border-radius: 6px;
+  color: #ffffff;
+  font-family: 'Cormorant Unicase', serif !important;
+  font-size: 0.9em !important;
+  padding: 0.2em 10px !important;
+  resize: none !important;
+  overflow: hidden !important;
+  max-height: 400px;
+  transition: outline 0.15s, height 0.15s;
+}
+.skill-desc-textarea:focus {
+  outline: 1.5px solid #fff;
+  background: rgba(33,37,51,0.35);
+}
+.skill-delete-row-btn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: transparent;
+  border: none;
+  color: #ff3b3b !important;
+  font-size: 1.2em;
+  cursor: pointer;
+  padding: 0;
+  border-radius: 5px;
+  transition: background 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  height: 28px;
+  width: 28px;
+}
+.skill-delete-row-btn i {
+  font-size: 0.95em;
+  color: #ff3b3b !important;
+  margin-top: 0;
+}
+
+.inventory-block {
+  background: transparent;
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px 0 rgba(0,0,0,0.18), 0 1.5px 6px 0 rgba(0,0,0,0.12);
+  padding: 4px 18px 12px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inventory-block .weapon-label {
+  /* для уніфікації */
+}
+
+.inventory-block .weapon-table th i {
+  font-size: 1.1em;
+  color: #f0f0f0;
+  vertical-align: middle;
+}
+
+.weapon-table-center {
+  text-align: center !important;
+}
+.weapon-table-center i {
+  display: inline-block;
+  width: 1.5em;
+  text-align: center;
+}
+
+/* === Кастомний вертикальний скролбар у стилі блоків === */
+::-webkit-scrollbar {
+  width: 10px;
+  background: rgba(0,0,0,0.10);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(40,40,40,0.22);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px 0 rgba(0,0,0,0.18);
+  border: 2px solid #f0f0f0;
+  transition: background 0.2s;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(40,40,40,0.32);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Для Firefox */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(40,40,40,0.22) rgba(0,0,0,0.10);
+}
+
+.skill-desc-textarea[readonly] {
+  cursor: default !important;
+  pointer-events: none !important;
+  background: rgba(33,37,51,0.25);
+}
+.skill-desc-textarea:not([readonly]) {
+  cursor: text;
+  pointer-events: auto;
+}
+
+.skill-name-label[contenteditable="false"] {
+  cursor: default !important;
+  pointer-events: none !important;
+}
+.skill-name-label[contenteditable="true"] {
+  cursor: text;
+  pointer-events: auto;
+}
+
+.weapon-label[contenteditable="false"],
+.skill-label[contenteditable="false"],
+.inventory-block .weapon-label[contenteditable="false"] {
+  cursor: default !important;
+  pointer-events: none !important;
+}
+.weapon-label[contenteditable="true"],
+.skill-label[contenteditable="true"],
+.inventory-block .weapon-label[contenteditable="true"] {
+  cursor: text;
+  pointer-events: auto;
+}
+
+.skill-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.skill-chat-icon {
+  font-size: 1.1em;
+  color: #b6e0ff;
+  margin-right: 6px;
+  vertical-align: middle;
+  opacity: 0.85;
+}
+
+@keyframes chatBounce {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.25); }
+  60% { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+.skill-chat-icon.chat-bounce {
+  animation: chatBounce 0.4s cubic-bezier(.68,-0.55,.27,1.55);
 }

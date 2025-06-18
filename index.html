@@ -39,7 +39,39 @@
         </div>
       </div>
 
-      <!-- Характеристики -->
+      <div class="quick-actions-row">
+        <div class="saves-and-advantages-block">
+          <div class="death-saves">
+            <div class="death-saves-group">
+              <div class="death-saves-label">Успіхи</div>
+              <div class="checkbox-group">
+                <input id="deathSavesSuccess1" type="checkbox" />
+                <input id="deathSavesSuccess2" type="checkbox" />
+                <input id="deathSavesSuccess3" type="checkbox" />
+              </div>
+            </div>
+            <div class="death-saves-group">
+              <div class="death-saves-label">Провали</div>
+              <div class="checkbox-group">
+                <input id="deathSavesFailure1" type="checkbox" />
+                <input id="deathSavesFailure2" type="checkbox" />
+                <input id="deathSavesFailure3" type="checkbox" />
+              </div>
+            </div>
+          </div>
+          <div class="inspiration-advantage-block">
+            <label class="advantage-label">Перевага <input id="advantageCheckbox" type="checkbox" /></label>
+            <label class="disadvantage-label">Похибка <input id="disadvantageCheckbox" type="checkbox" /></label>
+          </div>
+          <div class="inspiration-block">
+            <label class="inspiration-label"><span class="inspiration-crown" aria-label="Натхнення"><i class="fas fa-dice-d20"></i></span> <input id="inspirationCheckbox" type="checkbox" /></label>
+          </div>
+          <div class="help-block">
+            <i class="fas fa-info-circle" title="Довідка"></i>
+          </div>
+        </div>
+      </div>
+
       <div id="abilityScoresBlock">
         <div class="ability-scores">
           <div class="ability-score-item">
@@ -145,101 +177,87 @@
             </div>
           </div>
         </div>
-        <div class="death-saves-row">
-          <div class="saves-and-advantages-block">
-            <div class="death-saves">
-              <div class="death-saves-group">
-                <div class="death-saves-label">Успіхи</div>
-                <div class="checkbox-group">
-                  <input id="deathSavesSuccess1" type="checkbox" />
-                  <input id="deathSavesSuccess2" type="checkbox" />
-                  <input id="deathSavesSuccess3" type="checkbox" />
-                </div>
-              </div>
-              <div class="death-saves-group">
-                <div class="death-saves-label">Провали</div>
-                <div class="checkbox-group">
-                  <input id="deathSavesFailure1" type="checkbox" />
-                  <input id="deathSavesFailure2" type="checkbox" />
-                  <input id="deathSavesFailure3" type="checkbox" />
-                </div>
-              </div>
-            </div>
-            <div class="inspiration-advantage-block">
-              <label class="advantage-label">Перевага <input id="advantageCheckbox" type="checkbox" /></label>
-              <label class="disadvantage-label">Похибка <input id="disadvantageCheckbox" type="checkbox" /></label>
-            </div>
-            <div class="inspiration-block">
-              <label class="inspiration-label"><span class="inspiration-crown" aria-label="Натхнення"><i class="fas fa-dice-d20"></i></span> <input id="inspirationCheckbox" type="checkbox" /></label>
-            </div>
-            <div class="help-block">
-              <i class="fas fa-info-circle" title="Довідка"></i>
-            </div>
-          </div>
-        </div>
       </div>
 
       <!-- Лист персонажа -->
       <div class="character-sheet" id="characterSheetContainer">
-        <div class="header-block">
-          <div>
-            <div class="block">
-              <h2>Клас та рівень</h2>
+        <div class="sheet-columns">
+          <div class="sheet-col-left">
+            <div class="weapon-block">
+              <div class="weapon-label-row">
+                <div class="weapon-label-controls">
+                  <span class="weapon-label">Атаки</span>
+                  <div class="weapon-edit-group" style="display: flex; background: transparent; padding: 0; margin: 0;">
+                    <button class="weapon-add-row-btn" id="weaponAddRowBtn" title="Додати рядок" style="display:none;"><i class="fas fa-plus"></i></button>
+                    <button class="weapon-accept-btn" id="weaponAcceptBtn" title="Підтвердити" style="display:none;"><i class="fas fa-check-circle"></i></button>
+                    <button class="weapon-cancel-btn" id="weaponCancelBtn" title="Відхилити" style="display:none;"><i class="fas fa-times-circle"></i></button>
+                  </div>
+                  <button class="weapon-edit-btn" id="weaponEditBtn" title="Редагувати"><i class="fas fa-pen"></i></button>
+                </div>
+              </div>
+              <table class="weapon-table">
+                <thead>
+                  <tr>
+                    <th>Назва</th>
+                    <th class="weapon-table-center"><i class="fas fa-dice" title="Бонус"></i></th>
+                    <th class="weapon-table-center"><i class="fas fa-dice-d20" title="Шкода"></i></th>
+                    <th style="width:32px;"></th>
+                  </tr>
+                </thead>
+                <tbody id="weaponTableBody">
+                  <!-- Динамічні рядки -->
+                </tbody>
+              </table>
             </div>
-            <input id="characterClassLevel" placeholder="Воїн 1" type="text" />
-          </div>
-          <div>
-            <div class="block">
-              <h2>Передісторія</h2>
+            <!-- Новий блок інвентаря -->
+            <div class="inventory-block">
+              <div class="weapon-label-row">
+                <div class="weapon-label-controls">
+                  <span class="weapon-label">Інвентар</span>
+                  <div class="weapon-edit-group" style="display: flex; background: transparent; padding: 0; margin: 0;">
+                    <button class="weapon-add-row-btn" id="inventoryAddRowBtn" title="Додати рядок" style="display:none;"><i class="fas fa-plus"></i></button>
+                    <button class="weapon-accept-btn" id="inventoryAcceptBtn" title="Підтвердити" style="display:none;"><i class="fas fa-check-circle"></i></button>
+                    <button class="weapon-cancel-btn" id="inventoryCancelBtn" title="Відхилити" style="display:none;"><i class="fas fa-times-circle"></i></button>
+                  </div>
+                  <button class="weapon-edit-btn" id="inventoryEditBtn" title="Редагувати"><i class="fas fa-pen"></i></button>
+                </div>
+              </div>
+              <table class="weapon-table">
+                <thead>
+                  <tr>
+                    <th>Назва</th>
+                    <th class="weapon-table-center"><i class="fas fa-box" title="Кількість"></i></th>
+                    <th class="weapon-table-center"><i class="fas fa-weight-hanging" title="Вага"></i></th>
+                    <th style="width:32px;"></th>
+                  </tr>
+                </thead>
+                <tbody id="inventoryTableBody">
+                  <!-- Динамічні рядки -->
+                </tbody>
+              </table>
             </div>
-            <input id="background" placeholder="Солдат" type="text" />
           </div>
-        </div>
-        
-        <div class="header-block">
-          <div>
-            <div class="block">
-              <h2>Раса</h2>
+          <div class="sheet-col-right">
+            <div class="skill-block">
+              <div class="skill-label-row">
+                <div class="skill-label-controls">
+                  <span class="skill-label">Навички</span>
+                  <div class="skill-edit-group" style="display: flex; background: transparent; padding: 0; margin: 0;">
+                    <button class="skill-add-row-btn" id="skillAddRowBtn" title="Додати рядок" style="display:none;"><i class="fas fa-plus"></i></button>
+                    <button class="skill-accept-btn" id="skillAcceptBtn" title="Підтвердити" style="display:none;"><i class="fas fa-check-circle"></i></button>
+                    <button class="skill-cancel-btn" id="skillCancelBtn" title="Відхилити" style="display:none;"><i class="fas fa-times-circle"></i></button>
+                  </div>
+                  <button class="skill-edit-btn" id="skillEditBtn" title="Редагувати"><i class="fas fa-pen"></i></button>
+                </div>
+              </div>
+              <table class="skill-table">
+                <tbody id="skillTableBody">
+                  <!-- Динамічні рядки: кожен складається з поля назви (label+input) над полем опису (textarea), справа кнопка видалення -->
+                </tbody>
+              </table>
             </div>
-            <input id="characterRace" placeholder="Людина" type="text" />
-          </div>
-          <div>
-            <div class="block">
-              <h2>Світогляд</h2>
-            </div>
-            <input id="alignment" placeholder="Законослухняний добрий" type="text" />
           </div>
         </div>
-
-        <div class="block">
-          <h2>Володіння та мови</h2>
-        </div>
-        <textarea id="proficienciesAndLanguages" placeholder="Довга зброя, короткова зброя, щити..."></textarea>
-
-        <div class="block">
-          <h2>Спорядження</h2>
-        </div>
-        <textarea id="equipment" placeholder="Кольчуга, щит, довгий меч..."></textarea>
-
-        <div class="block">
-          <h2>Союзники та організації</h2>
-        </div>
-        <textarea id="alliesAndOrganizations" placeholder="Опишіть ваших союзників..."></textarea>
-
-        <div class="block">
-          <h2>Історія персонажа</h2>
-        </div>
-        <textarea id="characterHistory" placeholder="Розкажіть історію вашого персонажа..."></textarea>
-
-        <div class="block">
-          <h2>Додаткові особливості та таланти</h2>
-        </div>
-        <textarea id="additionalFeatures" placeholder="Особливості класу, раси, передісторії..."></textarea>
-
-        <div class="block">
-          <h2>Нотатки</h2>
-        </div>
-        <textarea id="notes" placeholder="Додаткові нотатки..."></textarea>
       </div>
     </div>
 
