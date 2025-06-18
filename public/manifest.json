@@ -12,4 +12,8 @@
     "height": 700,
     "width": 1060
   }
+    "permissions": [
+    "broadcast",
+    "notification"
+  ]
 }
