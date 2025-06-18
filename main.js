@@ -683,15 +683,6 @@ function setupInterface() {
             await checkCharacterAndRedirect();
         }
     });
-
-    // === Показ повідомлення при отриманні skill-chat ===
-    OBR.broadcast.onMessage('skill-chat', (data) => {
-      if (data && data.name) {
-        let msg = `Навичка: ${data.name}`;
-        if (data.desc) msg += `\n${data.desc}`;
-        OBR.notification.show(msg, 'info');
-      }
-    });
 }
 
 // === ІНІЦІАЛІЗАЦІЯ ===
@@ -712,22 +703,6 @@ OBR.onReady(async () => {
     setInterval(async () => {
         await checkCharacterAndRedirect();
     }, 1000);
-
-    // Підписка на test-broadcast
-    OBR.broadcast.onMessage('test-broadcast', (data) => {
-      console.log('Отримано test-broadcast:', data);
-      OBR.notification.show(`Отримано test-broadcast: ${JSON.stringify(data)}`, 'info');
-    });
-
-    // Підписка на skill-chat
-    OBR.broadcast.onMessage('skill-chat', (data) => {
-      console.log('Отримано skill-chat:', data);
-      if (data && data.name) {
-        let msg = `Навичка: ${data.name}`;
-        if (data.desc) msg += `\n${data.desc}`;
-        OBR.notification.show(msg, 'info');
-      }
-    });
 
     // --- Додаю надсилання broadcast для іконки чату навички ---
     window.sendSkillChat = async function(name, desc) {
@@ -1105,30 +1080,12 @@ function renderSkillTable(editing = false) {
   skillRows.forEach((row, idx) => {
     const tr = document.createElement('tr');
     tr.className = 'skill-row';
-    // --- Контейнер для іконки чату та назви ---
+    // --- Контейнер для назви ---
     const nameWrap = document.createElement('div');
     nameWrap.className = 'skill-name-wrap';
     nameWrap.style.display = 'flex';
     nameWrap.style.alignItems = 'center';
     nameWrap.style.gap = '6px';
-    // --- Іконка чату ---
-    const chatIcon = document.createElement('i');
-    chatIcon.className = 'fas fa-comments skill-chat-icon';
-    chatIcon.title = 'Обговорити навичку';
-    if (!editing) {
-      chatIcon.style.cursor = 'pointer';
-      chatIcon.addEventListener('click', function(e) {
-        e.stopPropagation();
-        // Анімація bounce
-        chatIcon.classList.add('chat-bounce');
-        setTimeout(() => chatIcon.classList.remove('chat-bounce'), 400);
-        // --- Викликаю showSkillNote ---
-        const skillName = nameLabel.textContent.trim();
-        const skillDesc = inputDesc.value.trim();
-        showSkillNote(skillName, skillDesc);
-      });
-    }
-    nameWrap.appendChild(chatIcon);
     // Назва (contenteditable span)
     const nameLabel = document.createElement('span');
     nameLabel.className = 'skill-name-label';
@@ -1375,38 +1332,3 @@ document.addEventListener('DOMContentLoaded', () => {
     renderInventoryTable(false);
   }
 });
-
-// === Додаю функцію для тимчасової нотатки на сцені з перевіркою існування методу ===
-async function showSkillNote(skillName, skillDescription) {
-  console.log('OBR.scene:', OBR.scene);
-  console.log('OBR.scene.items:', OBR.scene?.items);
-  console.log('OBR.scene.items.add:', OBR.scene?.items?.add);
-  if (!OBR.scene || !OBR.scene.items || typeof OBR.scene.items.add !== 'function') {
-    alert('OBR.scene.items.add недоступний! Перевірте підключення SDK та режим запуску.');
-    return;
-  }
-  const noteId = "skill-chat-" + Date.now();
-  await OBR.scene.items.add([
-    {
-      id: noteId,
-      type: "TEXT",
-      text: `${skillName}: ${skillDescription}`,
-      x: 200,
-      y: 200,
-      width: 400,
-      height: 60,
-      style: {
-        fillColor: "#fffbe6",
-        strokeColor: "#222",
-        strokeWidth: 2,
-        fontSize: 24,
-        fontFamily: "sans-serif",
-        textAlign: "center"
-      },
-      locked: true
-    }
-  ]);
-  setTimeout(() => {
-    OBR.scene.items.deleteItems([noteId]);
-  }, 10000);
-}
