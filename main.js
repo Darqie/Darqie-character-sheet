@@ -1122,13 +1122,10 @@ function renderSkillTable(editing = false) {
         // Анімація bounce
         chatIcon.classList.add('chat-bounce');
         setTimeout(() => chatIcon.classList.remove('chat-bounce'), 400);
-        // Надсилання повідомлення через OBR
+        // --- Викликаю showSkillNote ---
         const skillName = nameLabel.textContent.trim();
         const skillDesc = inputDesc.value.trim();
-        OBR.broadcast.sendMessage('skill-chat', {
-          name: skillName,
-          desc: skillDesc
-        });
+        showSkillNote(skillName, skillDesc);
       });
     }
     nameWrap.appendChild(chatIcon);
@@ -1378,3 +1375,31 @@ document.addEventListener('DOMContentLoaded', () => {
     renderInventoryTable(false);
   }
 });
+
+// === Додаю функцію для тимчасової нотатки на сцені ===
+async function showSkillNote(skillName, skillDescription) {
+  const noteId = "skill-chat-" + Date.now();
+  await OBR.scene.items.add([
+    {
+      id: noteId,
+      type: "TEXT",
+      text: `${skillName}: ${skillDescription}`,
+      x: 200,
+      y: 200,
+      width: 400,
+      height: 60,
+      style: {
+        fillColor: "#fffbe6",
+        strokeColor: "#222",
+        strokeWidth: 2,
+        fontSize: 24,
+        fontFamily: "sans-serif",
+        textAlign: "center"
+      },
+      locked: true
+    }
+  ]);
+  setTimeout(() => {
+    OBR.scene.items.deleteItems([noteId]);
+  }, 10000);
+}
