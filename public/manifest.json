@@ -12,9 +12,4 @@
     "height": 700,
     "width": 1060
   }
-  "permissions": [
-    { "name": "SCENE" },
-    { "name": "NOTIFICATION" },
-    { "name": "BROADCAST" }
-  ]
 }
