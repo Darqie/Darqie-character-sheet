@@ -1021,6 +1021,40 @@ OBR.onReady(async () => {
     window.sendSkillChat = async function(name, desc) {
       await OBR.broadcast.sendMessage('skill-chat', { name, desc });
     };
+
+    // === Додаю кидки кубика при натисканні на модифікатор ===
+    const abilities = [
+      { modId: 'strengthModifier', scoreId: 'strengthScore' },
+      { modId: 'dexterityModifier', scoreId: 'dexterityScore' },
+      { modId: 'constitutionModifier', scoreId: 'constitutionScore' },
+      { modId: 'intelligenceModifier', scoreId: 'intelligenceScore' },
+      { modId: 'wisdomModifier', scoreId: 'wisdomScore' },
+      { modId: 'charismaModifier', scoreId: 'charismaScore' },
+    ];
+
+    abilities.forEach(({ modId, scoreId }) => {
+      const modBox = document.getElementById(modId);
+      const scoreInput = document.getElementById(scoreId);
+      if (modBox && scoreInput) {
+        modBox.style.cursor = 'pointer';
+        modBox.title = 'Кинути d20 з цим модифікатором';
+        modBox.addEventListener('click', function (e) {
+          // Визначаємо модифікатор
+          let value = parseInt(scoreInput.value);
+          if (isNaN(value)) value = 10;
+          const mod = Math.floor((value - 10) / 2);
+          window.postMessage({
+            source: 'character-sheet',
+            action: 'roll-dice',
+            payload: {
+              type: 'D20',
+              style: 'NEBULA', // Можна змінити стиль
+              bonus: mod
+            }
+          }, '*');
+        });
+      }
+    });
 });
 
 // Функція для отримання поточного персонажа
