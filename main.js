@@ -2034,6 +2034,7 @@ function loadCoinsData() {
 
 async function sendDiceRollRequest(type, style, bonus) {
   const connectionId = await OBR.player.getConnectionId();
-  console.log("Відправляю кидок у metadata:", { type, style, bonus, connectionId });
-  OBR.room.setMetadata({ [DICE_ROLL_KEY]: { type, style, bonus, connectionId, ts: Date.now() } });
+  const playerName = currentPlayerName || '';
+  console.log("Відправляю кидок у metadata:", { type, style, bonus, connectionId, playerName });
+  OBR.room.setMetadata({ darqie: { ...((await OBR.room.getMetadata()).darqie || {}), activeRoll: { type, style, bonus, connectionId, playerName, ts: Date.now() } } });
 }
