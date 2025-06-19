@@ -1043,6 +1043,7 @@ OBR.onReady(async () => {
           let value = parseInt(scoreInput.value);
           if (isNaN(value)) value = 10;
           const mod = Math.floor((value - 10) / 2);
+          console.log(`Натиснуто на модифікатор ${modId}, модифікатор:`, mod);
           sendDiceRollRequest('D20', 'NEBULA', mod);
         });
       }
@@ -2032,5 +2033,6 @@ function loadCoinsData() {
 }
 
 function sendDiceRollRequest(type, style, bonus) {
+  console.log("Відправляю кидок у metadata:", { type, style, bonus });
   OBR.room.setMetadata({ [DICE_ROLL_KEY]: { type, style, bonus, ts: Date.now() } });
 }
