@@ -2,7 +2,7 @@ import OBR from '@owlbear-rodeo/sdk';
 
 // === КОНСТАНТИ ===
 const DARQIE_SHEETS_KEY = 'darqie.characterSheets';
-const DEBOUNCE_DELAY = 300;
+const DEBOUNCE_DELAY = 150;
 const UPLOADCARE_PUBLIC_KEY = '7d0fa9d84ac0680d6d83';
 
 // === ГЛОБАЛЬНІ ЗМІННІ ===
@@ -14,6 +14,8 @@ let isGM = false;
 let isRedirecting = false;
 let weaponEditing = false;
 let skillEditing = false;
+let editingInv = false;
+let editingEquip = false;
 
 // === ДИНАМІЧНА ТАБЛИЦЯ ЗБРОЇ ===
 let weaponRows = [
@@ -30,12 +32,32 @@ let inventoryRows = [
   { name: '', count: '', weight: '' }
 ];
 
+// === ДИНАМІЧНА ТАБЛИЦЯ СПОРЯДЖЕННЯ ===
+let equipmentRows = [
+  { name: '', armor: '', weight: '' }
+];
+
+// === ДАНІ МОНЕТ ===
+let coinsData = {
+  sen: 0,
+  gin: 0,
+  kin: 0
+};
+
 // === УТИЛІТИ ===
 function debounce(func, delay) {
+  let timeoutId;
+  let lastArgs;
+  let lastContext;
+  
   return function(...args) {
-    const context = this;
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => func.apply(context, args), delay);
+    lastArgs = args;
+    lastContext = this;
+    
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => {
+      func.apply(lastContext, lastArgs);
+    }, delay);
   };
 }
 
@@ -60,6 +82,8 @@ function getSheetInputElements() {
     wisdomScore: document.getElementById('wisdomScore'),
     charismaScore: document.getElementById('charismaScore'),
     healthPoints: document.getElementById('healthPoints'),
+    maxHealthPoints: document.getElementById('maxHealthPoints'),
+    healing: document.getElementById('healing'),
     armorClass: document.getElementById('armorClass'),
     initiative: document.getElementById('initiative'),
     speed: document.getElementById('speed'),
@@ -70,6 +94,8 @@ function getSheetInputElements() {
     additionalFeatures: document.getElementById('additionalFeatures'),
     notes: document.getElementById('notes'),
     characterPhoto: document.getElementById('characterPhotoImg'),
+    maxWeight: document.getElementById('maxWeight'),
+    currentWeight: document.getElementById('currentWeight'),
   };
 }
 
@@ -96,6 +122,137 @@ function updateModifiers() {
       output.textContent = (mod >= 0 ? '+' : '') + mod;
     }
   });
+
+  // Автоматичний розрахунок максимальної ваги на основі сили
+  updateMaxWeight();
+  // Автоматичний розрахунок швидкості на основі спритності
+  updateSpeed();
+  // Автоматичний розрахунок максимального здоров'я на основі статури
+  updateMaxHealth();
+  // Автоматичний розрахунок броні на основі спорядження
+  updateArmorClass();
+  updateCurrentWeight();
+}
+
+function updateMaxWeight() {
+  const strengthInput = document.getElementById('strengthScore');
+  const maxWeightInput = document.getElementById('maxWeight');
+  
+  if (strengthInput && maxWeightInput) {
+    let strengthValue = parseInt(strengthInput.value);
+    if (isNaN(strengthValue) || strengthValue < 0) {
+      strengthValue = 0;
+    }
+    
+    // Максимальна вага = 50 + значення сили, але не більше 999
+    const maxWeight = Math.min(50 + strengthValue, 999);
+    maxWeightInput.value = maxWeight;
+  }
+}
+
+function updateSpeed() {
+  const dexterityInput = document.getElementById('dexterityScore');
+  const speedInput = document.getElementById('speed');
+  
+  if (dexterityInput && speedInput) {
+    let dexterityValue = parseInt(dexterityInput.value);
+    if (isNaN(dexterityValue) || dexterityValue < 0) {
+      dexterityValue = 0;
+    }
+    
+    // Базова швидкість = 20
+    let speed = 20;
+    
+    // Додаємо 5 за кожні 8 очків спритності, якщо спритність більше 10
+    if (dexterityValue > 10) {
+      const bonusPoints = Math.floor((dexterityValue - 10) / 8);
+      speed += bonusPoints * 5;
+    }
+    
+    // Обмежуємо до 99
+    speed = Math.min(speed, 99);
+    speedInput.value = speed;
+  }
+}
+
+function updateMaxHealth() {
+  const constitutionInput = document.getElementById('constitutionScore');
+  const maxHealthInput = document.getElementById('maxHealthPoints');
+  
+  if (constitutionInput && maxHealthInput) {
+    let constitutionValue = parseInt(constitutionInput.value);
+    if (isNaN(constitutionValue) || constitutionValue < 0) {
+      constitutionValue = 0;
+    }
+    
+    // Максимальне здоров'я = 10 + значення статури
+    const maxHealth = Math.min(10 + constitutionValue, 99);
+    maxHealthInput.value = maxHealth;
+  }
+}
+
+function updateArmorClass() {
+  const armorClassInput = document.getElementById('armorClass');
+  
+  if (armorClassInput && equipmentRows) {
+    let totalArmor = 0;
+    
+    // Розраховуємо загальну броню зі спорядження
+    equipmentRows.forEach(row => {
+      const armor = parseFloat(row.armor) || 0;
+      totalArmor += armor;
+    });
+    
+    // Базова броня = 10 + броня зі спорядження
+    const armorClass = Math.min(10 + totalArmor, 99);
+    armorClassInput.value = armorClass;
+  }
+}
+
+function updateCurrentWeight() {
+  const currentWeightInput = document.getElementById('currentWeight');
+  const maxWeightInput = document.getElementById('maxWeight');
+  const inventoryBlock = document.querySelector('.inventory-block');
+  
+  if (currentWeightInput && (inventoryRows || equipmentRows)) {
+    let totalWeight = 0;
+    
+    // Розраховуємо загальну вагу всіх предметів в інвентарі
+    if (inventoryRows) {
+      inventoryRows.forEach(row => {
+        const count = parseFloat(row.count) || 0;
+        const weight = parseFloat(row.weight) || 0;
+        totalWeight += count * weight;
+      });
+    }
+    
+    // Розраховуємо загальну вагу всіх предметів спорядження
+    if (equipmentRows) {
+      equipmentRows.forEach(row => {
+        const weight = parseFloat(row.weight) || 0;
+        totalWeight += weight; // Спорядження враховується як 1 штука
+      });
+    }
+    
+    // Обмежуємо до 999
+    totalWeight = Math.min(totalWeight, 999);
+    
+    // Округляємо до 2 знаків після коми
+    currentWeightInput.value = Math.round(totalWeight * 100) / 100;
+    
+    // Перевіряємо чи перевищена максимальна вага
+    if (maxWeightInput && inventoryBlock) {
+      const maxWeight = parseFloat(maxWeightInput.value) || 0;
+      
+      if (totalWeight > maxWeight && maxWeight > 0) {
+        // Додаємо клас для червоного блимання
+        inventoryBlock.classList.add('inventory-overloaded');
+      } else {
+        // Видаляємо клас якщо вага в нормі
+        inventoryBlock.classList.remove('inventory-overloaded');
+      }
+    }
+  }
 }
 
 // === РОБОТА З ДАНИМИ ===
@@ -110,6 +267,20 @@ async function saveSheetData() {
 
   // Збереження основних полів
   for (const key in elements) {
+    if (['characterClassLevel','characterRace','background','alignment'].includes(key)) {
+      // Якщо є textarea модалки — беремо з неї
+      const modalMap = {
+        characterClassLevel: 'modalCharacterClass',
+        characterRace: 'modalCharacterRace',
+        background: 'modalBackground',
+        alignment: 'modalAlignment',
+      };
+      const modalEl = document.getElementById(modalMap[key]);
+      if (modalEl) {
+        sheet[key] = modalEl.value;
+        continue;
+      }
+    }
     if (elements[key]) {
       if (key === 'playerName') {
         if (!elements[key].disabled) {
@@ -141,6 +312,48 @@ async function saveSheetData() {
   sheet.advantage = document.getElementById('advantageCheckbox')?.checked || false;
   sheet.disadvantage = document.getElementById('disadvantageCheckbox')?.checked || false;
 
+  // Збереження інвентаря
+  if (!editingInv) {
+    const tbody = document.getElementById('inventoryTableBody');
+    if (tbody) {
+      inventoryRows = Array.from(tbody.children).map(tr => {
+        const inputName = tr.querySelector('.inventory-name');
+        const inputCount = tr.querySelector('.inventory-count');
+        const inputWeight = tr.querySelector('.inventory-weight');
+        return {
+          name: inputName ? inputName.value : '',
+          count: inputCount ? inputCount.value : '',
+          weight: inputWeight ? inputWeight.value : ''
+        };
+      });
+    }
+    sheet.inventory = JSON.parse(JSON.stringify(inventoryRows));
+  }
+
+  // Збереження спорядження
+  if (!editingEquip) {
+    const equipmentTbody = document.getElementById('equipmentTableBody');
+    if (equipmentTbody) {
+      equipmentRows = Array.from(equipmentTbody.children).map(tr => {
+        const inputName = tr.querySelector('.equipment-name');
+        const inputArmor = tr.querySelector('.equipment-armor');
+        const inputWeight = tr.querySelector('.equipment-weight');
+        return {
+          name: inputName ? inputName.value : '',
+          armor: inputArmor ? inputArmor.value : '',
+          weight: inputWeight ? inputWeight.value : ''
+        };
+      });
+    }
+    sheet.equipment = JSON.parse(JSON.stringify(equipmentRows));
+  }
+
+  // Збереження заголовків блоків
+  const inventoryLabel = document.querySelector('.inventory-block .weapon-label');
+  const equipmentLabel = document.querySelector('.equipment-block .weapon-label');
+  if (inventoryLabel && sheet.inventoryTitle) inventoryLabel.textContent = sheet.inventoryTitle;
+  if (equipmentLabel && sheet.equipmentTitle) equipmentLabel.textContent = sheet.equipmentTitle;
+
   try {
     // Отримуємо поточні метадані
     const currentMetadata = await OBR.room.getMetadata();
@@ -167,6 +380,7 @@ async function saveSheetData() {
     }
 
     updateDeathOverlay();
+    updateCurrentWeight();
   } catch (error) {
     console.error('Помилка при збереженні даних:', error);
   }
@@ -232,9 +446,30 @@ function loadSheetData() {
     : [{ name: '', count: '', weight: '' }];
   renderInventoryTable(false);
 
+  // --- Додаю завантаження спорядження ---
+  equipmentRows = Array.isArray(sheet.equipment) && sheet.equipment.length > 0
+    ? JSON.parse(JSON.stringify(sheet.equipment))
+    : [{ name: '', armor: '', weight: '' }];
+  renderEquipmentTable(false);
+
+  // --- Додаю завантаження монет ---
+  coinsData = sheet.coins ? JSON.parse(JSON.stringify(sheet.coins)) : { sen: 0, gin: 0, kin: 0 };
+  loadCoinsData();
+
   updateModifiers();
   updateDeathOverlay();
+  updateCurrentWeight();
 }
+
+// Ініціалізація при завантаженні
+updateModifiers();
+updateMaxWeight();
+updateSpeed();
+updateMaxHealth();
+updateArmorClass();
+updateCurrentWeight();
+renderInventoryTable(false);
+renderEquipmentTable(false);
 
 // === ІНТЕРФЕЙС ===
 async function updateCharacterDropdown() {
@@ -330,10 +565,76 @@ async function populatePlayerSelect() {
 // === НАЛАШТУВАННЯ ПОДІЙ ===
 function connectInputsToSave() {
   const elements = getSheetInputElements();
-  
-  // Підключення основних полів
+
+  // Підключення основних полів з обробниками тільки на blur і Enter
   Object.values(elements).forEach(el => {
-    if (el) el.addEventListener('input', debouncedSaveSheetData);
+    if (el) {
+      el.addEventListener('blur', () => {
+        setTimeout(() => saveSheetData(), 50);
+      });
+      el.addEventListener('keyup', (e) => {
+        if (e.key === 'Enter') {
+          saveSheetData();
+        }
+      });
+    }
+  });
+
+  // Виключаємо textarea модальних вікон з автоматичного збереження
+  const modalTextareas = [
+    'modalCharacterClass', 'modalCharacterRace', 'modalBackground', 'modalAlignment',
+    'modalAppearance', 'modalPersonalityTraits', 'modalFeatures', 'modalNotes',
+    'modalBonds', 'modalLanguages'
+  ];
+  modalTextareas.forEach(textareaId => {
+    const textarea = document.getElementById(textareaId);
+    if (textarea) {
+      textarea.removeEventListener('blur', () => setTimeout(() => saveSheetData(), 50));
+      textarea.removeEventListener('keyup', (e) => {
+        if (e.key === 'Enter') saveSheetData();
+      });
+    }
+  });
+
+  // Валідація для всіх числових полів
+  const numberInputs = [
+    'armorClass', 'healthPoints', 'speed', 'initiative', 'healing', 'maxHealthPoints',
+    'strengthScore', 'dexterityScore', 'constitutionScore', 'intelligenceScore', 'wisdomScore', 'charismaScore'
+  ];
+  numberInputs.forEach(inputId => {
+    const input = document.getElementById(inputId);
+    if (input) {
+      input.addEventListener('input', function() {
+        let value = parseInt(this.value);
+        if (isNaN(value)) {
+          this.value = '';
+        } else if (value < 0) {
+          this.value = 0;
+        } else if (value > 99) {
+          this.value = 99;
+        }
+        // Спеціальна обробка для maxHealthPoints - коригування healing
+        if (this.id === 'maxHealthPoints') {
+          const healingInput = document.getElementById('healing');
+          if (healingInput && healingInput.value) {
+            const currentHealing = parseInt(healingInput.value);
+            const newMaxHealth = parseInt(this.value);
+            if (!isNaN(currentHealing) && !isNaN(newMaxHealth) && currentHealing > newMaxHealth) {
+              healingInput.value = newMaxHealth;
+            }
+          }
+        }
+      });
+      input.addEventListener('blur', () => {
+        setTimeout(() => saveSheetData(), 50);
+      });
+      input.addEventListener('change', () => {
+        saveSheetData();
+      });
+      input.addEventListener('keyup', (e) => {
+        if (e.key === 'Enter') saveSheetData();
+      });
+    }
   });
 
   // Підключення чекбоксів
@@ -420,6 +721,8 @@ function setupCharacterButtons() {
           wisdomScore: '10',
           charismaScore: '10',
           healthPoints: '',
+          maxHealthPoints: '',
+          healing: '',
           armorClass: '',
           initiative: '',
           speed: '',
@@ -430,6 +733,8 @@ function setupCharacterButtons() {
           additionalFeatures: '',
           notes: '',
           characterPhoto: '/no-image-placeholder.svg',
+          maxWeight: '',
+          currentWeight: '',
           deathSavesSuccess: [false, false, false],
           deathSavesFailure: [false, false, false],
         };
@@ -667,6 +972,14 @@ function setupInterface() {
     updateCharacterDropdown();
     connectInputsToSave();
 
+    // Спеціальне налаштування для поля maxHealthPoints
+    const maxHealthPointsInput = document.getElementById('maxHealthPoints');
+    if (maxHealthPointsInput) {
+        maxHealthPointsInput.style.pointerEvents = 'auto';
+        maxHealthPointsInput.style.position = 'relative';
+        maxHealthPointsInput.style.zIndex = '10';
+    }
+
     // Додаємо підписку на зміни метаданих
     OBR.room.onMetadataChange(async (metadata) => {
         if (weaponEditing || skillEditing) return;
@@ -712,53 +1025,98 @@ OBR.onReady(async () => {
 
 // Функція для отримання поточного персонажа
 async function getCurrentCharacter() {
-  const metadata = await OBR.scene.getMetadata();
-  const characters = metadata.characters || {};
+  const metadata = await OBR.room.getMetadata();
+  const sheets = metadata[DARQIE_SHEETS_KEY] || [];
   const selectedCharacterId = document.getElementById('characterSelect').value;
-  
-  if (!selectedCharacterId) return null;
-  return characters[selectedCharacterId] || null;
+  if (selectedCharacterId === undefined || selectedCharacterId === null || selectedCharacterId === '') return null;
+  return sheets[parseInt(selectedCharacterId, 10)] || null;
 }
 
 // Функція для оновлення інформації в модальному вікні
 function updateModalInfo(character) {
   if (!character) return;
-  
-  document.getElementById('modalCharacterName').textContent = document.getElementById('characterName').value || 'Не вказано';
-  document.getElementById('modalCharacterRace').textContent = document.getElementById('characterRace').value || 'Не вказано';
-  document.getElementById('modalCharacterClass').textContent = document.getElementById('characterClassLevel').value || 'Не вказано';
-  document.getElementById('modalBackground').textContent = document.getElementById('background').value || 'Не вказано';
-  document.getElementById('modalAlignment').textContent = document.getElementById('alignment').value || 'Не вказано';
-  
-  // Оновлення характеристик
-  document.getElementById('modalStrength').textContent = document.getElementById('strengthScore').value || '10';
-  document.getElementById('modalDexterity').textContent = document.getElementById('dexterityScore').value || '10';
-  document.getElementById('modalConstitution').textContent = document.getElementById('constitutionScore').value || '10';
-  document.getElementById('modalIntelligence').textContent = document.getElementById('intelligenceScore').value || '10';
-  document.getElementById('modalWisdom').textContent = document.getElementById('wisdomScore').value || '10';
-  document.getElementById('modalCharisma').textContent = document.getElementById('charismaScore').value || '10';
+  const setValue = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.value = value;
+      el.style.height = 'auto';
+      el.style.height = (el.scrollHeight) + 'px';
+    }
+  };
+  setValue('modalCharacterClass', character.characterClassLevel || 'Не вказано');
+  setValue('modalCharacterRace', character.characterRace || 'Не вказано');
+  setValue('modalBackground', character.background || 'Не вказано');
+  setValue('modalAlignment', character.alignment || 'Не вказано');
+  setValue('modalAppearance', character.appearance || '');
+  setValue('modalLanguages', character.languages || '');
+  setValue('modalBonds', character.bonds || '');
+  setValue('modalPersonalityTraits', character.personalityTraits || '');
+  setValue('modalFeatures', character.features || '');
+  setValue('modalNotes', character.notes || '');
+
+  // Додаю автозміну висоти для всіх textarea модалки
+  setTimeout(() => {
+    document.querySelectorAll('.modal-body .skill-desc-textarea').forEach(ta => {
+      ta.style.height = 'auto';
+      ta.style.height = (ta.scrollHeight) + 'px';
+    });
+  }, 0);
 }
 
 // Функція для відкриття модального вікна
 async function openCharacterInfoModal() {
   const modal = document.getElementById('characterInfoModal');
   const currentCharacter = await getCurrentCharacter();
-  
+  // Додаю прокручування сторінки вгору при відкритті модалки
+  window.scrollTo({ top: 0, behavior: 'smooth' });
   if (currentCharacter) {
     updateModalInfo(currentCharacter);
     modal.style.display = 'block';
+    document.body.style.overflow = 'hidden';
   } else {
     // Якщо персонаж не вибраний, показуємо повідомлення
     const modalBody = document.querySelector('.modal-body');
     modalBody.innerHTML = '<p style="text-align: center; font-size: 1.2em;">Будь ласка, виберіть персонажа</p>';
     modal.style.display = 'block';
+    document.body.style.overflow = 'hidden';
   }
+
+  // Додаємо обробники для запобігання закриття модального вікна при роботі з textarea
+  modal.addEventListener('click', (event) => {
+    // Запобігаємо закриттю при кліку всередині модального вікна
+    event.stopPropagation();
+  });
+
+  // Запобігаємо закриттю при фокусі на textarea
+  modal.querySelectorAll('textarea').forEach(textarea => {
+    textarea.addEventListener('focus', () => {
+      clearTimeout(modalClickTimeout);
+    });
+    
+    textarea.addEventListener('click', (event) => {
+      event.stopPropagation();
+    });
+  });
 }
 
 // Функція для закриття модального вікна
 function closeCharacterInfoModal() {
   const modal = document.getElementById('characterInfoModal');
   modal.style.display = 'none';
+  document.body.style.overflow = '';
+  if (characterSheets[activeSheetIndex]) {
+    characterSheets[activeSheetIndex].characterClassLevel = document.getElementById('modalCharacterClass')?.value || '';
+    characterSheets[activeSheetIndex].characterRace = document.getElementById('modalCharacterRace')?.value || '';
+    characterSheets[activeSheetIndex].background = document.getElementById('modalBackground')?.value || '';
+    characterSheets[activeSheetIndex].alignment = document.getElementById('modalAlignment')?.value || '';
+    characterSheets[activeSheetIndex].appearance = document.getElementById('modalAppearance')?.value || '';
+    characterSheets[activeSheetIndex].languages = document.getElementById('modalLanguages')?.value || '';
+    characterSheets[activeSheetIndex].bonds = document.getElementById('modalBonds')?.value || '';
+    characterSheets[activeSheetIndex].personalityTraits = document.getElementById('modalPersonalityTraits')?.value || '';
+    characterSheets[activeSheetIndex].features = document.getElementById('modalFeatures')?.value || '';
+    characterSheets[activeSheetIndex].notes = document.getElementById('modalNotes')?.value || '';
+  }
+  if (typeof debouncedSaveSheetData === 'function') debouncedSaveSheetData();
 }
 
 // Додаємо обробники подій для модального вікна
@@ -771,9 +1129,20 @@ document.addEventListener('DOMContentLoaded', () => {
   closeButton.addEventListener('click', closeCharacterInfoModal);
 
   // Закриття модального вікна при кліку поза ним
+  let modalClickTimeout;
   window.addEventListener('click', (event) => {
     if (event.target === modal) {
-      closeCharacterInfoModal();
+      // Перевіряємо, чи не відбувається редагування в модальному вікні
+      const isEditing = modal.querySelector('textarea:not([readonly])');
+      if (isEditing) {
+        return; // Не закриваємо, якщо відбувається редагування
+      }
+      
+      // Додаємо затримку для запобігання випадкового закриття
+      clearTimeout(modalClickTimeout);
+      modalClickTimeout = setTimeout(() => {
+        closeCharacterInfoModal();
+      }, 100);
     }
   });
 
@@ -781,6 +1150,59 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && modal.style.display === 'block') {
       closeCharacterInfoModal();
+    }
+  });
+
+  // === Логіка редагування блоків у модалці ===
+  const modalBlocks = [
+    { field: 'Class', textarea: 'modalCharacterClass', edit: 'editModalClass', accept: 'acceptModalClass', cancel: 'cancelModalClass', mainField: 'characterClassLevel' },
+    { field: 'Race', textarea: 'modalCharacterRace', edit: 'editModalRace', accept: 'acceptModalRace', cancel: 'cancelModalRace', mainField: 'characterRace' },
+    { field: 'Background', textarea: 'modalBackground', edit: 'editModalBackground', accept: 'acceptModalBackground', cancel: 'cancelModalBackground', mainField: 'background' },
+    { field: 'Alignment', textarea: 'modalAlignment', edit: 'editModalAlignment', accept: 'acceptModalAlignment', cancel: 'cancelModalAlignment', mainField: 'alignment' },
+    { field: 'Appearance', textarea: 'modalAppearance', edit: 'editModalAppearance', accept: 'acceptModalAppearance', cancel: 'cancelModalAppearance', mainField: 'appearance' },
+    { field: 'Languages', textarea: 'modallanguages', edit: 'editModalLanguages', accept: 'acceptModalLanguages', cancel: 'cancelModalLanguages', mainField: 'languages' },
+    { field: 'Bonds', textarea: 'modalBonds', edit: 'editModalBonds', accept: 'acceptModalBonds', cancel: 'cancelModalBonds', mainField: 'bonds' },
+    { field: 'PersonalityTraits', textarea: 'modalPersonalityTraits', edit: 'editModalPersonalityTraits', accept: 'acceptModalPersonalityTraits', cancel: 'cancelModalPersonalityTraits', mainField: 'personalityTraits' },
+    { field: 'Features', textarea: 'modalFeatures', edit: 'editModalFeatures', accept: 'acceptModalFeatures', cancel: 'cancelModalFeatures', mainField: 'features' },
+    { field: 'Notes', textarea: 'modalNotes', edit: 'editModalNotes', accept: 'acceptModalNotes', cancel: 'cancelModalNotes', mainField: 'notes' },
+  ];
+  modalBlocks.forEach(({textarea, edit, accept, cancel, mainField}) => {
+    const ta = document.getElementById(textarea);
+    const btnEdit = document.getElementById(edit);
+    const btnAccept = document.getElementById(accept);
+    const btnCancel = document.getElementById(cancel);
+    let prevValue = '';
+    if (btnEdit && btnAccept && btnCancel && ta) {
+      btnEdit.addEventListener('click', () => {
+        prevValue = ta.value;
+        ta.readOnly = false;
+        ta.focus();
+        btnEdit.style.display = 'none';
+        btnAccept.style.display = '';
+        btnCancel.style.display = '';
+      });
+      btnCancel.addEventListener('click', () => {
+        ta.value = prevValue;
+        ta.readOnly = true;
+        btnEdit.style.display = '';
+        btnAccept.style.display = 'none';
+        btnCancel.style.display = 'none';
+        ta.style.height = 'auto';
+        ta.style.height = (ta.scrollHeight) + 'px';
+      });
+      btnAccept.addEventListener('click', () => {
+        ta.readOnly = true;
+        btnEdit.style.display = '';
+        btnAccept.style.display = 'none';
+        btnCancel.style.display = 'none';
+        ta.style.height = 'auto';
+        ta.style.height = (ta.scrollHeight) + 'px';
+        if (characterSheets[activeSheetIndex]) {
+          characterSheets[activeSheetIndex][mainField] = ta.value;
+          // Зберігаємо тільки при натисканні кнопки підтвердження
+          saveSheetData();
+        }
+      });
     }
   });
 
@@ -822,6 +1244,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (characterSheets[activeSheetIndex]) {
         characterSheets[activeSheetIndex].weapons = JSON.parse(JSON.stringify(weaponRows));
         debouncedSaveSheetData();
+        updateCurrentWeight();
       }
     }
   }
@@ -850,27 +1273,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // Додаю перевірку, що подія ініційована користувачем
   const abilityScoresBlock = document.querySelector('.ability-scores');
   if (abilityScoresBlock) {
-    abilityScoresBlock.addEventListener('click', async function(event) {
+    abilityScoresBlock.addEventListener('click', function(event) {
       const box = event.target.closest('.modifier-box');
       if (!box || !abilityScoresBlock.contains(box)) return;
       if (weaponEditing || skillEditing) return;
       if (event.target !== box) return;
       if (!event.isTrusted) return;
-      let label = '';
-      switch (box.id) {
-        case 'strengthModifier': label = 'Сила'; break;
-        case 'dexterityModifier': label = 'Спритність'; break;
-        case 'constitutionModifier': label = 'Статура'; break;
-        case 'intelligenceModifier': label = 'Інтелект'; break;
-        case 'wisdomModifier': label = 'Мудрість'; break;
-        case 'charismaModifier': label = 'Харизма'; break;
-        default: label = 'Характеристика';
-      }
-      alert(label + ': ' + box.textContent.trim());
-      await OBR.broadcast.sendMessage('ability-score-change', {
-        label: label,
-        value: box.textContent.trim()
-      });
       event.stopPropagation();
     });
   }
@@ -918,6 +1326,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (characterSheets[activeSheetIndex]) {
         characterSheets[activeSheetIndex].skills = JSON.parse(JSON.stringify(skillRows));
         debouncedSaveSheetData();
+        updateCurrentWeight();
       }
     }
   }
@@ -941,6 +1350,137 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   } else {
     renderSkillTable(false);
+  }
+
+  // --- Inventory block edit logic ---
+  let prevRowsInv = [];
+
+  const editBtnInv = document.getElementById('inventoryEditBtn');
+  const acceptBtnInv = document.getElementById('inventoryAcceptBtn');
+  const cancelBtnInv = document.getElementById('inventoryCancelBtn');
+  const addRowBtnInv = document.getElementById('inventoryAddRowBtn');
+
+  function setEditingModeInventory(on) {
+    editingInv = on;
+    renderInventoryTable(editingInv);
+    // Додаю керування contenteditable для заголовка інвентаря
+    const inventoryLabel = document.querySelector('.inventory-block .weapon-label');
+    if (inventoryLabel) inventoryLabel.contentEditable = !!on;
+    
+    editBtnInv.style.display = on ? 'none' : 'inline-flex';
+    acceptBtnInv.style.display = on ? 'inline-flex' : 'none';
+    cancelBtnInv.style.display = on ? 'inline-flex' : 'none';
+    addRowBtnInv.style.display = on ? 'inline-flex' : 'none';
+  }
+
+  if (editBtnInv && acceptBtnInv && cancelBtnInv && addRowBtnInv) {
+    renderInventoryTable(false);
+    editBtnInv.addEventListener('click', () => {
+      prevRowsInv = JSON.parse(JSON.stringify(inventoryRows));
+      setEditingModeInventory(true);
+    });
+    acceptBtnInv.addEventListener('click', () => {
+      setEditingModeInventory(false);
+      // Зберігаємо дані інвентаря
+      const tbody = document.getElementById('inventoryTableBody');
+      if (tbody) {
+        inventoryRows = Array.from(tbody.children).map(tr => {
+          const inputName = tr.querySelector('.inventory-name');
+          const inputCount = tr.querySelector('.inventory-count');
+          const inputWeight = tr.querySelector('.inventory-weight');
+          return {
+            name: inputName ? inputName.value : '',
+            count: inputCount ? inputCount.value : '',
+            weight: inputWeight ? inputWeight.value : ''
+          };
+        });
+      }
+      // Зберігаємо заголовок
+      const inventoryLabel = document.querySelector('.inventory-block .weapon-label');
+      if (inventoryLabel) {
+        characterSheets[activeSheetIndex].inventoryTitle = inventoryLabel.textContent;
+      }
+      // Зберігаємо в метадані
+      characterSheets[activeSheetIndex].inventory = JSON.parse(JSON.stringify(inventoryRows));
+      debouncedSaveSheetData();
+    });
+    cancelBtnInv.addEventListener('click', () => {
+      inventoryRows = JSON.parse(JSON.stringify(prevRowsInv));
+      setEditingModeInventory(false);
+    });
+    addRowBtnInv.addEventListener('click', () => {
+      inventoryRows.push({ name: '', count: '', weight: '' });
+      renderInventoryTable(true);
+      updateCurrentWeight();
+    });
+  } else {
+    renderInventoryTable(false);
+  }
+
+  // --- Equipment block edit logic ---
+  let prevRowsEquip = [];
+
+  const editBtnEquip = document.getElementById('equipmentEditBtn');
+  const acceptBtnEquip = document.getElementById('equipmentAcceptBtn');
+  const cancelBtnEquip = document.getElementById('equipmentCancelBtn');
+  const addRowBtnEquip = document.getElementById('equipmentAddRowBtn');
+
+  function setEditingModeEquipment(on) {
+    editingEquip = on;
+    renderEquipmentTable(editingEquip);
+    // Додаю керування contenteditable для заголовка спорядження
+    const equipmentLabel = document.querySelector('.equipment-block .weapon-label');
+    if (equipmentLabel) equipmentLabel.contentEditable = !!on;
+    
+    editBtnEquip.style.display = on ? 'none' : 'inline-flex';
+    acceptBtnEquip.style.display = on ? 'inline-flex' : 'none';
+    cancelBtnEquip.style.display = on ? 'inline-flex' : 'none';
+    addRowBtnEquip.style.display = on ? 'inline-flex' : 'none';
+  }
+
+  if (editBtnEquip && acceptBtnEquip && cancelBtnEquip && addRowBtnEquip) {
+    renderEquipmentTable(false);
+    editBtnEquip.addEventListener('click', () => {
+      prevRowsEquip = JSON.parse(JSON.stringify(equipmentRows));
+      setEditingModeEquipment(true);
+    });
+    acceptBtnEquip.addEventListener('click', () => {
+      setEditingModeEquipment(false);
+      // Зберігаємо дані спорядження
+      const equipmentTbody = document.getElementById('equipmentTableBody');
+      if (equipmentTbody) {
+        equipmentRows = Array.from(equipmentTbody.children).map(tr => {
+          const inputName = tr.querySelector('.equipment-name');
+          const inputArmor = tr.querySelector('.equipment-armor');
+          const inputWeight = tr.querySelector('.equipment-weight');
+          return {
+            name: inputName ? inputName.value : '',
+            armor: inputArmor ? inputArmor.value : '',
+            weight: inputWeight ? inputWeight.value : ''
+          };
+        });
+      }
+      // Зберігаємо заголовок
+      const equipmentLabel = document.querySelector('.equipment-block .weapon-label');
+      if (equipmentLabel) {
+        characterSheets[activeSheetIndex].equipmentTitle = equipmentLabel.textContent;
+      }
+      // Зберігаємо в метадані
+      characterSheets[activeSheetIndex].equipment = JSON.parse(JSON.stringify(equipmentRows));
+      debouncedSaveSheetData();
+    });
+    cancelBtnEquip.addEventListener('click', () => {
+      equipmentRows = JSON.parse(JSON.stringify(prevRowsEquip));
+      setEditingModeEquipment(false);
+    });
+    addRowBtnEquip.addEventListener('click', () => {
+      equipmentRows.push({ name: '', armor: '', weight: '' });
+      renderEquipmentTable(true);
+      updateCurrentWeight();
+      updateArmorClass();
+    });
+  } else {
+    renderEquipmentTable(false);
   }
 });
 
@@ -1017,7 +1557,7 @@ function renderWeaponTable(editing = false) {
     if (!editing) {
       inputDamage.addEventListener('click', e => {
         // Тут можна викликати будь-яку дію, наприклад, кидок кубика
-        alert('Натиснуто на шкоду: ' + row.damage);
+        // alert('Натиснуто на шкоду: ' + row.damage);
       });
     }
     tdDamage.appendChild(inputDamage);
@@ -1177,158 +1717,290 @@ function renderInventoryTable(editing = false) {
   const tbody = document.getElementById('inventoryTableBody');
   if (!tbody) return;
 
-  // --- ЗБЕРЕЖЕННЯ ФОКУСУ ---
-  let focusInfo = null;
+  // Зберігаємо фокус на активному елементі
   const active = document.activeElement;
+  let activeIndex = -1;
+  let activeField = '';
+
   if (active && active.tagName === 'INPUT' && active.className.startsWith('inventory-')) {
-    const parentTd = active.parentElement;
-    const parentTr = parentTd?.parentElement;
-    if (parentTr && parentTr.parentElement === tbody) {
-      const idx = Array.from(tbody.children).indexOf(parentTr);
-      focusInfo = {
-        idx,
-        className: active.className,
-        selectionStart: active.selectionStart,
-        selectionEnd: active.selectionEnd
-      };
+    const tr = active.closest('tr');
+    if (tr) {
+      activeIndex = Array.from(tbody.children).indexOf(tr);
+      if (active.className.includes('name')) activeField = 'name';
+      else if (active.className.includes('count')) activeField = 'count';
+      else if (active.className.includes('weight')) activeField = 'weight';
     }
   }
 
   tbody.innerHTML = '';
+
   inventoryRows.forEach((row, idx) => {
     const tr = document.createElement('tr');
+    
     // Назва
     const tdName = document.createElement('td');
     const inputName = document.createElement('input');
     inputName.type = 'text';
-    inputName.className = 'inventory-name';
-    inputName.placeholder = 'Назва';
     inputName.value = row.name;
-    inputName.disabled = !editing;
-    inputName.addEventListener('input', e => {
+    inputName.className = 'inventory-name';
+    inputName.addEventListener('input', (e) => {
       inventoryRows[idx].name = e.target.value;
+      if (!editingInv) {
+        debouncedSaveSheetData();
+      }
+      updateCurrentWeight();
     });
     tdName.appendChild(inputName);
     tr.appendChild(tdName);
+
     // Кількість
     const tdCount = document.createElement('td');
     const inputCount = document.createElement('input');
     inputCount.type = 'text';
-    inputCount.className = 'inventory-count';
-    inputCount.placeholder = '0';
     inputCount.value = row.count;
-    inputCount.disabled = !editing;
-    inputCount.addEventListener('input', e => {
+    inputCount.className = 'inventory-count';
+    inputCount.addEventListener('input', (e) => {
       inventoryRows[idx].count = e.target.value;
+      if (!editingInv) {
+        debouncedSaveSheetData();
+      }
+      updateCurrentWeight();
     });
     tdCount.appendChild(inputCount);
     tr.appendChild(tdCount);
+
     // Вага
     const tdWeight = document.createElement('td');
     const inputWeight = document.createElement('input');
     inputWeight.type = 'text';
-    inputWeight.className = 'inventory-weight';
-    inputWeight.placeholder = '0';
     inputWeight.value = row.weight;
-    inputWeight.disabled = !editing;
-    inputWeight.addEventListener('input', e => {
+    inputWeight.className = 'inventory-weight';
+    inputWeight.addEventListener('input', (e) => {
       inventoryRows[idx].weight = e.target.value;
+      if (!editingInv) {
+        debouncedSaveSheetData();
+      }
+      updateCurrentWeight();
     });
     tdWeight.appendChild(inputWeight);
     tr.appendChild(tdWeight);
+
     // Кнопка видалення
-    const tdDel = document.createElement('td');
+    const tdDelete = document.createElement('td');
     if (editing) {
-      const delBtn = document.createElement('button');
-      delBtn.className = 'weapon-delete-row-btn';
-      delBtn.title = 'Видалити рядок';
-      delBtn.innerHTML = '<i class="fas fa-trash"></i>';
-      delBtn.addEventListener('click', () => {
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'weapon-delete-row-btn';
+      deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
+      deleteBtn.onclick = () => {
         inventoryRows.splice(idx, 1);
         renderInventoryTable(true);
-      });
-      delBtn.style.marginLeft = '2px';
-      tdDel.appendChild(delBtn);
+        updateCurrentWeight();
+      };
+      tdDelete.appendChild(deleteBtn);
     }
-    tr.appendChild(tdDel);
-    tbody.appendChild(tr);
-  });
+    tr.appendChild(tdDelete);
 
-  // --- ВІДНОВЛЕННЯ ФОКУСУ ---
-  if (focusInfo && editing) {
-    const tr = tbody.children[focusInfo.idx];
-    if (tr) {
-      const input = tr.querySelector('.' + focusInfo.className);
-      if (input) {
-        input.focus();
-        if (typeof focusInfo.selectionStart === 'number' && typeof focusInfo.selectionEnd === 'number') {
-          input.setSelectionRange(focusInfo.selectionStart, focusInfo.selectionEnd);
-        }
+    tbody.appendChild(tr);
+
+    // Відновлюємо фокус
+    if (idx === activeIndex) {
+      let targetInput;
+      if (activeField === 'name') targetInput = inputName;
+      else if (activeField === 'count') targetInput = inputCount;
+      else if (activeField === 'weight') targetInput = inputWeight;
+      if (targetInput) {
+        setTimeout(() => targetInput.focus(), 0);
+        targetInput.setSelectionRange(targetInput.value.length, targetInput.value.length);
       }
     }
-  }
+  });
 }
 
-// --- Inventory block edit logic ---
-document.addEventListener('DOMContentLoaded', () => {
-  const editBtnInv = document.getElementById('inventoryEditBtn');
-  const acceptBtnInv = document.getElementById('inventoryAcceptBtn');
-  const cancelBtnInv = document.getElementById('inventoryCancelBtn');
-  const addRowBtnInv = document.getElementById('inventoryAddRowBtn');
+// === ДИНАМІЧНА ТАБЛИЦЯ СПОРЯДЖЕННЯ ===
+function renderEquipmentTable(editing = false) {
+  const tbody = document.getElementById('equipmentTableBody');
+  if (!tbody) return;
 
-  let prevRowsInv = [];
-  let editingInv = false;
+  // Зберігаємо фокус на активному елементі
+  const active = document.activeElement;
+  let activeIndex = -1;
+  let activeField = '';
 
-  function setEditingModeInventory(on) {
-    editingInv = on;
-    renderInventoryTable(editingInv);
-    // Додаю керування contenteditable для заголовка інвентаря
-    const inventoryLabel = document.querySelector('.inventory-block .weapon-label');
-    if (inventoryLabel) inventoryLabel.contentEditable = !!on;
-    if (editBtnInv) editBtnInv.style.display = on ? 'none' : '';
-    if (acceptBtnInv) acceptBtnInv.style.display = on ? '' : 'none';
-    if (cancelBtnInv) cancelBtnInv.style.display = on ? '' : 'none';
-    if (addRowBtnInv) addRowBtnInv.style.display = on ? '' : 'none';
-    if (!on) {
-      // Перед збереженням повністю перебудовуємо масив inventoryRows з DOM
-      const tbody = document.getElementById('inventoryTableBody');
-      if (tbody) {
-        inventoryRows = Array.from(tbody.children).map(tr => {
-          const inputName = tr.querySelector('.inventory-name');
-          const inputCount = tr.querySelector('.inventory-count');
-          const inputWeight = tr.querySelector('.inventory-weight');
-          return {
-            name: inputName ? inputName.value : '',
-            count: inputCount ? inputCount.value : '',
-            weight: inputWeight ? inputWeight.value : ''
-          };
-        });
-      }
-      if (characterSheets[activeSheetIndex]) {
-        characterSheets[activeSheetIndex].inventory = JSON.parse(JSON.stringify(inventoryRows));
-        debouncedSaveSheetData();
-      }
+  if (active && active.tagName === 'INPUT' && active.className.startsWith('equipment-')) {
+    const tr = active.closest('tr');
+    if (tr) {
+      activeIndex = Array.from(tbody.children).indexOf(tr);
+      if (active.className.includes('name')) activeField = 'name';
+      else if (active.className.includes('armor')) activeField = 'armor';
+      else if (active.className.includes('weight')) activeField = 'weight';
     }
   }
 
-  if (editBtnInv && acceptBtnInv && cancelBtnInv && addRowBtnInv) {
-    renderInventoryTable(false);
-    editBtnInv.addEventListener('click', () => {
-      prevRowsInv = JSON.parse(JSON.stringify(inventoryRows));
-      setEditingModeInventory(true);
+  tbody.innerHTML = '';
+
+  equipmentRows.forEach((row, idx) => {
+    const tr = document.createElement('tr');
+    
+    // Назва
+    const tdName = document.createElement('td');
+    const inputName = document.createElement('input');
+    inputName.type = 'text';
+    inputName.value = row.name;
+    inputName.className = 'equipment-name';
+    inputName.addEventListener('input', (e) => {
+      equipmentRows[idx].name = e.target.value;
+      if (!editingEquip) {
+        debouncedSaveSheetData();
+      }
+      updateCurrentWeight();
+      updateArmorClass();
     });
-    acceptBtnInv.addEventListener('click', () => {
-      setEditingModeInventory(false);
+    tdName.appendChild(inputName);
+    tr.appendChild(tdName);
+
+    // Броня
+    const tdArmor = document.createElement('td');
+    const inputArmor = document.createElement('input');
+    inputArmor.type = 'text';
+    inputArmor.value = row.armor;
+    inputArmor.className = 'equipment-armor';
+    inputArmor.addEventListener('input', (e) => {
+      equipmentRows[idx].armor = e.target.value;
+      if (!editingEquip) {
+        debouncedSaveSheetData();
+      }
+      updateCurrentWeight();
+      updateArmorClass();
     });
-    cancelBtnInv.addEventListener('click', () => {
-      inventoryRows = JSON.parse(JSON.stringify(prevRowsInv));
-      setEditingModeInventory(false);
+    tdArmor.appendChild(inputArmor);
+    tr.appendChild(tdArmor);
+
+    // Вага
+    const tdWeight = document.createElement('td');
+    const inputWeight = document.createElement('input');
+    inputWeight.type = 'text';
+    inputWeight.value = row.weight;
+    inputWeight.className = 'equipment-weight';
+    inputWeight.addEventListener('input', (e) => {
+      equipmentRows[idx].weight = e.target.value;
+      if (!editingEquip) {
+        debouncedSaveSheetData();
+      }
+      updateCurrentWeight();
+      updateArmorClass();
     });
-    addRowBtnInv.addEventListener('click', () => {
-      inventoryRows.push({ name: '', count: '', weight: '' });
-      renderInventoryTable(true);
-    });
-  } else {
-    renderInventoryTable(false);
+    tdWeight.appendChild(inputWeight);
+    tr.appendChild(tdWeight);
+
+    // Кнопка видалення
+    const tdDelete = document.createElement('td');
+    if (editing) {
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'weapon-delete-row-btn';
+      deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
+      deleteBtn.onclick = () => {
+        equipmentRows.splice(idx, 1);
+        renderEquipmentTable(true);
+        updateCurrentWeight();
+        updateArmorClass();
+      };
+      tdDelete.appendChild(deleteBtn);
+    }
+    tr.appendChild(tdDelete);
+
+    tbody.appendChild(tr);
+
+    // Відновлюємо фокус
+    if (idx === activeIndex) {
+      let targetInput;
+      if (activeField === 'name') targetInput = inputName;
+      else if (activeField === 'armor') targetInput = inputArmor;
+      else if (activeField === 'weight') targetInput = inputWeight;
+      if (targetInput) {
+        setTimeout(() => targetInput.focus(), 0);
+        targetInput.setSelectionRange(targetInput.value.length, targetInput.value.length);
+      }
+    }
+  });
+}
+
+// Додаємо обробники подій для полів ваги
+const maxWeightInput = document.getElementById('maxWeight');
+const currentWeightInput = document.getElementById('currentWeight');
+
+if (maxWeightInput) {
+  maxWeightInput.addEventListener('input', updateCurrentWeight);
+}
+
+if (currentWeightInput) {
+  currentWeightInput.addEventListener('input', updateCurrentWeight);
+}
+
+// Додаємо обробник події для поля спритності
+const dexterityInput = document.getElementById('dexterityScore');
+if (dexterityInput) {
+  dexterityInput.addEventListener('input', updateSpeed);
+}
+
+// Додаємо обробник події для поля статури
+const constitutionInput = document.getElementById('constitutionScore');
+if (constitutionInput) {
+  constitutionInput.addEventListener('input', updateMaxHealth);
+}
+
+// Додаємо обробники для заголовків блоків
+const inventoryLabel = document.querySelector('.inventory-block .weapon-label');
+const equipmentLabel = document.querySelector('.equipment-block .weapon-label');
+
+if (inventoryLabel) {
+  inventoryLabel.addEventListener('blur', () => {
+    if (!editingInv) {
+      characterSheets[activeSheetIndex].inventoryTitle = inventoryLabel.textContent;
+      debouncedSaveSheetData();
+    }
+  });
+}
+
+if (equipmentLabel) {
+  equipmentLabel.addEventListener('blur', () => {
+    if (!editingEquip) {
+      characterSheets[activeSheetIndex].equipmentTitle = equipmentLabel.textContent;
+      debouncedSaveSheetData();
+    }
+  });
+}
+
+// === РЕДАГУВАННЯ МОНЕТ ===
+document.addEventListener('DOMContentLoaded', function() {
+  const senInput = document.getElementById('senCoins');
+  const ginInput = document.getElementById('ginCoins');
+  const kinInput = document.getElementById('kinCoins');
+
+  function saveCoinsImmediate() {
+    coinsData.sen = parseInt(senInput.value) || 0;
+    coinsData.gin = parseInt(ginInput.value) || 0;
+    coinsData.kin = parseInt(kinInput.value) || 0;
+    characterSheets[activeSheetIndex].coins = JSON.parse(JSON.stringify(coinsData));
+    saveSheetData();
   }
+
+  [senInput, ginInput, kinInput].forEach(input => {
+    if (!input) return;
+    input.addEventListener('blur', saveCoinsImmediate);
+    input.addEventListener('keyup', (e) => {
+      if (e.key === 'Enter') saveCoinsImmediate();
+    });
+  });
+
+  loadCoinsData();
 });
+
+function loadCoinsData() {
+  const senInput = document.getElementById('senCoins');
+  const ginInput = document.getElementById('ginCoins');
+  const kinInput = document.getElementById('kinCoins');
+  
+  if (senInput) senInput.value = coinsData.sen || 0;
+  if (ginInput) ginInput.value = coinsData.gin || 0;
+  if (kinInput) kinInput.value = coinsData.kin || 0;
+}

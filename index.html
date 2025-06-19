@@ -82,7 +82,7 @@
               <div class="ability-score-input-row">
                 <div class="stat-input-wrapper">
                   <button class="stat-btn minus">−</button>
-                  <input id="strengthScore" type="number" placeholder="10" />
+                  <input id="strengthScore" type="number" placeholder="10" min="0" max="99" step="1" />
                   <button class="stat-btn plus">+</button>
                 </div>
               </div>
@@ -99,7 +99,7 @@
               <div class="ability-score-input-row">
                 <div class="stat-input-wrapper">
                   <button class="stat-btn minus">−</button>
-                  <input id="dexterityScore" type="number" placeholder="10" />
+                  <input id="dexterityScore" type="number" placeholder="10" min="0" max="99" step="1" />
                   <button class="stat-btn plus">+</button>
                 </div>
               </div>
@@ -116,7 +116,7 @@
               <div class="ability-score-input-row">
                 <div class="stat-input-wrapper">
                   <button class="stat-btn minus">−</button>
-                  <input id="constitutionScore" type="number" placeholder="10" />
+                  <input id="constitutionScore" type="number" placeholder="10" min="0" max="99" step="1" />
                   <button class="stat-btn plus">+</button>
                 </div>
               </div>
@@ -133,7 +133,7 @@
               <div class="ability-score-input-row">
                 <div class="stat-input-wrapper">
                   <button class="stat-btn minus">−</button>
-                  <input id="intelligenceScore" type="number" placeholder="10" />
+                  <input id="intelligenceScore" type="number" placeholder="10" min="0" max="99" step="1" />
                   <button class="stat-btn plus">+</button>
                 </div>
               </div>
@@ -150,7 +150,7 @@
               <div class="ability-score-input-row">
                 <div class="stat-input-wrapper">
                   <button class="stat-btn minus">−</button>
-                  <input id="wisdomScore" type="number" placeholder="10" />
+                  <input id="wisdomScore" type="number" placeholder="10" min="0" max="99" step="1" />
                   <button class="stat-btn plus">+</button>
                 </div>
               </div>
@@ -167,7 +167,7 @@
               <div class="ability-score-input-row">
                 <div class="stat-input-wrapper">
                   <button class="stat-btn minus">−</button>
-                  <input id="charismaScore" type="number" placeholder="10" />
+                  <input id="charismaScore" type="number" placeholder="10" min="0" max="99" step="1" />
                   <button class="stat-btn plus">+</button>
                 </div>
               </div>
@@ -209,11 +209,30 @@
                 </tbody>
               </table>
             </div>
+            <!-- Блок монет -->
+            <div class="coins-block">
+              <div class="coins-block-minimal">
+                <i class="fas fa-coins" title="Монети" style="margin-right: 10px;"></i>
+                <span class="coin-label">Сен</span>
+                <input type="number" id="senCoins" placeholder="0" min="0" max="999999" step="1" />
+                <span class="coin-label">Гін</span>
+                <input type="number" id="ginCoins" placeholder="0" min="0" max="999999" step="1" />
+                <span class="coin-label">Кін</span>
+                <input type="number" id="kinCoins" placeholder="0" min="0" max="999999" step="1" />
+              </div>
+            </div>
             <!-- Новий блок інвентаря -->
-            <div class="inventory-block">
-              <div class="weapon-label-row">
+            <div class="inventory-block" style="margin-bottom: 0 !important; padding-bottom: 0 !important;">
+              <div class="weapon-label-row" style="margin-bottom: 0 !important; padding-bottom: 0 !important;">
                 <div class="weapon-label-controls">
                   <span class="weapon-label">Інвентар</span>
+                  <div class="max-weight-wrapper" style="margin: 0 !important; padding: 0 !important; margin-left: 0 !important; margin-right: 0 !important;">
+                    <input id="currentWeight" placeholder="0" type="number" min="0" max="999" step="1" readonly />
+                  </div>
+                  /
+                  <div class="max-weight-wrapper" style="margin: 0 !important; padding: 0 !important; margin-left: 0 !important; margin-right: 0 !important;">
+                    <input id="maxWeight" placeholder="50" type="number" min="0" max="999" step="1" readonly />
+                  </div>
                   <div class="weapon-edit-group" style="display: flex; background: transparent; padding: 0; margin: 0;">
                     <button class="weapon-add-row-btn" id="inventoryAddRowBtn" title="Додати рядок" style="display:none;"><i class="fas fa-plus"></i></button>
                     <button class="weapon-accept-btn" id="inventoryAcceptBtn" title="Підтвердити" style="display:none;"><i class="fas fa-check-circle"></i></button>
@@ -236,6 +255,35 @@
                 </tbody>
               </table>
             </div>
+            
+            <!-- Блок спорядження -->
+            <div class="equipment-block equipment-block--last" style="margin-bottom: 0 !important; padding-bottom: 0 !important;">
+              <div class="weapon-label-row" style="margin-bottom: 0 !important; padding-bottom: 0 !important;">
+                <div class="weapon-label-controls">
+                  <span class="weapon-label">Спорядження</span>
+                  <div class="weapon-edit-group" style="display: flex; background: transparent; padding: 0; margin: 0;">
+                    <button class="weapon-add-row-btn" id="equipmentAddRowBtn" title="Додати рядок" style="display:none;"><i class="fas fa-plus"></i></button>
+                    <button class="weapon-accept-btn" id="equipmentAcceptBtn" title="Підтвердити" style="display:none;"><i class="fas fa-check-circle"></i></button>
+                    <button class="weapon-cancel-btn" id="equipmentCancelBtn" title="Відхилити" style="display:none;"><i class="fas fa-times-circle"></i></button>
+                  </div>
+                  <button class="weapon-edit-btn" id="equipmentEditBtn" title="Редагувати"><i class="fas fa-pen"></i></button>
+                </div>
+              </div>
+              <table class="weapon-table">
+                <thead>
+                  <tr>
+                    <th>Назва</th>
+                    <th class="weapon-table-center"><i class="fas fa-shield-alt" title="Броня"></i></th>
+                    <th class="weapon-table-center"><i class="fas fa-weight-hanging" title="Вага"></i></th>
+                    <th style="width:32px;"></th>
+                  </tr>
+                </thead>
+                <tbody id="equipmentTableBody">
+                  <!-- Динамічні рядки -->
+                </tbody>
+              </table>
+            </div>
+            <div class="sheet-bottom-spacer"></div>
           </div>
           <div class="sheet-col-right">
             <div class="skill-block">
@@ -267,10 +315,6 @@
         <input id="characterName" placeholder="Ім'я персонажа" type="text" />
         
         <div class="photo-container">
-          <img alt="Натисніть для завантаження фотографії" 
-               id="characterPhotoImg" 
-               src="/no-image-placeholder.svg"
-               title="Натисніть для завантаження фотографії" />
           <div id="photoControls">
             <button id="replacePhotoButton" title="Завантажити фотографію">
               <i class="fas fa-upload"></i>
@@ -279,22 +323,18 @@
               <i class="fas fa-trash-alt"></i>
             </button>
           </div>
+          <img alt="Натисніть для завантаження фотографії" 
+               id="characterPhotoImg" 
+               src="/no-image-placeholder.svg"
+               title="Натисніть для завантаження фотографії" />
         </div>
 
         <div class="quick-stats-block">
           <div class="quick-stat-item">
-            <i class="fas fa-heart" title="ХП"></i>
-            <div class="stat-input-wrapper">
-              <button class="stat-btn minus">−</button>
-              <input id="healthPoints" placeholder="8" type="number" />
-              <button class="stat-btn plus">+</button>
-            </div>
-          </div>
-          <div class="quick-stat-item">
             <i class="fas fa-shield-alt" title="Клас Броні"></i>
             <div class="stat-input-wrapper">
               <button class="stat-btn minus">−</button>
-              <input id="armorClass" placeholder="16" type="number" />
+              <input id="armorClass" placeholder="16" type="number" min="0" max="99" step="1" readonly />
               <button class="stat-btn plus">+</button>
             </div>
           </div>
@@ -302,7 +342,15 @@
             <i class="fas fa-running" title="Швидкість"></i>
             <div class="stat-input-wrapper">
               <button class="stat-btn minus">−</button>
-              <input id="speed" placeholder="30" type="number" />
+              <input id="speed" placeholder="30" type="number" min="0" max="99" step="1" readonly />
+              <button class="stat-btn plus">+</button>
+            </div>
+          </div>
+          <div class="quick-stat-item">
+            <i class="fas fa-plus" title="Лікування"></i>
+            <div class="stat-input-wrapper">
+              <button class="stat-btn minus">−</button>
+              <input id="healthPoints" placeholder="8" type="number" min="0" max="99" step="1" />
               <button class="stat-btn plus">+</button>
             </div>
           </div>
@@ -310,8 +358,23 @@
             <i class="fas fa-spa" title="Ініціатива"></i>
             <div class="stat-input-wrapper">
               <button class="stat-btn minus">−</button>
-              <input id="initiative" placeholder="0" type="number" />
+              <input id="initiative" placeholder="0" type="number" min="0" max="99" step="1" />
               <button class="stat-btn plus">+</button>
+            </div>
+          </div>
+          <div class="quick-stats-bottom-row">
+            <div class="quick-stat-item">
+              <i class="fas fa-heart" title="ХП"></i>
+              <div class="stat-input-wrapper">
+                <button class="stat-btn minus">−</button>
+                <input id="healing" placeholder="0" type="number" min="0" max="99" step="1" />
+                <button class="stat-btn plus">+</button>
+              </div>
+            </div>
+            <div class="quick-stat-item">
+              <div class="stat-input-wrapper">
+                <input id="maxHealthPoints" placeholder="12" type="number" min="0" max="99" step="1" readonly />
+              </div>
             </div>
           </div>
         </div>
@@ -333,38 +396,87 @@
         <span class="close-modal">&times;</span>
       </div>
       <div class="modal-body">
-        <div class="info-grid">
-          <div class="info-item">
-            <label>Ім'я:</label>
-            <span id="modalCharacterName"></span>
-          </div>
-          <div class="info-item">
-            <label>Раса:</label>
-            <span id="modalCharacterRace"></span>
-          </div>
-          <div class="info-item">
-            <label>Клас та рівень:</label>
-            <span id="modalCharacterClass"></span>
-          </div>
-          <div class="info-item">
-            <label>Передісторія:</label>
-            <span id="modalBackground"></span>
-          </div>
-          <div class="info-item">
-            <label>Світогляд:</label>
-            <span id="modalAlignment"></span>
-          </div>
-          <div class="info-item">
-            <label>Характеристики:</label>
-            <div class="modal-stats">
-              <div>СИЛ: <span id="modalStrength"></span></div>
-              <div>СПР: <span id="modalDexterity"></span></div>
-              <div>СТА: <span id="modalConstitution"></span></div>
-              <div>ІНТ: <span id="modalIntelligence"></span></div>
-              <div>МУД: <span id="modalWisdom"></span></div>
-              <div>ХАР: <span id="modalCharisma"></span></div>
+        <div class="modal-row-flex">
+          <div class="skill-block modal-col-third">
+            <div class="skill-label"><span class="modal-label-title">Клас</span>
+              <button class="modal-edit-btn" id="editModalClass" title="Редагувати"><i class="fas fa-pen"></i></button>
+              <button class="modal-accept-btn" id="acceptModalClass" title="Підтвердити" style="display:none;"><i class="fas fa-check"></i></button>
+              <button class="modal-cancel-btn" id="cancelModalClass" title="Відхилити" style="display:none;"><i class="fas fa-times"></i></button>
             </div>
+            <textarea class="skill-desc-textarea" readonly id="modalCharacterClass"></textarea>
           </div>
+          <div class="skill-block modal-col-third">
+            <div class="skill-label"><span class="modal-label-title">Раса</span>
+              <button class="modal-edit-btn" id="editModalRace" title="Редагувати"><i class="fas fa-pen"></i></button>
+              <button class="modal-accept-btn" id="acceptModalRace" title="Підтвердити" style="display:none;"><i class="fas fa-check"></i></button>
+              <button class="modal-cancel-btn" id="cancelModalRace" title="Відхилити" style="display:none;"><i class="fas fa-times"></i></button>
+            </div>
+            <textarea class="skill-desc-textarea" readonly id="modalCharacterRace"></textarea>
+          </div>
+          <div class="skill-block modal-col-third">
+            <div class="skill-label"><span class="modal-label-title">Світогляд</span>
+              <button class="modal-edit-btn" id="editModalAlignment" title="Редагувати"><i class="fas fa-pen"></i></button>
+              <button class="modal-accept-btn" id="acceptModalAlignment" title="Підтвердити" style="display:none;"><i class="fas fa-check"></i></button>
+              <button class="modal-cancel-btn" id="cancelModalAlignment" title="Відхилити" style="display:none;"><i class="fas fa-times"></i></button>
+            </div>
+            <textarea class="skill-desc-textarea" readonly id="modalAlignment"></textarea>
+          </div>
+        </div>
+        <div class="skill-block">
+          <div class="skill-label"><span class="modal-label-title">Зовнішність</span>
+            <button class="modal-edit-btn" id="editModalAppearance" title="Редагувати"><i class="fas fa-pen"></i></button>
+            <button class="modal-accept-btn" id="acceptModalAppearance" title="Підтвердити" style="display:none;"><i class="fas fa-check"></i></button>
+            <button class="modal-cancel-btn" id="cancelModalAppearance" title="Відхилити" style="display:none;"><i class="fas fa-times"></i></button>
+          </div>
+          <textarea class="skill-desc-textarea" readonly id="modalAppearance"></textarea>
+        </div>
+        <div class="skill-block">
+          <div class="skill-label"><span class="modal-label-title">Риси характеру</span>
+            <button class="modal-edit-btn" id="editModalPersonalityTraits" title="Редагувати"><i class="fas fa-pen"></i></button>
+            <button class="modal-accept-btn" id="acceptModalPersonalityTraits" title="Підтвердити" style="display:none;"><i class="fas fa-check"></i></button>
+            <button class="modal-cancel-btn" id="cancelModalPersonalityTraits" title="Відхилити" style="display:none;"><i class="fas fa-times"></i></button>
+          </div>
+          <textarea class="skill-desc-textarea" readonly id="modalPersonalityTraits"></textarea>
+        </div>
+        <div class="skill-block">
+          <div class="skill-label"><span class="modal-label-title">Особливості поведінки</span>
+            <button class="modal-edit-btn" id="editModalFeatures" title="Редагувати"><i class="fas fa-pen"></i></button>
+            <button class="modal-accept-btn" id="acceptModalFeatures" title="Підтвердити" style="display:none;"><i class="fas fa-check"></i></button>
+            <button class="modal-cancel-btn" id="cancelModalFeatures" title="Відхилити" style="display:none;"><i class="fas fa-times"></i></button>
+          </div>
+          <textarea class="skill-desc-textarea" readonly id="modalFeatures"></textarea>
+        </div>
+        <div class="skill-block">
+          <div class="skill-label"><span class="modal-label-title">Передісторія</span>
+            <button class="modal-edit-btn" id="editModalBackground" title="Редагувати"><i class="fas fa-pen"></i></button>
+            <button class="modal-accept-btn" id="acceptModalBackground" title="Підтвердити" style="display:none;"><i class="fas fa-check"></i></button>
+            <button class="modal-cancel-btn" id="cancelModalBackground" title="Відхилити" style="display:none;"><i class="fas fa-times"></i></button>
+          </div>
+          <textarea class="skill-desc-textarea" readonly id="modalBackground"></textarea>
+        </div>
+        <div class="skill-block">
+          <div class="skill-label"><span class="modal-label-title">Зв'язки</span>
+            <button class="modal-edit-btn" id="editModalBonds" title="Редагувати"><i class="fas fa-pen"></i></button>
+            <button class="modal-accept-btn" id="acceptModalBonds" title="Підтвердити" style="display:none;"><i class="fas fa-check"></i></button>
+            <button class="modal-cancel-btn" id="cancelModalBonds" title="Відхилити" style="display:none;"><i class="fas fa-times"></i></button>
+          </div>
+          <textarea class="skill-desc-textarea" readonly id="modalBonds"></textarea>
+        </div>
+        <div class="skill-block">
+          <div class="skill-label"><span class="modal-label-title">Мови</span>
+            <button class="modal-edit-btn" id="editModalLanguages" title="Редагувати"><i class="fas fa-pen"></i></button>
+            <button class="modal-accept-btn" id="acceptModalLanguages" title="Підтвердити" style="display:none;"><i class="fas fa-check"></i></button>
+            <button class="modal-cancel-btn" id="cancelModalLanguages" title="Відхилити" style="display:none;"><i class="fas fa-times"></i></button>
+          </div>
+          <textarea class="skill-desc-textarea" readonly id="modalLanguages"></textarea>
+        </div>
+        <div class="skill-block">
+          <div class="skill-label"><span class="modal-label-title">Примітки</span>
+            <button class="modal-edit-btn" id="editModalNotes" title="Редагувати"><i class="fas fa-pen"></i></button>
+            <button class="modal-accept-btn" id="acceptModalNotes" title="Підтвердити" style="display:none;"><i class="fas fa-check"></i></button>
+            <button class="modal-cancel-btn" id="cancelModalNotes" title="Відхилити" style="display:none;"><i class="fas fa-times"></i></button>
+          </div>
+          <textarea class="skill-desc-textarea" readonly id="modalNotes"></textarea>
         </div>
       </div>
     </div>
@@ -372,5 +484,27 @@
 
   <script src="https://unpkg.com/@owlbear-rodeo/sdk@latest/dist/owlbear-sdk.js"></script>
   <script src="main.js" type="module"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const helpIcon = document.querySelector('.help-block i');
+      const mainContent = document.getElementById('mainContent');
+      const closeModal = document.querySelector('.close-modal');
+      const modal = document.getElementById('characterInfoModal');
+      function closeHelp() {
+        if (mainContent) mainContent.classList.remove('darken-bg');
+      }
+      if (helpIcon && mainContent) {
+        helpIcon.addEventListener('click', function() {
+          mainContent.classList.add('darken-bg');
+        });
+      }
+      if (closeModal) {
+        closeModal.addEventListener('click', closeHelp);
+      }
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeHelp();
+      });
+    });
+  </script>
 </body>
 </html>
