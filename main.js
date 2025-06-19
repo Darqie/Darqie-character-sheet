@@ -2032,7 +2032,8 @@ function loadCoinsData() {
   if (kinInput) kinInput.value = coinsData.kin || 0;
 }
 
-function sendDiceRollRequest(type, style, bonus) {
-  console.log("Відправляю кидок у metadata:", { type, style, bonus });
-  OBR.room.setMetadata({ [DICE_ROLL_KEY]: { type, style, bonus, ts: Date.now() } });
+async function sendDiceRollRequest(type, style, bonus) {
+  const player = await OBR.party.getPlayer();
+  console.log("Відправляю кидок у metadata:", { type, style, bonus, connectionId: player.connectionId });
+  OBR.room.setMetadata({ [DICE_ROLL_KEY]: { type, style, bonus, connectionId: player.connectionId, ts: Date.now() } });
 }
