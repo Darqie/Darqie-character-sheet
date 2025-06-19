@@ -4,6 +4,7 @@ import OBR from '@owlbear-rodeo/sdk';
 const DARQIE_SHEETS_KEY = 'darqie.characterSheets';
 const DEBOUNCE_DELAY = 150;
 const UPLOADCARE_PUBLIC_KEY = '7d0fa9d84ac0680d6d83';
+const DICE_ROLL_KEY = "darqie.rollRequest";
 
 // === ГЛОБАЛЬНІ ЗМІННІ ===
 let characterSheets = [];
@@ -1022,7 +1023,7 @@ OBR.onReady(async () => {
       await OBR.broadcast.sendMessage('skill-chat', { name, desc });
     };
 
-    // === Додаю кидки кубика при натисканні на модифікатор ===
+    // === Додаю кидки кубика при натисканні на модифікатор через OBR.room.setMetadata ===
     const abilities = [
       { modId: 'strengthModifier', scoreId: 'strengthScore' },
       { modId: 'dexterityModifier', scoreId: 'dexterityScore' },
@@ -1039,19 +1040,10 @@ OBR.onReady(async () => {
         modBox.style.cursor = 'pointer';
         modBox.title = 'Кинути d20 з цим модифікатором';
         modBox.addEventListener('click', function (e) {
-          // Визначаємо модифікатор
           let value = parseInt(scoreInput.value);
           if (isNaN(value)) value = 10;
           const mod = Math.floor((value - 10) / 2);
-          window.postMessage({
-            source: 'character-sheet',
-            action: 'roll-dice',
-            payload: {
-              type: 'D20',
-              style: 'NEBULA', // Можна змінити стиль
-              bonus: mod
-            }
-          }, '*');
+          sendDiceRollRequest('D20', 'NEBULA', mod);
         });
       }
     });
@@ -2037,4 +2029,8 @@ function loadCoinsData() {
   if (senInput) senInput.value = coinsData.sen || 0;
   if (ginInput) ginInput.value = coinsData.gin || 0;
   if (kinInput) kinInput.value = coinsData.kin || 0;
+}
+
+function sendDiceRollRequest(type, style, bonus) {
+  OBR.room.setMetadata({ [DICE_ROLL_KEY]: { type, style, bonus, ts: Date.now() } });
 }
