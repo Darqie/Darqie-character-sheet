@@ -77,7 +77,7 @@
           <div class="ability-score-item">
             <div class="ability-score-left">
               <div class="ability-score-label-row">
-                <label for="strengthScore">Сила</label>
+                <label>Сила</label>
               </div>
               <div class="ability-score-input-row">
                 <div class="stat-input-wrapper">
@@ -85,6 +85,7 @@
                   <input id="strengthScore" type="number" placeholder="10" min="0" max="99" step="1" />
                   <button class="stat-btn plus">+</button>
                 </div>
+                <button class="stat-edit-btn" title="Редагувати"><i class="fas fa-pen"></i></button>
               </div>
             </div>
             <div class="ability-score-mod-col">
@@ -94,7 +95,7 @@
           <div class="ability-score-item">
             <div class="ability-score-left">
               <div class="ability-score-label-row">
-                <label for="dexterityScore">Спритність</label>
+                <label>Спритність</label>
               </div>
               <div class="ability-score-input-row">
                 <div class="stat-input-wrapper">
@@ -102,6 +103,7 @@
                   <input id="dexterityScore" type="number" placeholder="10" min="0" max="99" step="1" />
                   <button class="stat-btn plus">+</button>
                 </div>
+                <button class="stat-edit-btn" title="Редагувати"><i class="fas fa-pen"></i></button>
               </div>
             </div>
             <div class="ability-score-mod-col">
@@ -111,7 +113,7 @@
           <div class="ability-score-item">
             <div class="ability-score-left">
               <div class="ability-score-label-row">
-                <label for="constitutionScore">Статура</label>
+                <label>Статура</label>
               </div>
               <div class="ability-score-input-row">
                 <div class="stat-input-wrapper">
@@ -119,6 +121,7 @@
                   <input id="constitutionScore" type="number" placeholder="10" min="0" max="99" step="1" />
                   <button class="stat-btn plus">+</button>
                 </div>
+                <button class="stat-edit-btn" title="Редагувати"><i class="fas fa-pen"></i></button>
               </div>
             </div>
             <div class="ability-score-mod-col">
@@ -128,7 +131,7 @@
           <div class="ability-score-item">
             <div class="ability-score-left">
               <div class="ability-score-label-row">
-                <label for="intelligenceScore">Інтелект</label>
+                <label>Інтелект</label>
               </div>
               <div class="ability-score-input-row">
                 <div class="stat-input-wrapper">
@@ -136,6 +139,7 @@
                   <input id="intelligenceScore" type="number" placeholder="10" min="0" max="99" step="1" />
                   <button class="stat-btn plus">+</button>
                 </div>
+                <button class="stat-edit-btn" title="Редагувати"><i class="fas fa-pen"></i></button>
               </div>
             </div>
             <div class="ability-score-mod-col">
@@ -145,7 +149,7 @@
           <div class="ability-score-item">
             <div class="ability-score-left">
               <div class="ability-score-label-row">
-                <label for="wisdomScore">Мудрість</label>
+                <label>Мудрість</label>
               </div>
               <div class="ability-score-input-row">
                 <div class="stat-input-wrapper">
@@ -153,6 +157,7 @@
                   <input id="wisdomScore" type="number" placeholder="10" min="0" max="99" step="1" />
                   <button class="stat-btn plus">+</button>
                 </div>
+                <button class="stat-edit-btn" title="Редагувати"><i class="fas fa-pen"></i></button>
               </div>
             </div>
             <div class="ability-score-mod-col">
@@ -162,7 +167,7 @@
           <div class="ability-score-item">
             <div class="ability-score-left">
               <div class="ability-score-label-row">
-                <label for="charismaScore">Харизма</label>
+                <label>Харизма</label>
               </div>
               <div class="ability-score-input-row">
                 <div class="stat-input-wrapper">
@@ -170,6 +175,7 @@
                   <input id="charismaScore" type="number" placeholder="10" min="0" max="99" step="1" />
                   <button class="stat-btn plus">+</button>
                 </div>
+                <button class="stat-edit-btn" title="Редагувати"><i class="fas fa-pen"></i></button>
               </div>
             </div>
             <div class="ability-score-mod-col">
@@ -350,7 +356,7 @@
             <i class="fas fa-plus" title="Лікування"></i>
             <div class="stat-input-wrapper">
               <button class="stat-btn minus">−</button>
-              <input id="healthPoints" placeholder="8" type="number" min="0" max="99" step="1" />
+              <input id="health" placeholder="0" type="number" min="0" max="99" step="1" />
               <button class="stat-btn plus">+</button>
             </div>
           </div>
@@ -367,7 +373,7 @@
               <i class="fas fa-heart" title="ХП"></i>
               <div class="stat-input-wrapper">
                 <button class="stat-btn minus">−</button>
-                <input id="healing" placeholder="0" type="number" min="0" max="99" step="1" />
+                <input id="healthPoints" placeholder="0" type="number" min="0" max="99" step="1" />
                 <button class="stat-btn plus">+</button>
               </div>
             </div>

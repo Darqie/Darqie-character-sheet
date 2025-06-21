@@ -131,6 +131,7 @@ textarea {
   resize: vertical;
   box-shadow: none;
   outline: none;
+  font-family: 'Cormorant Unicase', serif !important;
 }
 
 input:focus,
@@ -198,6 +199,7 @@ textarea::placeholder {
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
   background-color: transparent;
   backdrop-filter: blur(10px);
+  position: relative;
 }
 
 .ability-score-left {
@@ -205,6 +207,8 @@ textarea::placeholder {
   flex-direction: column;
   justify-content: space-between;
   align-items: flex-start;
+  position: relative;
+  grid-column: 1;
 }
 
 .ability-score-label-row {
@@ -224,10 +228,24 @@ textarea::placeholder {
 
 .ability-score-input-row {
   width: 100%;
+  max-width: 140px;
+  min-width: 80px;
   margin-top: 8px;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0;
 }
 
 .ability-score-mod-col {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  grid-column: 2;
+}
+
+.ability-score-edit-col {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -456,9 +474,41 @@ textarea::placeholder {
 /* Статистики та модифікатори */
 .stat-input-wrapper {
   position: relative;
-  display: inline-block;
+  display: flex;
+  align-items: center;
   width: 100%;
   height: 36px;
+  gap: 4px;
+}
+
+.stat-input-wrapper .stat-btn.minus {
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+}
+
+.stat-input-wrapper .stat-btn.plus {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+}
+
+.stat-input-wrapper input {
+  width: 100%;
+  height: 100%;
+  padding: 0 32px 0 32px;
+  box-sizing: border-box;
+  font-size: 16px;
+  text-align: center;
+  background-color: transparent;
+  border: none;
+  outline: 1px solid rgba(255,255,255,0.3);
+  color: white;
+  border-radius: 4px;
 }
 
 .max-weight-wrapper {
@@ -1845,13 +1895,23 @@ textarea:focus {
   width: 100%;
   min-height: 30px;
   background: rgba(33,37,51,0.25);
- -family: 'Cormorant Unicase', serif !important;
+  font-family: 'Cormorant Unicase', serif !important;
   font-size: 0.9em !important;
   padding: 0.2em 10px !important;
   resize: none !important;
   overflow: hidden !important;
   max-height: 400px;
   transition: outline 0.15s, height 0.15s;
+  border: none !important;
+  outline: none !important;
+  border-radius: 6px;
+  box-shadow: none !important;
+}
+
+.skill-desc-textarea:focus {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
 .skill-delete-row-btn {
@@ -2176,14 +2236,6 @@ textarea:focus {
   margin-bottom: 32px !important;
 }
 
-.inventory-block .weapon-label {
-  /* для уніфікації */
-}
-
-.equipment-block .weapon-label {
-  /* для уніфікації */
-}
-
 .inventory-block .weapon-table th i {
   font-size: 1.1em;
   color: #f0f0f0;
@@ -2375,6 +2427,77 @@ html {
   box-shadow: none;
   padding: 2px 0 2px 0;
   margin-bottom: 0 !important;
+}
+
+/* --- Курсор для input в інвентарі та спорядженні --- */
+.inventory-block input[readonly],
+.equipment-block input[readonly] {
+  cursor: default !important;
+  pointer-events: none;
+  background: rgba(33,37,51,0.25);
+}
+
+.inventory-block input:not([readonly]),
+.equipment-block input:not([readonly]) {
+  cursor: text;
+  pointer-events: auto;
+}
+
+.stat-edit-btn {
+  background: transparent;
+  border: none;
+  color: #b0b0b0;
+  font-size: 1em;
+  cursor: pointer;
+  padding: 0;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  width: 24px;
+  flex-shrink: 0;
+}
+.stat-edit-btn:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.08);
+}
+
+.stat-input-wrapper input[readonly],
+.stat-input-wrapper input[disabled] {
+  background: rgba(33,37,51,0.25);
+  color: #b0b0b0;
+  cursor: default;
+}
+.stat-input-wrapper .stat-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.stat-input-wrapper .stat-btn {
+  z-index: 1;
+}
+
+/* Видаляю order стилі */
+.stat-input-wrapper .stat-btn.minus { order: unset; }
+.stat-input-wrapper input { order: unset; }
+.stat-input-wrapper .stat-btn.plus { order: unset; }
+.stat-input-wrapper .stat-edit-btn { order: unset; }
+
+.skill-chat-icon {
+  cursor: pointer;
+  color: #b0b0b0;
+  font-size: 0.9em;
+  transition: color 0.15s;
+  flex-shrink: 0;
+}
+
+.skill-chat-icon:hover {
+  color: #fff;
+}
+
+.fa-dice-d20 {
+  font-size: 0.85em;
 }
 
 
