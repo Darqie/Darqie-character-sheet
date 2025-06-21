@@ -1029,8 +1029,9 @@ function setupInterface() {
 
     // Додаємо підписку на повідомлення про навички
     OBR.broadcast.onMessage("skill-message", async (data) => {
-        if (data.type === 'skill-info') {
-            await showSkillNotification(data.skillName, data.skillDescription, data.playerName);
+        const skillData = data.data || data;
+        if (skillData && skillData.type === 'skill-info') {
+            await showSkillNotification(skillData.skillName, skillData.skillDescription, skillData.playerName);
         }
     });
 }
@@ -2204,13 +2205,14 @@ async function sendSkillMessage(skillName, skillDescription) {
 async function showSkillNotification(skillName, skillDescription, playerName) {
   try {
     const notificationTitle = `Навичка: ${skillName}`;
-    const notificationText = skillDescription || 'Опис відсутній';
+    const notificationText = skillDescription ? `${skillName}:\n\n${skillDescription}` : skillName;
     
-    await OBR.notification.show(notificationText, 'info', {
+    await OBR.notification.show(notificationText, 'INFO', {
       title: notificationTitle,
       description: `Показано гравцем: ${playerName}`,
-      duration: 8000
+      duration: 120000
     });
+    console.log('Показано сповіщення про навичку:', skillName);
   } catch (error) {
     console.error('Помилка при показі сповіщення про навичку:', error);
   }
