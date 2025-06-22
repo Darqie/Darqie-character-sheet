@@ -2581,4 +2581,11 @@ function clearAdvantageCheckboxes() {
   if (disadvantageCheckbox) {
     disadvantageCheckbox.checked = false;
   }
+  
+  // Зберігаємо зміни в метаданих
+  if (characterSheets[activeSheetIndex]) {
+    characterSheets[activeSheetIndex].advantage = false;
+    characterSheets[activeSheetIndex].disadvantage = false;
+    debouncedSaveSheetData();
+  }
 }
