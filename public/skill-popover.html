@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Навичка</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Unicase:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <style>
+    html, body {
+      height: 100%;
+      min-height: 100%;
+    }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Cormorant Unicase', serif !important;
+      background: transparent;
+      color: #f0f0f0;
+      overflow: hidden;
+      user-select: none;
+    }
+    .skill-popover {
+      background: none !important;
+      border: none !important;
+      box-shadow: none !important;
+      padding: 4px 18px 12px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 18px;
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      position: relative;
+      padding-bottom: 28px;
+    }
+    .skill-header {
+      font-family: 'Cormorant Unicase', serif !important;
+      font-size: 1.2em;
+      font-weight: 900;
+      color: #f0f0f0;
+      text-transform: uppercase;
+      margin-bottom: 0;
+      margin-top: 0;
+      line-height: 1.1;
+      letter-spacing: 0.04em;
+      position: relative;
+      cursor: default !important;
+      user-select: none !important;
+      pointer-events: auto;
+      width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .skill-header::after {
+      content: '';
+      display: block;
+      width: 100%;
+      height: 0;
+      border-bottom: 1.5px solid rgba(255,255,255,0.35);
+      margin-top: 8px;
+    }
+    .skill-name {
+      flex: 1 1 0;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-align: left;
+    }
+    .player-name-top {
+      position: absolute;
+      top: 4px;
+      right: 18px;
+      font-size: 0.75em;
+      color: #b0b0b0;
+      font-weight: 400;
+      opacity: 0.8;
+      text-align: right;
+      white-space: nowrap;
+      z-index: 10;
+      background: none;
+      pointer-events: none;
+    }
+    .skill-description {
+      width: 100%;
+      flex: 1 1 0;
+      min-height: 0;
+      max-height: 100%;
+      background: rgba(33,37,51,0.25);
+      font-family: 'Cormorant Unicase', serif !important;
+      font-size: 0.9em !important;
+      padding: 0.2em 10px !important;
+      resize: none !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+      border: none !important;
+      outline: none !important;
+      border-radius: 6px;
+      box-shadow: none !important;
+      color: #e0e0e0;
+      line-height: 1.4;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+      scrollbar-width: thin;
+      scrollbar-color: #b0b0b0 rgba(33,37,51,0.10);
+    }
+    .skill-description::-webkit-scrollbar {
+      width: 7px;
+      background: rgba(33,37,51,0.10);
+      border-radius: 6px;
+    }
+    .skill-description::-webkit-scrollbar-thumb {
+      background: #b0b0b0;
+      border-radius: 6px;
+      opacity: 0.7;
+    }
+    .skill-description::-webkit-scrollbar-thumb:hover {
+      background: #e0e0e0;
+    }
+    .skill-description:focus {
+      outline: none !important;
+      border: none !important;
+      box-shadow: none !important;
+    }
+    /* Автоматичне розтягування textarea */
+    .skill-description {
+      height: auto;
+      min-height: 30px;
+    }
+    .skill-header-row {
+      display: flex;
+      flex-direction: row;
+      align-items: flex-end;
+      width: 100%;
+      gap: 0;
+    }
+    .skill-name-container {
+      flex: 1 1 0;
+      min-width: 0;
+      max-width: 100%;
+      display: flex;
+      align-items: flex-end;
+    }
+    .skill-name {
+      font-family: 'Cormorant Unicase', serif !important;
+      font-size: 1.2em;
+      font-weight: 900;
+      color: #f0f0f0;
+      text-transform: uppercase;
+      line-height: 1.1;
+      letter-spacing: 0.04em;
+      text-align: left;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .player-name-container {
+      flex: 0 0 auto;
+      min-width: unset;
+      max-width: 100%;
+      display: flex;
+      align-items: flex-end;
+    }
+    .player-name {
+      font-size: 0.75em;
+      color: #b0b0b0;
+      font-weight: 400;
+      opacity: 0.8;
+      text-align: right;
+      white-space: nowrap;
+    }
+    .skill-header-row::after {
+      content: '';
+      display: block;
+      width: 100%;
+      height: 0;
+      border-bottom: 1.5px solid rgba(255,255,255,0.35);
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="skill-popover">
+    <div class="skill-header" id="skillName">Назва навички</div>
+    <div class="skill-description" id="skillDescription">Опис навички</div>
+    <div class="player-name-top" id="playerNameTop">Гравець</div>
+  </div>
+  <script>
+    // Отримуємо параметри з URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const skillName = urlParams.get('name') || 'Назва навички';
+    const skillDescription = urlParams.get('desc') || 'Опис навички';
+    const playerName = urlParams.get('player') || 'Гравець';
+
+    // Встановлюємо значення
+    document.getElementById('skillName').textContent = decodeURIComponent(skillName);
+    document.getElementById('skillDescription').innerText = decodeURIComponent(skillDescription);
+    document.getElementById('playerNameTop').textContent = decodeURIComponent(playerName);
+
+    // Автоматично розтягуємо textarea
+    // const textarea = document.getElementById('skillDescription');
+    // textarea.style.height = 'auto';
+    // textarea.style.height = (textarea.scrollHeight) + 'px';
+
+    // Закриття по Escape
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        if (window.OBR && window.OBR.popover) {
+          window.OBR.popover.close();
+        }
+      }
+    });
+
+    // Через 5 секунд надсилаємо сигнал на закриття через метадані
+    if (window.OBR && window.OBR.onReady) {
+      window.OBR.onReady(() => {
+        setTimeout(async () => {
+          const meta = await window.OBR.room.getMetadata();
+          await window.OBR.room.setMetadata({
+            ...meta,
+            darqie: {
+              ...(meta.darqie || {}),
+              closeSkillPopover: Date.now()
+            }
+          });
+        }, 5000);
+      });
+    }
+  </script>
+</body>
+</html> 
