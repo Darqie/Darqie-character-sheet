@@ -2309,9 +2309,7 @@ async function sendDiceRollRequest(type, style, bonus) {
     await OBR.room.setMetadata(updatedMetadata);
     
     // Знімаємо чекбокси переваги/похибки одразу після відправки запиту
-    if (advantageType) {
-      clearAdvantageCheckboxes();
-    }
+    clearAdvantageCheckboxes();
     
   } catch (error) {
     // Повністю ігноруємо помилки
