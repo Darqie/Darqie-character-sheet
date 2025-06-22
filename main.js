@@ -1934,7 +1934,7 @@ async function openSkillPopover(skillName, skillDescription, playerName, senderC
     if (myConnectionId === senderConnectionId) return; // Не відкриваємо popover для ініціатора
     await OBR.popover.open({
       id: 'skill-popover',
-      url: `skill-popover.html?name=${encodeURIComponent(skillName)}&desc=${encodeURIComponent(skillDescription || '')}&player=${encodeURIComponent(playerName || '')}`,
+      url: `https://darqie-character-sheet.onrender.com/skill-popover.html?name=${encodeURIComponent(skillName)}&desc=${encodeURIComponent(skillDescription || '')}&player=${encodeURIComponent(playerName || '')}`,
       width: 400,
       height: 300,
       anchorOrigin: { horizontal: 'RIGHT', vertical: 'TOP' },
