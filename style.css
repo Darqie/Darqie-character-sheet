@@ -2291,6 +2291,7 @@ html {
 .skill-desc-textarea:not([readonly]) {
   cursor: text;
   pointer-events: auto;
+  background: rgba(33,37,51,0.25);
 }
 
 .skill-name-label[contenteditable="false"] {
@@ -2498,6 +2499,39 @@ html {
 
 .fa-dice-d20 {
   font-size: 0.85em;
+}
+
+.fa-dice-d20 {
+  color: #ff6b6b;
+}
+
+/* Стилі для клікабельних полів зброї */
+.weapon-bonus[readonly],
+.weapon-damage[readonly] {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.weapon-bonus[readonly]:hover,
+.weapon-damage[readonly]:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
+}
+
+.weapon-bonus[readonly]:active,
+.weapon-damage[readonly]:active {
+  background-color: rgba(255, 255, 255, 0.15);
+  transform: scale(0.98);
+}
+
+/* Іконки для полів зброї */
+.weapon-table th:nth-child(2) i {
+  color: #4ecdc4;
+}
+
+.weapon-table th:nth-child(3) i {
+  color: #ff6b6b;
 }
 
 

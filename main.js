@@ -17,6 +17,11 @@ let weaponEditing = false;
 let skillEditing = false;
 let editingInv = false;
 let editingEquip = false;
+let lastRollRequestTime = 0;
+
+// Ініціалізуємо глобальні змінні
+window.weaponEditing = false;
+window.skillEditing = false;
 
 // === ДИНАМІЧНА ТАБЛИЦЯ ЗБРОЇ ===
 let weaponRows = [
@@ -388,9 +393,9 @@ async function saveSheetData() {
 }
 
 function loadSheetData() {
-  if (characterSheets.length === 0) return;
-  
   const sheet = characterSheets[activeSheetIndex];
+  if (!sheet) return;
+  
   const elements = getSheetInputElements();
 
   // Завантаження основних полів
@@ -433,7 +438,7 @@ function loadSheetData() {
   weaponRows = Array.isArray(sheet.weapons) && sheet.weapons.length > 0
     ? JSON.parse(JSON.stringify(sheet.weapons))
     : [{ name: '', bonus: '', damage: '' }];
-  renderWeaponTable(weaponEditing);
+  renderWeaponTable(false); // Завжди починаємо з режиму перегляду
 
   // --- Додаю завантаження навичок ---
   skillRows = Array.isArray(sheet.skills) && sheet.skills.length > 0
@@ -457,6 +462,14 @@ function loadSheetData() {
   coinsData = sheet.coins ? JSON.parse(JSON.stringify(sheet.coins)) : { sen: 0, gin: 0, kin: 0 };
   loadCoinsData();
 
+  // --- Додаю завантаження заголовків блоків ---
+  const weaponLabel = document.querySelector('.weapon-block .weapon-label');
+  const inventoryLabel = document.querySelector('.inventory-block .weapon-label');
+  const equipmentLabel = document.querySelector('.equipment-block .weapon-label');
+  if (weaponLabel && sheet.weaponTitle) weaponLabel.textContent = sheet.weaponTitle;
+  if (inventoryLabel && sheet.inventoryTitle) inventoryLabel.textContent = sheet.inventoryTitle;
+  if (equipmentLabel && sheet.equipmentTitle) equipmentLabel.textContent = sheet.equipmentTitle;
+
   updateModifiers();
   updateDeathOverlay();
   updateCurrentWeight();
@@ -469,6 +482,7 @@ updateSpeed();
 updateMaxHealth();
 updateArmorClass();
 updateCurrentWeight();
+renderWeaponTable(false); // Додаю ініціалізацію таблиці зброї
 renderInventoryTable(false);
 renderEquipmentTable(false);
 
@@ -502,7 +516,6 @@ async function updateCharacterDropdown() {
     } else {
       if (waitingBlock) waitingBlock.style.display = 'none';
       if (mainContent) mainContent.style.display = 'flex';
-      await OBR.notification.show("У вас ще немає персонажів.", "info");
     }
     return;
   }
@@ -735,7 +748,6 @@ function setupCharacterButtons() {
   if (addBtn && isGM) {
     addBtn.addEventListener('click', async () => {
       try {
-        console.log('Створення нового персонажа');
         const newSheet = {
           characterName: '',
           playerName: '',
@@ -790,7 +802,7 @@ function setupCharacterButtons() {
         loadSheetData();
         populatePlayerSelect();
         
-        console.log('Новий персонаж створено успішно');
+        // console.log('Новий персонаж створено успішно');
       } catch (error) {
         console.error('Помилка при створенні персонажа:', error);
       }
@@ -829,7 +841,7 @@ function setupCharacterButtons() {
         loadSheetData();
         populatePlayerSelect();
         
-        console.log('Персонаж видалено успішно');
+        // console.log('Персонаж видалено успішно');
       } catch (error) {
         console.error('Помилка при видаленні персонажа:', error);
       }
@@ -995,11 +1007,24 @@ async function checkCharacterAndRedirect() {
 
 // Модифікуємо функцію setupInterface
 function setupInterface() {
+    // Захист від повторного виклику
+    if (window.interfaceSetup) {
+        return;
+    }
+    window.interfaceSetup = true;
+    
     setupCharacterButtons();
+    
     setupPhotoButtons();
+    
     setupStatButtons();
+    
     setupStatEditButtons();
+    
+    // setupModifierButtons(); // Видаляємо цей виклик
+    
     updateCharacterDropdown();
+    
     connectInputsToSave();
 
     // Спеціальне налаштування для поля maxHealthPoints
@@ -1018,6 +1043,40 @@ function setupInterface() {
         if (JSON.stringify(characterSheets) !== JSON.stringify(sheets)) {
             await checkCharacterAndRedirect();
         }
+        
+        // Обробляємо модальне вікно навичок
+        const skillModalData = metadata.darqie?.skillModal;
+        if (skillModalData && skillModalData.timestamp) {
+            // Перевіряємо, чи це нове повідомлення (не старіше 5 секунд)
+            const now = Date.now();
+            if (now - skillModalData.timestamp < 5000) {
+                openSkillModal(
+                    skillModalData.skillName,
+                    skillModalData.skillDescription,
+                    skillModalData.playerName
+                );
+            }
+        }
+        // Обробляємо popover навичок
+        const skillPopoverData = metadata.darqie?.skillPopover;
+        if (skillPopoverData && skillPopoverData.timestamp) {
+            // Перевіряємо, чи це нове повідомлення (не старіше 5 секунд)
+            const now = Date.now();
+            if (now - skillPopoverData.timestamp < 5000) {
+                openSkillPopover(
+                    skillPopoverData.skillName,
+                    skillPopoverData.skillDescription,
+                    skillPopoverData.playerName,
+                    skillPopoverData.senderConnectionId
+                );
+            }
+        }
+        // Обробка сигналу закриття popover навички
+        if (metadata.darqie?.closeSkillPopover) {
+            if (window.OBR && window.OBR.popover) {
+                window.OBR.popover.close();
+            }
+        }
     });
 
     // Додаємо підписку на повідомлення про призначення персонажа
@@ -1027,23 +1086,23 @@ function setupInterface() {
         }
     });
 
-    // Додаємо підписку на повідомлення про навички
-    OBR.broadcast.onMessage("skill-message", async (data) => {
-        const skillData = data.data || data;
-        if (skillData && skillData.type === 'skill-info') {
-            await showSkillNotification(skillData.skillName, skillData.skillDescription, skillData.playerName);
-        }
-    });
+    // Додаємо затримку для підключення обробників модифікаторів
+    setTimeout(() => {
+      setupModifierButtons();
+    }, 100);
 }
 
 // === ІНІЦІАЛІЗАЦІЯ ===
 OBR.onReady(async () => {
+    // Очищаємо старий запит
+    await clearOldRollRequest();
+    
     // Отримання інформації про гравця
     currentPlayerName = await OBR.player.getName();
     isGM = (await OBR.player.getRole()) === 'GM';
 
     // Налаштування інтерфейсу
-    setupInterface();
+    setupInterface(); // Викликаємо setupInterface для ініціалізації
 
     // Підписка на зміни в партії
     OBR.party.onChange(() => {
@@ -1162,7 +1221,10 @@ document.addEventListener('DOMContentLoaded', () => {
   closeButton.addEventListener('click', closeCharacterInfoModal);
 
   // Налаштовуємо обробники для модифікаторів
-  setupModifierButtons();
+  // Прибираємо дублюючий виклик - setupModifierButtons вже викликається в setupInterface
+  // console.log("📋 [CHARACTER] DOMContentLoaded: Setting up modifier buttons...");
+  // setupModifierButtons();
+  // console.log("📋 [CHARACTER] DOMContentLoaded: Modifier buttons setup completed");
 
   // Закриття модального вікна при кліку поза ним
   let modalClickTimeout;
@@ -1186,6 +1248,33 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && modal.style.display === 'block') {
       closeCharacterInfoModal();
+    }
+  });
+
+  // Обробники для модального вікна навичок
+  const skillModal = document.getElementById('skillModal');
+  const closeSkillModalBtn = document.getElementById('closeSkillModal');
+  
+  if (closeSkillModalBtn) {
+    closeSkillModalBtn.addEventListener('click', closeSkillModal);
+  }
+  
+  // Закриття модального вікна навичок при кліку поза ним
+  if (skillModal) {
+    skillModal.addEventListener('click', (event) => {
+      if (event.target === skillModal) {
+        closeSkillModal();
+      }
+    });
+  }
+  
+  // Закриття модального вікна навичок при натисканні Escape
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      const skillModal = document.getElementById('skillModal');
+      if (skillModal && skillModal.style.display === 'block') {
+        closeSkillModal();
+      }
     }
   });
 
@@ -1254,6 +1343,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function setEditingMode(on) {
     editing = on;
     weaponEditing = on;
+    window.weaponEditing = on; // Додаємо глобальну змінну
     renderWeaponTable(editing);
     // Додаю керування contenteditable для заголовка
     const weaponLabel = document.querySelector('.weapon-block .weapon-label');
@@ -1276,6 +1366,11 @@ document.addEventListener('DOMContentLoaded', () => {
             damage: inputDamage ? inputDamage.value : ''
           };
         });
+      }
+      // Зберігаємо заголовок
+      const weaponLabel = document.querySelector('.weapon-block .weapon-label');
+      if (weaponLabel) {
+        characterSheets[activeSheetIndex].weaponTitle = weaponLabel.textContent;
       }
       if (characterSheets[activeSheetIndex]) {
         characterSheets[activeSheetIndex].weapons = JSON.parse(JSON.stringify(weaponRows));
@@ -1336,6 +1431,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function setEditingModeSkill(on) {
     editingSkill = on;
     skillEditing = on;
+    window.skillEditing = on; // Додаємо глобальну змінну
     renderSkillTable(editingSkill);
     // Додаю керування contenteditable для заголовка навичок
     const skillLabel = document.querySelector('.skill-block .skill-label');
@@ -1523,7 +1619,9 @@ document.addEventListener('DOMContentLoaded', () => {
 // === ДИНАМІЧНА ТАБЛИЦЯ ЗБРОЇ ===
 function renderWeaponTable(editing = false) {
   const tbody = document.getElementById('weaponTableBody');
-  if (!tbody) return;
+  if (!tbody) {
+    return;
+  }
 
   // --- ЗБЕРЕЖЕННЯ ФОКУСУ ---
   let focusInfo = null;
@@ -1559,6 +1657,7 @@ function renderWeaponTable(editing = false) {
     });
     tdName.appendChild(inputName);
     tr.appendChild(tdName);
+    
     // Бонус
     const tdBonus = document.createElement('td');
     const inputBonus = document.createElement('input');
@@ -1566,12 +1665,52 @@ function renderWeaponTable(editing = false) {
     inputBonus.className = 'weapon-bonus';
     inputBonus.placeholder = '+0';
     inputBonus.value = row.bonus;
-    inputBonus.disabled = !editing;
+    if (editing) {
+      inputBonus.disabled = false;
+      inputBonus.readOnly = false;
+    } else {
+      inputBonus.disabled = false;
+      inputBonus.readOnly = true;
+    }
     inputBonus.addEventListener('input', e => {
       weaponRows[idx].bonus = e.target.value;
     });
+    // --- Додаю можливість натискати на поле "Бонус" лише у режимі перегляду ---
+    if (!editing) {
+      inputBonus.style.cursor = 'pointer';
+      inputBonus.title = 'Кинути d20 з цим бонусом атаки';
+      inputBonus.addEventListener('click', e => {
+        // Перевіряємо, чи це справжній клік користувача
+        if (e.detail !== 1 || !e.isTrusted) {
+          return;
+        }
+        
+        // Додаткова перевірка, що ми не в режимі редагування
+        if (window.weaponEditing) {
+          return;
+        }
+        
+        // Перевіряємо, чи поле не заблоковане
+        if (inputBonus.disabled) {
+          return;
+        }
+        
+        // Парсимо бонус
+        let bonus = 0;
+        const bonusValue = row.bonus.trim();
+        if (bonusValue) {
+          // Видаляємо + з початку, якщо є
+          const cleanBonus = bonusValue.startsWith('+') ? bonusValue.slice(1) : bonusValue;
+          bonus = parseInt(cleanBonus) || 0;
+        }
+        
+        // Для атаки використовуємо стиль NEBULA
+        sendDiceRollRequest('D20', 'NEBULA', bonus);
+      });
+    }
     tdBonus.appendChild(inputBonus);
-    tr.appendChild(tdBonus);
+    tr.appendChild(tdBonus); // Додаємо поле бонусу до рядка
+    
     // Шкода
     const tdDamage = document.createElement('td');
     const inputDamage = document.createElement('input');
@@ -1591,13 +1730,26 @@ function renderWeaponTable(editing = false) {
     });
     // --- Додаю можливість натискати на поле "Шкода" лише у режимі перегляду ---
     if (!editing) {
+      inputDamage.style.cursor = 'pointer';
+      inputDamage.title = 'Кинути кубик шкоди';
       inputDamage.addEventListener('click', e => {
-        // Тут можна викликати будь-яку дію, наприклад, кидок кубика
-        // alert('Натиснуто на шкоду: ' + row.damage);
+        // Перевіряємо, чи це справжній клік користувача
+        if (e.detail !== 1 || !e.isTrusted) {
+          return;
+        }
+        
+        // Додаткова перевірка, що ми не в режимі редагування
+        if (window.weaponEditing) {
+          return;
+        }
+        
+        // Кидок шкоди
+        rollWeaponDamage(row.damage);
       });
     }
     tdDamage.appendChild(inputDamage);
     tr.appendChild(tdDamage);
+    
     // Кнопка видалення
     const tdDel = document.createElement('td');
     if (editing) {
@@ -1670,12 +1822,10 @@ function renderSkillTable(editing = false) {
     chatIcon.style.color = '#b0b0b0';
     chatIcon.style.fontSize = '0.9em';
     chatIcon.style.transition = 'color 0.15s';
-    chatIcon.title = 'Чат навички';
+    chatIcon.title = 'Показати навичку всім гравцям';
     chatIcon.addEventListener('click', async (e) => {
-      // Запобігаємо спливу події, щоб не заважати редагуванню
       e.stopPropagation();
-      // Відправляємо повідомлення про навичку
-      await sendSkillMessage(row.name, row.desc);
+      await showSkillToAllPlayers(row.name, row.desc);
     });
     chatIcon.addEventListener('mouseenter', () => {
       chatIcon.style.color = '#fff';
@@ -1714,14 +1864,11 @@ function renderSkillTable(editing = false) {
     inputDesc.addEventListener('input', e => {
       skillRows[idx].desc = e.target.value;
     });
-    // --- Додаю автозміну висоти textarea навіть у режимі readonly ---
     setTimeout(() => {
       inputDesc.style.height = 'auto';
       inputDesc.style.height = (inputDesc.scrollHeight) + 'px';
     }, 0);
-    // ---
     tr.appendChild(inputDesc);
-    // Кнопка видалення
     if (editing) {
       const delBtn = document.createElement('button');
       delBtn.className = 'skill-delete-row-btn';
@@ -1736,7 +1883,6 @@ function renderSkillTable(editing = false) {
     tbody.appendChild(tr);
   });
 
-  // --- ВІДНОВЛЕННЯ ФОКУСУ ---
   if (focusInfo && editing) {
     const tr = tbody.children[focusInfo.idx];
     if (tr) {
@@ -1753,6 +1899,49 @@ function renderSkillTable(editing = false) {
         }
       }
     }
+  }
+}
+
+// --- Popover API ---
+async function showSkillToAllPlayers(skillName, skillDescription) {
+  try {
+    const playerName = await OBR.player.getName();
+    const connectionId = await OBR.player.getConnectionId();
+    const currentMetadata = await OBR.room.getMetadata();
+    await OBR.room.setMetadata({
+      ...currentMetadata,
+      darqie: {
+        ...(currentMetadata.darqie || {}),
+        skillPopover: {
+          skillName: skillName,
+          skillDescription: skillDescription || '',
+          playerName: playerName,
+          senderConnectionId: connectionId,
+          timestamp: Date.now()
+        }
+      }
+    });
+    // Сповіщення для ініціатора
+    await OBR.notification.show('Опис навички розіслано учасникам', 'INFO');
+  } catch (error) {
+    console.error('Помилка при показі навички всім гравцям:', error);
+  }
+}
+
+async function openSkillPopover(skillName, skillDescription, playerName, senderConnectionId) {
+  try {
+    const myConnectionId = await OBR.player.getConnectionId();
+    if (myConnectionId === senderConnectionId) return; // Не відкриваємо popover для ініціатора
+    await OBR.popover.open({
+      id: 'skill-popover',
+      url: `/public/skill-popover.html?name=${encodeURIComponent(skillName)}&desc=${encodeURIComponent(skillDescription || '')}&player=${encodeURIComponent(playerName || '')}`,
+      width: 400,
+      height: 300,
+      anchorOrigin: { horizontal: 'RIGHT', vertical: 'TOP' },
+      transformOrigin: { horizontal: 'RIGHT', vertical: 'TOP' }
+    });
+  } catch (error) {
+    console.error('Помилка при відкритті popover навички:', error);
   }
 }
 
@@ -2002,8 +2191,18 @@ if (constitutionInput) {
 }
 
 // Додаємо обробники для заголовків блоків
+const weaponLabel = document.querySelector('.weapon-block .weapon-label');
 const inventoryLabel = document.querySelector('.inventory-block .weapon-label');
 const equipmentLabel = document.querySelector('.equipment-block .weapon-label');
+
+if (weaponLabel) {
+  weaponLabel.addEventListener('blur', () => {
+    if (!weaponEditing) {
+      characterSheets[activeSheetIndex].weaponTitle = weaponLabel.textContent;
+      debouncedSaveSheetData();
+    }
+  });
+}
 
 if (inventoryLabel) {
   inventoryLabel.addEventListener('blur', () => {
@@ -2059,10 +2258,64 @@ function loadCoinsData() {
 }
 
 async function sendDiceRollRequest(type, style, bonus) {
-  const connectionId = await OBR.player.getConnectionId();
-  const playerName = currentPlayerName || '';
-  console.log("Відправляю кидок у metadata:", { type, style, bonus, connectionId, playerName });
-  OBR.room.setMetadata({ darqie: { ...((await OBR.room.getMetadata()).darqie || {}), activeRoll: { type, style, bonus, connectionId, playerName, ts: Date.now() } } });
+  try {
+    // Захист від повторної відправки запиту протягом 500мс
+    const now = Date.now();
+    if (now - lastRollRequestTime < 500) {
+      return;
+    }
+    lastRollRequestTime = now;
+    
+    // Перевіряємо стан чекбоксів переваги/похибки
+    const advantageCheckbox = document.getElementById('advantageCheckbox');
+    const disadvantageCheckbox = document.getElementById('disadvantageCheckbox');
+    const advantage = advantageCheckbox?.checked || false;
+    const disadvantage = disadvantageCheckbox?.checked || false;
+    
+    // Визначаємо тип переваги
+    let advantageType = null;
+    if (advantage && !disadvantage) {
+      advantageType = 'advantage';
+    } else if (disadvantage && !advantage) {
+      advantageType = 'disadvantage';
+    }
+    
+    const connectionId = await OBR.player.getConnectionId();
+    const playerName = currentPlayerName || '';
+    
+    const rollRequest = { 
+      type, 
+      style, 
+      bonus, 
+      advantage: advantageType,
+      connectionId, 
+      playerName, 
+      ts: Date.now() 
+    };
+    
+    // Отримуємо поточні метадані кімнати
+    const currentMetadata = await OBR.room.getMetadata();
+    
+    // Додаємо наш запит
+    const updatedMetadata = { 
+      ...currentMetadata, 
+      darqie: { 
+        ...(currentMetadata.darqie || {}), 
+        activeRoll: rollRequest 
+      } 
+    };
+    
+    // Відправляємо оновлені метадані
+    await OBR.room.setMetadata(updatedMetadata);
+    
+    // Знімаємо чекбокси переваги/похибки одразу після відправки запиту
+    if (advantageType) {
+      clearAdvantageCheckboxes();
+    }
+    
+  } catch (error) {
+    // Повністю ігноруємо помилки
+  }
 }
 
 function setupStatEditButtons() {
@@ -2085,13 +2338,12 @@ function setupStatEditButtons() {
     if (plus) plus.disabled = true;
     // Клік на олівець — розблокувати
     if (editBtn) {
-      editBtn.addEventListener('click', () => {
+      editBtn.addEventListener('mousedown', (e) => {
+        e.preventDefault(); // Запобігаємо втраті фокусу
         input.readOnly = false;
         if (minus) minus.disabled = false;
         if (plus) plus.disabled = false;
         input.focus();
-        // Видаляємо setSelectionRange для полів типу number
-        // input.setSelectionRange(input.value.length, input.value.length);
       });
     }
     // Втрата фокусу — знову заблокувати (але не при натисканні на + або -)
@@ -2143,15 +2395,15 @@ function setupStatEditButtons() {
     if (plus) plus.disabled = false;
   });
 }
-// Додаю виклик setupStatEditButtons у setupInterface після setupStatButtons
-const origSetupInterface = setupInterface;
-setupInterface = function() {
-  origSetupInterface();
-  setupStatEditButtons();
-};
 
 // Функція для налаштування обробників подій на модифікатори
 function setupModifierButtons() {
+  // Глобальна перевірка щоб не підключати обробники двічі
+  if (window.modifierButtonsSetup) {
+    return;
+  }
+  window.modifierButtonsSetup = true;
+  
   const abilities = [
     { modId: 'strengthModifier', scoreId: 'strengthScore' },
     { modId: 'dexterityModifier', scoreId: 'dexterityScore' },
@@ -2164,56 +2416,169 @@ function setupModifierButtons() {
   abilities.forEach(({ modId, scoreId }) => {
     const modBox = document.getElementById(modId);
     const scoreInput = document.getElementById(scoreId);
+    
     if (modBox && scoreInput) {
-      // Захист від дублювання
-      if (modBox.dataset.rollHandlerAttached) return;
+      // Перевіряємо, чи знаходиться modifier-box в правильному контексті (ability-score-mod-col)
+      const abilityScoreModCol = modBox.closest('.ability-score-mod-col');
+      if (!abilityScoreModCol) {
+        return;
+      }
+      
+      // Додаткова перевірка, що елемент знаходиться в ability-scores
+      const abilityScores = modBox.closest('.ability-scores');
+      if (!abilityScores) {
+        return;
+      }
+      
+      // Перевіряємо чи вже є обробник
+      if (modBox.dataset.rollHandlerAttached) {
+        return;
+      }
+      
+      // Позначаємо що обробник підключений
       modBox.dataset.rollHandlerAttached = "true";
       modBox.style.cursor = 'pointer';
       modBox.title = 'Кинути d20 з цим модифікатором';
+      
       modBox.addEventListener('click', function (e) {
-        if (!e.isTrusted) return;
-        if (typeof e.button !== 'undefined' && e.button !== 0) return;
-        if (e.pointerType && e.pointerType !== 'mouse') return;
+        // Перевіряємо, чи це справжній клік користувача
+        if (e.detail !== 1 || !e.isTrusted) {
+          return;
+        }
+        
+        // Кидок лише якщо клік саме по цьому елементу, а не по вкладеному
+        if (e.currentTarget !== e.target) {
+          return;
+        }
+        // Перевірка, що це саме .modifier-box у .ability-score-mod-col
+        if (!modBox.classList.contains('modifier-box') || !modBox.closest('.ability-score-mod-col')) {
+          return;
+        }
+        
         let value = parseInt(scoreInput.value);
         if (isNaN(value)) value = 10;
         const mod = Math.floor((value - 10) / 2);
-        console.log(`Натиснуто на модифікатор ${modId}, модифікатор:`, mod);
+        
         sendDiceRollRequest('D20', 'NEBULA', mod);
       });
     }
   });
 }
 
-async function sendSkillMessage(skillName, skillDescription) {
-  try {
-    const playerName = await OBR.player.getName();
-    const message = {
-      type: 'skill-info',
-      skillName: skillName,
-      skillDescription: skillDescription,
-      playerName: playerName,
-      timestamp: Date.now()
-    };
-    
-    await OBR.broadcast.sendMessage('skill-message', message);
-    console.log('Відправлено повідомлення про навичку:', skillName);
-  } catch (error) {
-    console.error('Помилка при відправці повідомлення про навичку:', error);
+// Функція для закриття модального вікна навички
+function closeSkillModal() {
+  const modal = document.getElementById('skillModal');
+  if (modal) {
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
   }
 }
 
-async function showSkillNotification(skillName, skillDescription, playerName) {
+// Функція для очищення старого запиту кидка з метаданів
+async function clearOldRollRequest() {
   try {
-    const notificationTitle = `Навичка: ${skillName}`;
-    const notificationText = skillDescription ? `${skillName}:\n\n${skillDescription}` : skillName;
-    
-    await OBR.notification.show(notificationText, 'INFO', {
-      title: notificationTitle,
-      description: `Показано гравцем: ${playerName}`,
-      duration: 120000
-    });
-    console.log('Показано сповіщення про навичку:', skillName);
+    const currentMetadata = await OBR.room.getMetadata();
+    if (currentMetadata.darqie?.activeRoll) {
+      const updatedMetadata = { 
+        ...currentMetadata, 
+        darqie: { 
+          ...(currentMetadata.darqie || {}), 
+          activeRoll: null 
+        } 
+      };
+      await OBR.room.setMetadata(updatedMetadata);
+    }
   } catch (error) {
-    console.error('Помилка при показі сповіщення про навичку:', error);
+    // Повністю ігноруємо помилки
+  }
+}
+
+// --- Додаємо обробник метаданих для відкриття листа персонажа ---
+
+async function handleMetadataChange(metadata) {
+  const openSignal = metadata.darqie?.openCharacterSheet;
+  if (openSignal) {
+    try {
+      // Відкриваємо розширення листа персонажа
+      await OBR.action.open();
+      // Очищаємо сигнал
+      const currentMetadata = await OBR.room.getMetadata();
+      await OBR.room.setMetadata({
+        ...currentMetadata,
+        darqie: {
+          ...(currentMetadata.darqie || {}),
+          openCharacterSheet: null
+        }
+      });
+    } catch (error) {
+      console.error(`📋 [CHARACTER] Помилка при відкритті розширення:`, error);
+    }
+  }
+}
+
+if (!window.__darqieCharacterSheetMetaHandler) {
+  window.__darqieCharacterSheetMetaHandler = true;
+  OBR.onReady(() => {
+    OBR.room.onMetadataChange(handleMetadataChange);
+  });
+}
+
+// Функція для парсингу шкоди зброї (наприклад: "1d6+2" -> { dice: "D6", count: 1, bonus: 2 })
+function parseWeaponDamage(damageString) {
+  if (!damageString || typeof damageString !== 'string') {
+    return null;
+  }
+  
+  // Видаляємо пробіли
+  const cleanString = damageString.trim();
+  
+  // Регулярний вираз для парсингу: (кількість)d(сторінки)[+/-](бонус)
+  const regex = /^(\d+)d(\d+)([+-]\d+)?$/i;
+  const match = cleanString.match(regex);
+  
+  if (!match) {
+    return null;
+  }
+  
+  const count = parseInt(match[1]);
+  const sides = parseInt(match[2]);
+  const bonus = match[3] ? parseInt(match[3]) : 0;
+  
+  // Перевіряємо, чи це стандартний кубик
+  const validDice = ['D4', 'D6', 'D8', 'D10', 'D12', 'D20', 'D100'];
+  const diceType = `D${sides}`;
+  
+  if (!validDice.includes(diceType)) {
+    return null;
+  }
+  
+  return {
+    dice: diceType,
+    count: count,
+    bonus: bonus
+  };
+}
+
+// Функція для кидка шкоди зброї
+async function rollWeaponDamage(damageString) {
+  const parsed = parseWeaponDamage(damageString);
+  if (!parsed) {
+    return;
+  }
+  
+  // Для шкоди використовуємо стиль GALAXY
+  sendDiceRollRequest(parsed.dice, 'GALAXY', parsed.bonus);
+}
+
+// Функція для автоматичного зняття чекбоксів переваги/похибки після кидка
+function clearAdvantageCheckboxes() {
+  const advantageCheckbox = document.getElementById('advantageCheckbox');
+  const disadvantageCheckbox = document.getElementById('disadvantageCheckbox');
+  
+  if (advantageCheckbox) {
+    advantageCheckbox.checked = false;
+  }
+  if (disadvantageCheckbox) {
+    disadvantageCheckbox.checked = false;
   }
 }
