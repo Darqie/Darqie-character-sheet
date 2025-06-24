@@ -2,7 +2,7 @@ import OBR from '@owlbear-rodeo/sdk';
 
 // === КОНСТАНТИ ===
 const DARQIE_SHEETS_KEY = 'darqie.characterSheets';
-const DEBOUNCE_DELAY = 100;
+const DEBOUNCE_DELAY = 150;
 const UPLOADCARE_PUBLIC_KEY = '7d0fa9d84ac0680d6d83';
 const DICE_ROLL_KEY = "darqie.rollRequest";
 
@@ -1783,6 +1783,15 @@ function renderWeaponTable(editing = false) {
   }
 }
 
+// --- AcceptBtn для зброї ---
+if (acceptBtn) {
+  acceptBtn.addEventListener('click', () => {
+    // Оновлюємо масив у characterSheets
+    characterSheets[activeSheetIndex].weapons = JSON.parse(JSON.stringify(weaponRows));
+    saveSheetData(); // Тільки тут зберігаємо в OBR
+  });
+}
+
 // === ДИНАМІЧНА ТАБЛИЦЯ НАВИЧОК ===
 function renderSkillTable(editing = false) {
   const tbody = document.getElementById('skillTableBody');
@@ -1900,6 +1909,15 @@ function renderSkillTable(editing = false) {
       }
     }
   }
+}
+
+// --- AcceptBtn для навичок ---
+if (acceptBtnSkill) {
+  acceptBtnSkill.addEventListener('click', () => {
+    // Оновлюємо масив у characterSheets
+    characterSheets[activeSheetIndex].skills = JSON.parse(JSON.stringify(skillRows));
+    saveSheetData();
+  });
 }
 
 // --- Popover API ---
@@ -2061,6 +2079,28 @@ function renderInventoryTable(editing = false) {
   });
 }
 
+// --- AcceptBtn для інвентаря ---
+if (acceptBtnInv) {
+  acceptBtnInv.addEventListener('click', () => {
+    // Зберігаємо дані інвентаря
+    const tbody = document.getElementById('inventoryTableBody');
+    if (tbody) {
+      inventoryRows = Array.from(tbody.children).map(tr => {
+        const inputName = tr.querySelector('.inventory-name');
+        const inputCount = tr.querySelector('.inventory-count');
+        const inputWeight = tr.querySelector('.inventory-weight');
+        return {
+          name: inputName ? inputName.value : '',
+          count: inputCount ? inputCount.value : '',
+          weight: inputWeight ? inputWeight.value : ''
+        };
+      });
+    }
+    characterSheets[activeSheetIndex].inventory = JSON.parse(JSON.stringify(inventoryRows));
+    saveSheetData();
+  });
+}
+
 // === ДИНАМІЧНА ТАБЛИЦЯ СПОРЯДЖЕННЯ ===
 function renderEquipmentTable(editing = false) {
   const tbody = document.getElementById('equipmentTableBody');
@@ -2163,6 +2203,28 @@ function renderEquipmentTable(editing = false) {
         targetInput.setSelectionRange(targetInput.value.length, targetInput.value.length);
       }
     }
+  });
+}
+
+// --- AcceptBtn для спорядження ---
+if (acceptBtnEquip) {
+  acceptBtnEquip.addEventListener('click', () => {
+    // Зберігаємо дані спорядження
+    const equipmentTbody = document.getElementById('equipmentTableBody');
+    if (equipmentTbody) {
+      equipmentRows = Array.from(equipmentTbody.children).map(tr => {
+        const inputName = tr.querySelector('.equipment-name');
+        const inputArmor = tr.querySelector('.equipment-armor');
+        const inputWeight = tr.querySelector('.equipment-weight');
+        return {
+          name: inputName ? inputName.value : '',
+          armor: inputArmor ? inputArmor.value : '',
+          weight: inputWeight ? inputWeight.value : ''
+        };
+      });
+    }
+    characterSheets[activeSheetIndex].equipment = JSON.parse(JSON.stringify(equipmentRows));
+    saveSheetData();
   });
 }
 
