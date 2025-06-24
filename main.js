@@ -390,11 +390,6 @@ async function saveSheetData() {
   } catch (error) {
     console.error('Помилка при збереженні даних:', error);
   }
-
-  // Додаю логування для weaponRows
-  if (characterSheets[activeSheetIndex] && characterSheets[activeSheetIndex].weapons) {
-    console.log('[WEAPON-TABLE] saveSheetData: characterSheets[activeSheetIndex].weapons =', JSON.stringify(characterSheets[activeSheetIndex].weapons));
-  }
 }
 
 function loadSheetData() {
@@ -1343,7 +1338,6 @@ document.addEventListener('DOMContentLoaded', () => {
     editBtn.addEventListener('click', () => {
       prevRows = JSON.parse(JSON.stringify(weaponRows));
       setEditingMode(true);
-      console.log('[WEAPON-TABLE] enter edit mode, prevRows:', JSON.stringify(prevRows));
     });
     acceptBtn.addEventListener('click', () => {
       // ОНОВЛЮЄМО weaponRows з DOM перед збереженням!
@@ -1361,17 +1355,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       }
       setEditingMode(false);
-      console.log('[WEAPON-TABLE] accept edit, weaponRows:', JSON.stringify(weaponRows));
     });
     cancelBtn.addEventListener('click', () => {
       weaponRows = JSON.parse(JSON.stringify(prevRows));
       setEditingMode(false);
-      console.log('[WEAPON-TABLE] cancel edit, restored weaponRows:', JSON.stringify(weaponRows));
     });
     addRowBtn.addEventListener('click', () => {
       weaponRows.push({ name: '', bonus: '', damage: '' });
       renderWeaponTable(true);
-      console.log('[WEAPON-TABLE] add row, weaponRows:', JSON.stringify(weaponRows));
     });
   } else {
     renderWeaponTable(false);
@@ -1486,7 +1477,6 @@ document.addEventListener('DOMContentLoaded', () => {
     editBtnInv.addEventListener('click', () => {
       prevRowsInv = JSON.parse(JSON.stringify(inventoryRows));
       setEditingModeInventory(true);
-      console.log('[INVENTORY-TABLE] enter edit mode, prevRows:', JSON.stringify(prevRowsInv));
     });
     acceptBtnInv.addEventListener('click', () => {
       // ОНОВЛЮЄМО inventoryRows з DOM перед збереженням!
@@ -1504,18 +1494,15 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       }
       setEditingModeInventory(false);
-      console.log('[INVENTORY-TABLE] accept edit, inventoryRows:', JSON.stringify(inventoryRows));
     });
     cancelBtnInv.addEventListener('click', () => {
       inventoryRows = JSON.parse(JSON.stringify(prevRowsInv));
       setEditingModeInventory(false);
-      console.log('[INVENTORY-TABLE] cancel edit, restored inventoryRows:', JSON.stringify(inventoryRows));
     });
     addRowBtnInv.addEventListener('click', () => {
       inventoryRows.push({ name: '', count: '', weight: '' });
       renderInventoryTable(true);
       updateCurrentWeight();
-      console.log('[INVENTORY-TABLE] add row, inventoryRows:', JSON.stringify(inventoryRows));
     });
   } else {
     renderInventoryTable(false);
@@ -1547,7 +1534,6 @@ document.addEventListener('DOMContentLoaded', () => {
     editBtnEquip.addEventListener('click', () => {
       prevRowsEquip = JSON.parse(JSON.stringify(equipmentRows));
       setEditingModeEquipment(true);
-      console.log('[EQUIPMENT-TABLE] enter edit mode, prevRows:', JSON.stringify(prevRowsEquip));
     });
     acceptBtnEquip.addEventListener('click', () => {
       // ОНОВЛЮЄМО equipmentRows з DOM перед збереженням!
@@ -1565,19 +1551,16 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       }
       setEditingModeEquipment(false);
-      console.log('[EQUIPMENT-TABLE] accept edit, equipmentRows:', JSON.stringify(equipmentRows));
     });
     cancelBtnEquip.addEventListener('click', () => {
       equipmentRows = JSON.parse(JSON.stringify(prevRowsEquip));
       setEditingModeEquipment(false);
-      console.log('[EQUIPMENT-TABLE] cancel edit, restored equipmentRows:', JSON.stringify(equipmentRows));
     });
     addRowBtnEquip.addEventListener('click', () => {
       equipmentRows.push({ name: '', armor: '', weight: '' });
       renderEquipmentTable(true);
       updateCurrentWeight();
       updateArmorClass();
-      console.log('[EQUIPMENT-TABLE] add row, equipmentRows:', JSON.stringify(equipmentRows));
     });
   } else {
     renderEquipmentTable(false);
@@ -1622,7 +1605,6 @@ function renderWeaponTable(editing = false) {
     inputName.disabled = !editing;
     inputName.addEventListener('input', e => {
       weaponRows[idx].name = e.target.value;
-      console.log('[WEAPON-TABLE] input name, idx:', idx, 'value:', e.target.value, 'weaponRows:', JSON.stringify(weaponRows));
     });
     tdName.appendChild(inputName);
     tr.appendChild(tdName);
@@ -1643,7 +1625,6 @@ function renderWeaponTable(editing = false) {
     }
     inputBonus.addEventListener('input', e => {
       weaponRows[idx].bonus = e.target.value;
-      console.log('[WEAPON-TABLE] input bonus, idx:', idx, 'value:', e.target.value, 'weaponRows:', JSON.stringify(weaponRows));
     });
     // --- Додаю можливість натискати на поле "Бонус" лише у режимі перегляду ---
     if (!editing) {
@@ -1697,7 +1678,6 @@ function renderWeaponTable(editing = false) {
     }
     inputDamage.addEventListener('input', e => {
       weaponRows[idx].damage = e.target.value;
-      console.log('[WEAPON-TABLE] input damage, idx:', idx, 'value:', e.target.value, 'weaponRows:', JSON.stringify(weaponRows));
     });
     // --- Додаю можливість натискати на поле "Шкода" лише у режимі перегляду ---
     if (!editing) {
@@ -1729,10 +1709,8 @@ function renderWeaponTable(editing = false) {
       delBtn.title = 'Видалити рядок';
       delBtn.innerHTML = '<i class="fas fa-trash"></i>';
       delBtn.addEventListener('click', () => {
-        console.log('[WEAPON-TABLE] delete row, idx:', idx, 'row:', JSON.stringify(weaponRows[idx]));
         weaponRows.splice(idx, 1);
         renderWeaponTable(true);
-        console.log('[WEAPON-TABLE] after delete, weaponRows:', JSON.stringify(weaponRows));
       });
       delBtn.style.marginLeft = '2px';
       tdDel.appendChild(delBtn);
