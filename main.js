@@ -2,7 +2,7 @@ import OBR from '@owlbear-rodeo/sdk';
 
 // === КОНСТАНТИ ===
 const DARQIE_SHEETS_KEY = 'darqie.characterSheets';
-const DEBOUNCE_DELAY = 600;
+const DEBOUNCE_DELAY = 100;
 const UPLOADCARE_PUBLIC_KEY = '7d0fa9d84ac0680d6d83';
 const DICE_ROLL_KEY = "darqie.rollRequest";
 
