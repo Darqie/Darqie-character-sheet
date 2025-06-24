@@ -390,6 +390,11 @@ async function saveSheetData() {
   } catch (error) {
     console.error('Помилка при збереженні даних:', error);
   }
+
+  // Додаю логування для weaponRows
+  if (characterSheets[activeSheetIndex] && characterSheets[activeSheetIndex].weapons) {
+    console.log('[WEAPON-TABLE] saveSheetData: characterSheets[activeSheetIndex].weapons =', JSON.stringify(characterSheets[activeSheetIndex].weapons));
+  }
 }
 
 function loadSheetData() {
@@ -1338,17 +1343,21 @@ document.addEventListener('DOMContentLoaded', () => {
     editBtn.addEventListener('click', () => {
       prevRows = JSON.parse(JSON.stringify(weaponRows));
       setEditingMode(true);
+      console.log('[WEAPON-TABLE] enter edit mode, prevRows:', JSON.stringify(prevRows));
     });
     acceptBtn.addEventListener('click', () => {
       setEditingMode(false);
+      console.log('[WEAPON-TABLE] accept edit, weaponRows:', JSON.stringify(weaponRows));
     });
     cancelBtn.addEventListener('click', () => {
       weaponRows = JSON.parse(JSON.stringify(prevRows));
       setEditingMode(false);
+      console.log('[WEAPON-TABLE] cancel edit, restored weaponRows:', JSON.stringify(weaponRows));
     });
     addRowBtn.addEventListener('click', () => {
       weaponRows.push({ name: '', bonus: '', damage: '' });
       renderWeaponTable(true);
+      console.log('[WEAPON-TABLE] add row, weaponRows:', JSON.stringify(weaponRows));
     });
   } else {
     renderWeaponTable(false);
@@ -1607,6 +1616,7 @@ function renderWeaponTable(editing = false) {
     inputName.disabled = !editing;
     inputName.addEventListener('input', e => {
       weaponRows[idx].name = e.target.value;
+      console.log('[WEAPON-TABLE] input name, idx:', idx, 'value:', e.target.value, 'weaponRows:', JSON.stringify(weaponRows));
     });
     tdName.appendChild(inputName);
     tr.appendChild(tdName);
@@ -1627,6 +1637,7 @@ function renderWeaponTable(editing = false) {
     }
     inputBonus.addEventListener('input', e => {
       weaponRows[idx].bonus = e.target.value;
+      console.log('[WEAPON-TABLE] input bonus, idx:', idx, 'value:', e.target.value, 'weaponRows:', JSON.stringify(weaponRows));
     });
     // --- Додаю можливість натискати на поле "Бонус" лише у режимі перегляду ---
     if (!editing) {
@@ -1680,6 +1691,7 @@ function renderWeaponTable(editing = false) {
     }
     inputDamage.addEventListener('input', e => {
       weaponRows[idx].damage = e.target.value;
+      console.log('[WEAPON-TABLE] input damage, idx:', idx, 'value:', e.target.value, 'weaponRows:', JSON.stringify(weaponRows));
     });
     // --- Додаю можливість натискати на поле "Шкода" лише у режимі перегляду ---
     if (!editing) {
@@ -1711,8 +1723,10 @@ function renderWeaponTable(editing = false) {
       delBtn.title = 'Видалити рядок';
       delBtn.innerHTML = '<i class="fas fa-trash"></i>';
       delBtn.addEventListener('click', () => {
+        console.log('[WEAPON-TABLE] delete row, idx:', idx, 'row:', JSON.stringify(weaponRows[idx]));
         weaponRows.splice(idx, 1);
         renderWeaponTable(true);
+        console.log('[WEAPON-TABLE] after delete, weaponRows:', JSON.stringify(weaponRows));
       });
       delBtn.style.marginLeft = '2px';
       tdDel.appendChild(delBtn);
