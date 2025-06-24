@@ -1346,6 +1346,20 @@ document.addEventListener('DOMContentLoaded', () => {
       console.log('[WEAPON-TABLE] enter edit mode, prevRows:', JSON.stringify(prevRows));
     });
     acceptBtn.addEventListener('click', () => {
+      // ОНОВЛЮЄМО weaponRows з DOM перед збереженням!
+      const tbody = document.getElementById('weaponTableBody');
+      if (tbody) {
+        weaponRows = Array.from(tbody.children).map(tr => {
+          const inputName = tr.querySelector('.weapon-name');
+          const inputBonus = tr.querySelector('.weapon-bonus');
+          const inputDamage = tr.querySelector('.weapon-damage');
+          return {
+            name: inputName ? inputName.value : '',
+            bonus: inputBonus ? inputBonus.value : '',
+            damage: inputDamage ? inputDamage.value : ''
+          };
+        });
+      }
       setEditingMode(false);
       console.log('[WEAPON-TABLE] accept edit, weaponRows:', JSON.stringify(weaponRows));
     });
@@ -1472,10 +1486,10 @@ document.addEventListener('DOMContentLoaded', () => {
     editBtnInv.addEventListener('click', () => {
       prevRowsInv = JSON.parse(JSON.stringify(inventoryRows));
       setEditingModeInventory(true);
+      console.log('[INVENTORY-TABLE] enter edit mode, prevRows:', JSON.stringify(prevRowsInv));
     });
     acceptBtnInv.addEventListener('click', () => {
-      setEditingModeInventory(false);
-      // Зберігаємо дані інвентаря
+      // ОНОВЛЮЄМО inventoryRows з DOM перед збереженням!
       const tbody = document.getElementById('inventoryTableBody');
       if (tbody) {
         inventoryRows = Array.from(tbody.children).map(tr => {
@@ -1489,23 +1503,19 @@ document.addEventListener('DOMContentLoaded', () => {
           };
         });
       }
-      // Зберігаємо заголовок
-      const inventoryLabel = document.querySelector('.inventory-block .weapon-label');
-      if (inventoryLabel) {
-        characterSheets[activeSheetIndex].inventoryTitle = inventoryLabel.textContent;
-      }
-      // Зберігаємо в метадані
-      characterSheets[activeSheetIndex].inventory = JSON.parse(JSON.stringify(inventoryRows));
-      debouncedSaveSheetData();
+      setEditingModeInventory(false);
+      console.log('[INVENTORY-TABLE] accept edit, inventoryRows:', JSON.stringify(inventoryRows));
     });
     cancelBtnInv.addEventListener('click', () => {
       inventoryRows = JSON.parse(JSON.stringify(prevRowsInv));
       setEditingModeInventory(false);
+      console.log('[INVENTORY-TABLE] cancel edit, restored inventoryRows:', JSON.stringify(inventoryRows));
     });
     addRowBtnInv.addEventListener('click', () => {
       inventoryRows.push({ name: '', count: '', weight: '' });
       renderInventoryTable(true);
       updateCurrentWeight();
+      console.log('[INVENTORY-TABLE] add row, inventoryRows:', JSON.stringify(inventoryRows));
     });
   } else {
     renderInventoryTable(false);
@@ -1537,10 +1547,10 @@ document.addEventListener('DOMContentLoaded', () => {
     editBtnEquip.addEventListener('click', () => {
       prevRowsEquip = JSON.parse(JSON.stringify(equipmentRows));
       setEditingModeEquipment(true);
+      console.log('[EQUIPMENT-TABLE] enter edit mode, prevRows:', JSON.stringify(prevRowsEquip));
     });
     acceptBtnEquip.addEventListener('click', () => {
-      setEditingModeEquipment(false);
-      // Зберігаємо дані спорядження
+      // ОНОВЛЮЄМО equipmentRows з DOM перед збереженням!
       const equipmentTbody = document.getElementById('equipmentTableBody');
       if (equipmentTbody) {
         equipmentRows = Array.from(equipmentTbody.children).map(tr => {
@@ -1554,24 +1564,20 @@ document.addEventListener('DOMContentLoaded', () => {
           };
         });
       }
-      // Зберігаємо заголовок
-      const equipmentLabel = document.querySelector('.equipment-block .weapon-label');
-      if (equipmentLabel) {
-        characterSheets[activeSheetIndex].equipmentTitle = equipmentLabel.textContent;
-      }
-      // Зберігаємо в метадані
-      characterSheets[activeSheetIndex].equipment = JSON.parse(JSON.stringify(equipmentRows));
-      debouncedSaveSheetData();
+      setEditingModeEquipment(false);
+      console.log('[EQUIPMENT-TABLE] accept edit, equipmentRows:', JSON.stringify(equipmentRows));
     });
     cancelBtnEquip.addEventListener('click', () => {
       equipmentRows = JSON.parse(JSON.stringify(prevRowsEquip));
       setEditingModeEquipment(false);
+      console.log('[EQUIPMENT-TABLE] cancel edit, restored equipmentRows:', JSON.stringify(equipmentRows));
     });
     addRowBtnEquip.addEventListener('click', () => {
       equipmentRows.push({ name: '', armor: '', weight: '' });
       renderEquipmentTable(true);
       updateCurrentWeight();
       updateArmorClass();
+      console.log('[EQUIPMENT-TABLE] add row, equipmentRows:', JSON.stringify(equipmentRows));
     });
   } else {
     renderEquipmentTable(false);
