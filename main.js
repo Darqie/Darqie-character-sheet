@@ -1093,6 +1093,20 @@ OBR.onReady(async () => {
     setInterval(async () => {
         await checkCharacterAndRedirect();
     }, 1000);
+
+    // Глобальний обробник показу поповера навичок від інших гравців
+    if (!window.__skillPopoverBroadcastHandler) {
+      window.__skillPopoverBroadcastHandler = true;
+      OBR.broadcast.onMessage('skill-popover', async (data) => {
+        try {
+          const msg = data?.data || data;
+          if (!msg || msg.type !== 'open-skill-popover') return;
+          const myId = await OBR.player.getConnectionId();
+          if (msg.senderId === myId) return; // не показуємо відправнику
+          await openSkillPopover(msg.name, msg.desc);
+        } catch (_) {}
+      });
+    }
 });
 
 // Функція для отримання поточного персонажа
@@ -1775,10 +1789,9 @@ function renderSkillTable(editing = false) {
     chatIcon.style.transition = 'color 0.15s';
     chatIcon.title = 'Чат навички';
     chatIcon.addEventListener('click', async (e) => {
-      // Запобігаємо спливу події, щоб не заважати редагуванню
       e.stopPropagation();
-      // Відправляємо повідомлення про навичку
-      await sendSkillMessage(row.name, row.desc);
+      // Відправляємо широкомовне повідомлення, щоб ПОКАЗАТИ поповер іншим гравцям (не собі)
+      await broadcastOpenSkillPopover(row.name || '', row.desc || '');
     });
     chatIcon.addEventListener('mouseenter', () => {
       chatIcon.style.color = '#fff';
@@ -2397,12 +2410,79 @@ async function sendSkillMessage(skillName, skillDescription) {
 
 async function showSkillNotification(skillName, skillDescription, playerName) {
   try {
+    if (window.__skillPopoverOpen) {
+      return;
+    }
     const notificationText = skillDescription ? `${skillName}:\n\n${skillDescription}` : skillName;
     
     await OBR.notification.show(notificationText, 'SUCCESS');
   } catch (error) {
     console.error('Помилка при показі сповіщення про навичку:', error);
   }
+}
+
+// Відкриття поповера з навичкою
+async function openSkillPopover(skillName, skillDescription) {
+  try {
+    const playerName = await OBR.player.getName();
+    const query = new URLSearchParams({
+      name: skillName || '',
+      desc: skillDescription || '',
+      player: playerName || ''
+    }).toString();
+
+    window.__skillPopoverOpen = true;
+    try {
+      await OBR.popover.open({
+        id: 'darqie-skill-popover',
+        url: `/skill-popover.html?${query}`,
+        height: 260,
+        width: 420,
+      });
+    } catch (e1) {
+      // Спроба відносного шляху
+      await OBR.popover.open({
+        id: 'darqie-skill-popover',
+        url: `skill-popover.html?${query}`,
+        height: 260,
+        width: 420,
+      });
+    }
+
+    // Опціонально: підписка на закриття через метадані
+    const onMeta = async (meta) => {
+      if (meta?.darqie?.closeSkillPopover) {
+        try { await OBR.popover.close('darqie-skill-popover'); } catch(_) {}
+        window.__skillPopoverOpen = false;
+      }
+    };
+    OBR.room.onMetadataChange(onMeta);
+    setTimeout(() => {
+      OBR.room.offMetadataChange?.(onMeta);
+      // На випадок, якщо модалка закрилась іншим шляхом
+      window.__skillPopoverOpen = false;
+    }, 10000);
+  } catch (error) {
+    // Ігноруємо помилку, але не показуємо Snackbar
+    window.__skillPopoverOpen = false;
+  }
+}
+
+// Відправити запит на відкриття поповера іншим гравцям
+async function broadcastOpenSkillPopover(skillName, skillDescription) {
+  try {
+    const senderId = await OBR.player.getConnectionId();
+    const playerName = await OBR.player.getName();
+    const payload = {
+      type: 'open-skill-popover',
+      name: skillName || '',
+      desc: skillDescription || '',
+      playerName: playerName || '',
+      senderId,
+      ts: Date.now(),
+    };
+    await OBR.broadcast.sendMessage('skill-popover', payload);
+  } catch (_) {}
 }
 
 // Функція для очищення старого запиту кидка з метаданів
