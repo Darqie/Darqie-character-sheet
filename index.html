@@ -489,7 +489,28 @@
   </div>
 
   <!-- Модальне вікно для навичок більше не потрібне -->
-  
+  <!-- Модальне вікно навички -->
+  <div id="skillInfoModal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Навичка</h2>
+        <span class="close-modal-skill">&times;</span>
+      </div>
+      <div class="modal-body">
+        <div class="skill-block">
+          <div class="skill-label"><span class="modal-label-title">Назва</span></div>
+          <input id="skillModalName" type="text" readonly />
+        </div>
+        <div class="skill-block">
+          <div class="skill-label"><span class="modal-label-title">Опис</span></div>
+          <textarea id="skillModalDesc" class="skill-desc-textarea" readonly></textarea>
+        </div>
+        <div class="modal-actions" style="display:flex; gap: 10px; justify-content:flex-end; margin-top:10px;">
+          <button id="skillModalSendBtn" class="modal-accept-btn" title="Надіслати в чат"><i class="fas fa-paper-plane"></i></button>
+        </div>
+      </div>
+    </div>
+  </div>
   
   <script src="main.js" type="module"></script>
   <script>
