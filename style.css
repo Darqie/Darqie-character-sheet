@@ -330,10 +330,13 @@ textarea::placeholder {
 }
 
 #characterPhotoImg {
-  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  z-index: 2;
 }
 
 #photoControls {
@@ -432,20 +435,21 @@ textarea::placeholder {
 .character-controls button,
 #photoControls button,
 #addCharacterButton,
-#deleteCharacterButton {
+#deleteCharacterButton,
+#createTokenButton {
   padding: 10px 16px;
   border-radius: 8px;
-  box-shadow: none !important;
-  background-color: transparent !important;
+  background: none;
+  background-color: transparent;
   border: none;
-  outline: none !important;
-  backdrop-filter: none !important;
+  box-shadow: none;
+  outline: none;
   color: #e0e0e0;
   font-family: 'Cormorant Unicase', serif !important;
   font-size: 1.1em;
   font-weight: 700;
   cursor: pointer;
-  transition: outline 0.15s, background 0.2s;
+  transition: all 0.3s ease;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -453,22 +457,28 @@ textarea::placeholder {
 
 #addCharacterButton,
 #deleteCharacterButton,
+#createTokenButton,
 #photoControls button {
-  background: transparent !important;
-  background-color: transparent !important;
-  box-shadow: none !important;
-  outline: 1px solid rgba(255,255,255,0.3) !important;
-  backdrop-filter: none !important;
-  transition: outline 0.15s, background 0.2s;
+  background: none;
+  outline: none;
+  border: none;
+  position: relative;
 }
 
 #addCharacterButton:hover,
 #deleteCharacterButton:hover,
+#createTokenButton:hover,
 #photoControls button:hover {
-  outline: 1.5px solid #fff !important;
-  outline-offset: 2px;
-  background-color: transparent !important;
   color: #fff;
+  transform: translateY(-2px) scale(1.1);
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.6));
+}
+
+#addCharacterButton:active,
+#deleteCharacterButton:active,
+#createTokenButton:active,
+#photoControls button:active {
+  transform: translateY(0) scale(1.05);
 }
 
 /* Статистики та модифікатори */
@@ -2532,6 +2542,233 @@ html {
 
 .weapon-table th:nth-child(3) i {
   color: #ff6b6b;
+}
+
+/* ========== БЛОК ОЧІКУВАННЯ ========== */
+.waiting-block {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(78, 205, 196, 0.1) 0%, rgba(255, 107, 107, 0.1) 100%);
+  z-index: 9999;
+  overflow: hidden;
+}
+
+.waiting-block::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    transparent,
+    rgba(78, 205, 196, 0.1),
+    transparent
+  );
+  animation: shimmer 3s infinite;
+}
+
+.waiting-container {
+  text-align: center;
+  animation: fadeInUp 0.6s ease-out;
+  z-index: 1;
+}
+
+.dice-spinner {
+  width: 200px;
+  height: 200px;
+  margin: 0 auto 40px;
+  position: relative;
+  animation: breathe 3s ease-in-out infinite;
+}
+
+.dice-spinner i {
+  font-size: 200px;
+  color: #4ecdc4;
+  display: block;
+  animation: floatSlow 4s ease-in-out infinite, colorPulse 3s ease-in-out infinite;
+  filter: drop-shadow(0 10px 40px rgba(78, 205, 196, 0.6));
+}
+
+.waiting-title {
+  font-size: 2.5em;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 15px 0;
+  text-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  letter-spacing: 1px;
+  animation: fadeIn 1s ease-in;
+}
+
+.waiting-subtitle {
+  font-size: 1.2em;
+  color: #b0b0b0;
+  margin: 0 0 40px 0;
+  animation: fadeIn 1.5s ease-in;
+}
+
+.loading-bar {
+  width: 300px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  margin: 0 auto;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.loading-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4ecdc4, #ff6b6b, #4ecdc4);
+  background-size: 200% 100%;
+  border-radius: 10px;
+  animation: loadingBar 2s ease-in-out infinite;
+  box-shadow: 0 0 20px rgba(78, 205, 196, 0.6);
+}
+
+/* Анімації для блоку очікування */
+@keyframes colorPulse {
+  0%, 100% {
+    color: #4ecdc4;
+  }
+  50% {
+    color: #ff6b6b;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes loadingBar {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* ========== ЗАГЛУШКА ДЛЯ ФОТО ========== */
+.photo-placeholder {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(78, 205, 196, 0.2) 0%, rgba(255, 107, 107, 0.2) 100%);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border-radius: 8px;
+  overflow: hidden;
+  z-index: 1;
+  backdrop-filter: blur(10px);
+}
+
+.photo-placeholder::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    transparent,
+    rgba(78, 205, 196, 0.1),
+    transparent
+  );
+  animation: shimmer 3s infinite;
+}
+
+.photo-placeholder:hover {
+  background: linear-gradient(135deg, rgba(78, 205, 196, 0.35) 0%, rgba(255, 107, 107, 0.35) 100%);
+  transform: scale(1.02);
+}
+
+.placeholder-content {
+  text-align: center;
+  z-index: 1;
+  animation: breathe 3s ease-in-out infinite;
+}
+
+.placeholder-content i {
+  font-size: 120px;
+  color: #4ecdc4;
+  display: block;
+  margin-bottom: 15px;
+  filter: drop-shadow(0 5px 15px rgba(78, 205, 196, 0.3));
+  animation: floatSlow 4s ease-in-out infinite;
+}
+
+.placeholder-content p {
+  font-size: 1.1em;
+  color: #e0e0e0;
+  margin: 0;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+.photo-placeholder:hover .placeholder-content i {
+  color: #ff6b6b;
+  transform: scale(1.1) rotate(5deg);
+}
+
+/* Анімації для заглушки фото */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%) translateY(-100%) rotate(45deg);
+  }
+  100% {
+    transform: translateX(100%) translateY(100%) rotate(45deg);
+  }
+}
+
+@keyframes floatSlow {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-15px) rotate(-5deg);
+  }
+}
+
+@keyframes breathe {
+  0%, 100% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 

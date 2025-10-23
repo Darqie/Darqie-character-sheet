@@ -1,4 +1,4 @@
-import OBR from '@owlbear-rodeo/sdk';
+import OBR, { buildImage, buildLabel } from '@owlbear-rodeo/sdk';
 
 // === КОНСТАНТИ ===
 const DARQIE_SHEETS_KEY = 'darqie.characterSheets';
@@ -18,6 +18,8 @@ let skillEditing = false;
 let editingInv = false;
 let editingEquip = false;
 let lastRollRequestTime = 0;
+let isSaving = false;
+let saveQueue = [];
 
 // Ініціалізуємо глобальні змінні
 window.weaponEditing = false;
@@ -88,7 +90,7 @@ function getSheetInputElements() {
     wisdomScore: document.getElementById('wisdomScore'),
     charismaScore: document.getElementById('charismaScore'),
     maxHealthPoints: document.getElementById('maxHealthPoints'),
-    health: document.getElementById('health'),
+    healing: document.getElementById('health'),
     armorClass: document.getElementById('armorClass'),
     initiative: document.getElementById('initiative'),
     speed: document.getElementById('speed'),
@@ -212,6 +214,9 @@ function updateArmorClass() {
     // Базова броня = 10 + броня зі спорядження
     const armorClass = Math.min(10 + totalArmor, 99);
     armorClassInput.value = armorClass;
+    
+    // Оновлюємо клас броні на токені
+    updateTokenAC(armorClass);
   }
 }
 
@@ -266,6 +271,16 @@ const debouncedSaveSheetData = debounce(saveSheetData, DEBOUNCE_DELAY);
 
 async function saveSheetData() {
   if (characterSheets.length === 0) return;
+  
+  // Якщо вже зберігаємо, додаємо в чергу
+  if (isSaving) {
+    if (!saveQueue.includes(activeSheetIndex)) {
+      saveQueue.push(activeSheetIndex);
+    }
+    return;
+  }
+  
+  isSaving = true;
 
   const sheet = characterSheets[activeSheetIndex];
   const elements = getSheetInputElements();
@@ -361,11 +376,11 @@ async function saveSheetData() {
   if (equipmentLabel && sheet.equipmentTitle) equipmentLabel.textContent = sheet.equipmentTitle;
 
   try {
-    // Отримуємо поточні метадані
+    // Отримуємо СВІЖІ метадані перед збереженням
     const currentMetadata = await OBR.room.getMetadata();
     const currentSheets = currentMetadata[DARQIE_SHEETS_KEY] || [];
     
-    // Оновлюємо лист персонажа в масиві
+    // ВАЖЛИВО: Оновлюємо ТІЛЬКИ наш лист персонажа, не чіпаючи інші
     currentSheets[activeSheetIndex] = { ...sheet };
     
     // Зберігаємо оновлені дані
@@ -389,6 +404,17 @@ async function saveSheetData() {
     updateCurrentWeight();
   } catch (error) {
     console.error('Помилка при збереженні даних:', error);
+  } finally {
+    isSaving = false;
+    
+    // Обробляємо чергу збережень
+    if (saveQueue.length > 0) {
+      const nextIndex = saveQueue.shift();
+      if (nextIndex === activeSheetIndex) {
+        // Якщо в черзі той самий персонаж, зберігаємо ще раз
+        setTimeout(() => saveSheetData(), 100);
+      }
+    }
   }
 }
 
@@ -402,7 +428,31 @@ function loadSheetData() {
   for (const key in elements) {
     if (elements[key]) {
       if (key === 'characterPhoto') {
-        elements[key].src = sheet[key] || '/no-image-placeholder.svg';
+        const photoUrl = sheet[key];
+        const placeholder = document.getElementById('photoPlaceholder');
+        const photoImg = elements[key];
+        
+        // Перевіряємо чи це дійсно URL фото, а не URL сторінки
+        const isValidPhotoUrl = photoUrl && 
+                                photoUrl !== '' && 
+                                photoUrl !== '/no-image-placeholder.svg' &&
+                                !photoUrl.includes('index.html') &&
+                                !photoUrl.includes('obrref') &&
+                                !photoUrl.includes('localhost');
+        
+        if (isValidPhotoUrl) {
+          // Є фото - показуємо його
+          photoImg.src = photoUrl;
+          photoImg.style.display = 'block';
+          if (placeholder) placeholder.style.display = 'none';
+        } else {
+          // Немає фото - показуємо заглушку
+          photoImg.src = '';
+          photoImg.style.display = 'none';
+          if (placeholder) {
+            placeholder.style.display = 'flex';
+          }
+        }
       } else {
         elements[key].value = sheet[key] || '';
       }
@@ -707,8 +757,206 @@ function connectInputsToSave() {
   }
   if (armorClassInput) {
     armorClassInput.addEventListener('blur', updateArmorClass);
+    // Також додаємо оновлення іконки AC на токені
+    armorClassInput.addEventListener('input', () => {
+      const newAC = parseInt(armorClassInput.value) || 10;
+      updateTokenAC(newAC);
+    });
+  }
+
+  // Оновлення імені персонажа в dropdown при зміні
+  const characterNameInput = document.getElementById('characterName');
+  if (characterNameInput) {
+    characterNameInput.addEventListener('input', () => {
+      updateCharacterNameInDropdown();
+    });
+    characterNameInput.addEventListener('blur', () => {
+      updateCharacterNameInDropdown();
+    });
+  }
+  
+  // Оновлення здоров'я на токені при зміні
+  const healthPointsInput = document.getElementById('healthPoints');
+  if (healthPointsInput) {
+    healthPointsInput.addEventListener('input', () => {
+      const newHealth = parseInt(healthPointsInput.value) || 0;
+      const healthInput = document.getElementById('health');
+      const tempHealth = parseInt(healthInput?.value) || 0;
+      updateTokenHealth(newHealth, tempHealth);
+    });
+  }
+  
+  // Оновлення тимчасового здоров'я (поле "лікування") на токені при зміні
+  const healthInput = document.getElementById('health');
+  if (healthInput) {
+    healthInput.addEventListener('input', () => {
+      const healthPointsInput = document.getElementById('healthPoints');
+      const newHealth = parseInt(healthPointsInput?.value) || 0;
+      const tempHealth = parseInt(healthInput.value) || 0;
+      updateTokenHealth(newHealth, tempHealth);
+    });
   }
 }
+
+// Функція для оновлення імені персонажа в dropdown
+async function updateCharacterNameInDropdown() {
+  const characterSelect = document.getElementById('characterSelect');
+  const characterNameInput = document.getElementById('characterName');
+  
+  if (characterSelect && characterNameInput) {
+    const selectedOption = characterSelect.querySelector(`option[value="${activeSheetIndex}"]`);
+    if (selectedOption) {
+      const newName = characterNameInput.value.trim() || `Персонаж ${activeSheetIndex + 1}`;
+      selectedOption.textContent = newName;
+      
+      // Оновлюємо підпис токена на карті, якщо він існує
+      await updateTokenLabel(newName);
+    }
+  }
+}
+
+// Функція для оновлення підпису токена
+async function updateTokenLabel(newName) {
+  try {
+    const currentSheet = characterSheets[activeSheetIndex];
+    if (!currentSheet) return;
+    
+    // Шукаємо токен поточного персонажа за старим ім'ям або по playerName
+    const allItems = await OBR.scene.items.getItems();
+    const characterToken = allItems.find(item => 
+      item.metadata?.characterSheet?.playerName === currentSheet.playerName &&
+      item.layer === 'CHARACTER' &&
+      item.metadata?.characterSheet
+    );
+    
+    if (characterToken) {
+      // Оновлюємо ім'я та підпис токена
+      await OBR.scene.items.updateItems([characterToken.id], (items) => {
+        items.forEach(item => {
+          item.name = newName;
+          item.text.plainText = newName;
+          if (item.metadata?.characterSheet) {
+            item.metadata.characterSheet.characterName = newName;
+          }
+        });
+      });
+      
+      console.log('Підпис токена оновлено:', newName);
+    }
+  } catch (error) {
+    console.error('Помилка при оновленні підпису токена:', error);
+  }
+}
+
+// Функція для оновлення іконки здоров'я на токені
+async function updateTokenHealth(newHealth, tempHealth = null) {
+  try {
+    const currentSheet = characterSheets[activeSheetIndex];
+    if (!currentSheet) return;
+    
+    // Якщо tempHealth не передано, беремо з поточного персонажа (поле healing)
+    if (tempHealth === null) {
+      tempHealth = currentSheet.healing || 0;
+    }
+    
+    // Формуємо текст з урахуванням тимчасового здоров'я
+    const healthText = tempHealth > 0 
+      ? `♥${newHealth}(${tempHealth})` 
+      : `♥${newHealth}`;
+    
+    // Шукаємо іконку здоров'я поточного персонажа
+    const allItems = await OBR.scene.items.getItems();
+    const healthBadge = allItems.find(item => 
+      item.metadata?.healthBadge === true &&
+      item.metadata?.playerName === currentSheet.playerName &&
+      item.layer === 'ATTACHMENT'
+    );
+    
+    if (healthBadge) {
+      // Оновлюємо текст іконки здоров'я
+      await OBR.scene.items.updateItems([healthBadge.id], (items) => {
+        items.forEach(item => {
+          item.text.plainText = healthText;
+        });
+      });
+      
+      console.log('Іконка здоров\'я оновлена:', healthText);
+    }
+    
+    // Також оновлюємо здоров'я в метаданих токена
+    const characterToken = allItems.find(item => 
+      item.metadata?.characterSheet?.playerName === currentSheet.playerName &&
+      item.layer === 'CHARACTER' &&
+      item.metadata?.characterSheet
+    );
+    
+    if (characterToken) {
+      await OBR.scene.items.updateItems([characterToken.id], (items) => {
+        items.forEach(item => {
+          if (item.metadata?.['com.owlbear.token']) {
+            item.metadata['com.owlbear.token'].hp = newHealth;
+          }
+          if (item.metadata?.characterSheet) {
+            item.metadata.characterSheet.healthPoints = newHealth;
+            item.metadata.characterSheet.healing = tempHealth;
+          }
+        });
+      });
+    }
+  } catch (error) {
+    console.error('Помилка при оновленні іконки здоров\'я:', error);
+  }
+}
+
+// Функція для оновлення іконки класу броні на токені
+async function updateTokenAC(newAC) {
+  try {
+    const currentSheet = characterSheets[activeSheetIndex];
+    if (!currentSheet) return;
+    
+    // Шукаємо іконку класу броні поточного персонажа
+    const allItems = await OBR.scene.items.getItems();
+    const acBadge = allItems.find(item => 
+      item.metadata?.acBadge === true &&
+      item.metadata?.playerName === currentSheet.playerName &&
+      item.layer === 'ATTACHMENT'
+    );
+    
+    if (acBadge) {
+      // Оновлюємо текст іконки класу броні
+      await OBR.scene.items.updateItems([acBadge.id], (items) => {
+        items.forEach(item => {
+          item.text.plainText = `🛡${newAC}`;
+        });
+      });
+      
+      console.log('Іконка класу броні оновлена:', newAC);
+    }
+    
+    // Також оновлюємо AC в метаданих токена
+    const characterToken = allItems.find(item => 
+      item.metadata?.characterSheet?.playerName === currentSheet.playerName &&
+      item.layer === 'CHARACTER' &&
+      item.metadata?.characterSheet
+    );
+    
+    if (characterToken) {
+      await OBR.scene.items.updateItems([characterToken.id], (items) => {
+        items.forEach(item => {
+          if (item.metadata?.['com.owlbear.token']) {
+            item.metadata['com.owlbear.token'].ac = newAC;
+          }
+          if (item.metadata?.characterSheet) {
+            item.metadata.characterSheet.armorClass = newAC;
+          }
+        });
+      });
+    }
+  } catch (error) {
+    console.error('Помилка при оновленні іконки класу броні:', error);
+  }
+}
+
 
 function setupStatButtons() {
   document.querySelectorAll('.stat-input-wrapper').forEach(wrapper => {
@@ -731,15 +979,24 @@ function setupStatButtons() {
 function setupCharacterButtons() {
   const addBtn = document.getElementById('addCharacterButton');
   const delBtn = document.getElementById('deleteCharacterButton');
+  const createTokenBtn = document.getElementById('createTokenButton');
 
-  // Блокування кнопок для не-GM
+  // Приховування кнопок для не-GM
   if (!isGM) {
     [addBtn, delBtn].forEach(btn => {
       if (btn) {
-        btn.setAttribute('disabled', 'true');
-        btn.style.opacity = '0.5';
-        btn.style.pointerEvents = 'none';
-        btn.title = 'Доступно лише для GM';
+        btn.style.display = 'none';
+      }
+    });
+    // Кнопка створення токена доступна всім
+    if (createTokenBtn) {
+      createTokenBtn.style.display = 'flex';
+    }
+  } else {
+    // Показуємо всі кнопки для GM
+    [addBtn, delBtn, createTokenBtn].forEach(btn => {
+      if (btn) {
+        btn.style.display = 'flex';
       }
     });
   }
@@ -847,6 +1104,205 @@ function setupCharacterButtons() {
       }
     });
   }
+
+  // Створення токена персонажа на карті (доступно всім гравцям)
+  if (createTokenBtn) {
+    createTokenBtn.addEventListener('click', async () => {
+      try {
+        const currentSheet = characterSheets[activeSheetIndex];
+        if (!currentSheet) {
+          alert('Немає активного персонажа для створення токена');
+          return;
+        }
+
+        // Перевіряємо чи вже існує токен для цього персонажа
+        const allItems = await OBR.scene.items.getItems();
+        const existingToken = allItems.find(item => 
+          item.layer === 'CHARACTER' && 
+          item.metadata?.characterSheet?.characterName === currentSheet.characterName &&
+          item.metadata?.characterSheet?.playerName === currentSheet.playerName
+        );
+
+        if (existingToken) {
+          // Якщо токен вже існує, фокусуємо камеру на ньому
+          const bounds = await OBR.scene.items.getItemBounds([existingToken.id]);
+          await OBR.viewport.animateToBounds(bounds);
+          alert(`Токен персонажа "${currentSheet.characterName}" вже існує на карті.`);
+          return;
+        }
+
+        // Отримуємо ID власника персонажа (гравця)
+        const playerName = currentSheet.playerName;
+        let ownerUserId = null;
+        
+        if (playerName) {
+          // Шукаємо гравця за ім'ям у списку учасників кімнати
+          const players = await OBR.party.getPlayers();
+          const owner = players.find(p => p.name === playerName);
+          if (owner) {
+            ownerUserId = owner.id;
+          }
+        }
+
+        // Отримуємо центр поточного viewport
+        const width = await OBR.viewport.getWidth();
+        const height = await OBR.viewport.getHeight();
+        const scale = await OBR.viewport.getScale();
+        
+        // Створюємо токен в центрі екрану (0, 0 - це центр viewport)
+        const center = { x: 0, y: 0 };
+
+        // Завжди використовуємо заглушку для всіх токенів
+        const imageUrl = window.location.origin + '/character-token-placeholder.png';
+
+        // Створюємо токен персонажа (займає 1 клітинку на карті)
+        let tokenItem = buildImage(
+          {
+            height: 128,
+            width: 128,
+            url: imageUrl,
+            mime: 'image/png'
+          },
+          {
+            dpi: 128,
+            offset: { x: 0, y: 0 }
+          }
+        )
+          .position(center)
+          .layer('CHARACTER')
+          .name(currentSheet.characterName || 'Персонаж')
+          .plainText(currentSheet.characterName || 'Персонаж')  // Додаємо текст з іменем
+          .textItemType('LABEL')  // Текст як лейбл знизу токена
+          .metadata({
+            'com.owlbear.token': {
+              hp: parseInt(currentSheet.healthPoints) || 0,
+              maxHp: parseInt(currentSheet.maxHealthPoints) || 0,
+              ac: parseInt(currentSheet.armorClass) || 10
+            },
+            characterSheet: {
+              characterName: currentSheet.characterName,
+              playerName: currentSheet.playerName,
+              healthPoints: currentSheet.healthPoints,
+              maxHealthPoints: currentSheet.maxHealthPoints,
+              healing: currentSheet.healing,
+              armorClass: currentSheet.armorClass,
+              ownerUserId: ownerUserId
+            }
+          })
+          .build();
+        
+        // Якщо знайшли власника персонажа, встановлюємо createdUserId ПЕРЕД додаванням на сцену
+        if (ownerUserId) {
+          tokenItem.createdUserId = ownerUserId;
+        }
+        
+        // Додаємо токен на сцену спочатку, щоб отримати його bounds
+        await OBR.scene.items.addItems([tokenItem]);
+        
+        // Отримуємо bounds токена для точного позиціонування
+        const tokenBounds = await OBR.scene.items.getItemBounds([tokenItem.id]);
+        
+        // Створюємо іконку здоров'я (attachment) - справа зверху токена
+        const tempHP = currentSheet.healing || 0;
+        console.log('Тимчасове здоров\'я при створенні токена:', tempHP, 'currentSheet.healing:', currentSheet.healing);
+        console.log('Основне здоров\'я при створенні токена:', currentSheet.healthPoints);
+        const healthText = tempHP > 0 
+          ? `♥${currentSheet.healthPoints || 0}(${tempHP})` 
+          : `♥${currentSheet.healthPoints || 0}`;
+        console.log('Текст на токені:', healthText);
+        
+        const healthBadge = buildLabel()
+          .position({ 
+            x: tokenBounds.max.x - 10,  // Справа, трохи зміщено вліво від краю
+            y: tokenBounds.min.y + 10   // Зверху, трохи зміщено вниз від краю
+          })
+          .layer('ATTACHMENT')
+          .attachedTo(tokenItem.id)
+          .plainText(healthText)
+          .locked(true)  // Блокуємо переміщення та редагування
+          .metadata({
+            healthBadge: true,
+            characterName: currentSheet.characterName,
+            playerName: currentSheet.playerName
+          })
+          .build();
+
+        // Створюємо іконку класу броні (attachment) - зліва зверху токена
+        const acBadge = buildLabel()
+          .position({ 
+            x: tokenBounds.min.x + 10,  // Зліва, трохи зміщено вправо від краю
+            y: tokenBounds.min.y + 10   // Зверху, трохи зміщено вниз від краю
+          })
+          .layer('ATTACHMENT')
+          .attachedTo(tokenItem.id)
+          .plainText(`🛡${currentSheet.armorClass || 10}`)
+          .locked(true)  // Блокуємо переміщення та редагування
+          .metadata({
+            acBadge: true,
+            characterName: currentSheet.characterName,
+            playerName: currentSheet.playerName
+          })
+          .build();
+
+        // Якщо знайшли власника персонажа, встановлюємо createdUserId для іконок
+        if (ownerUserId) {
+          healthBadge.createdUserId = ownerUserId;
+          acBadge.createdUserId = ownerUserId;
+        }
+
+        // Додаємо іконки здоров'я та класу броні на сцену
+        await OBR.scene.items.addItems([healthBadge, acBadge]);
+        
+        // Застосовуємо стилі до іконки здоров'я
+        await OBR.scene.items.updateItems([healthBadge.id], (items) => {
+          items.forEach(item => {
+            item.scale = { x: 1, y: 1 };  // Фіксований масштаб
+            item.style.pointerWidth = 0;
+            item.style.pointerHeight = 0;
+            item.style.backgroundColor = '#000000';  // Чорний фон
+            item.style.backgroundOpacity = 0.5;  // Напівпрозорий (скляний ефект)
+            item.style.cornerRadius = 8;  // Закруглені кути як в листі
+            item.locked = true;  // Блокуємо
+            item.disableHit = true;  // Вимикаємо взаємодію
+            item.zIndex = 1000;  // Високий z-index щоб бути поверх
+          });
+        });
+        
+        // Застосовуємо стилі до іконки класу броні
+        await OBR.scene.items.updateItems([acBadge.id], (items) => {
+          items.forEach(item => {
+            item.scale = { x: 1, y: 1 };  // Фіксований масштаб
+            item.style.pointerWidth = 0;
+            item.style.pointerHeight = 0;
+            item.style.backgroundColor = '#000000';  // Чорний фон
+            item.style.backgroundOpacity = 0.5;  // Напівпрозорий (скляний ефект)
+            item.style.cornerRadius = 8;  // Закруглені кути як в листі
+            item.locked = true;  // Блокуємо
+            item.disableHit = true;  // Вимикаємо взаємодію
+            item.zIndex = 1000;  // Високий z-index щоб бути поверх
+          });
+        });
+        
+        console.log('Токен персонажа створено:', currentSheet.characterName);
+        
+        // Фокусуємо камеру на новостворений токен
+        const bounds = await OBR.scene.items.getItemBounds([tokenItem.id]);
+        await OBR.viewport.animateToBounds(bounds);
+        
+        // Показуємо повідомлення користувачу
+        if (currentSheet.characterName) {
+          alert(`Токен персонажа "${currentSheet.characterName}" створено на карті!`);
+        } else {
+          alert('Токен персонажа створено на карті!');
+        }
+        
+      } catch (error) {
+        console.error('Помилка при створенні токена персонажа:', error);
+        console.error('Детальна інформація:', JSON.stringify(error, null, 2));
+        alert('Помилка при створенні токена. Перевірте консоль для деталей.');
+      }
+    });
+  }
 }
 
 function setupPhotoButtons() {
@@ -854,14 +1310,23 @@ function setupPhotoButtons() {
   const deletePhotoBtn = document.getElementById('deletePhotoButton');
   const photoInput = document.getElementById('photoFileInput');
   const photoImg = document.getElementById('characterPhotoImg');
+  const placeholder = document.getElementById('photoPlaceholder');
 
   if (!photoBtn || !photoInput || !photoImg || !deletePhotoBtn) return;
 
-  // Завантаження фото
+  // Завантаження фото через кнопку
   photoBtn.addEventListener('click', () => {
     photoInput.value = '';
     photoInput.click();
   });
+
+  // Завантаження фото через клік на заглушку
+  if (placeholder) {
+    placeholder.addEventListener('click', () => {
+      photoInput.value = '';
+      photoInput.click();
+    });
+  }
 
   photoInput.addEventListener('change', async () => {
     const file = photoInput.files[0];
@@ -883,6 +1348,9 @@ function setupPhotoButtons() {
       if (result?.file) {
         const imageUrl = `https://ucarecdn.com/${result.file}/`;
         photoImg.src = imageUrl;
+        photoImg.style.display = 'block';
+        const placeholder = document.getElementById('photoPlaceholder');
+        if (placeholder) placeholder.style.display = 'none';
 
         if (characterSheets[activeSheetIndex]) {
           characterSheets[activeSheetIndex].characterPhoto = imageUrl;
@@ -902,10 +1370,163 @@ function setupPhotoButtons() {
     if (!confirm('Ви дійсно хочете видалити фото персонажа?')) return;
 
     if (characterSheets[activeSheetIndex]) {
-      characterSheets[activeSheetIndex].characterPhoto = '/no-image-placeholder.svg';
-      photoImg.src = '/no-image-placeholder.svg';
+      characterSheets[activeSheetIndex].characterPhoto = '';
+      photoImg.src = '';
+      photoImg.style.display = 'none';
+      const placeholder = document.getElementById('photoPlaceholder');
+      if (placeholder) placeholder.style.display = 'flex';
       await saveSheetData();
     }
+  });
+
+  // Оновлення фото токена
+  const updateTokenPhotoBtn = document.getElementById('updateTokenPhotoButton');
+  const tokenPhotoInput = document.getElementById('tokenPhotoFileInput');
+  
+  if (updateTokenPhotoBtn && tokenPhotoInput) {
+    // Відкриваємо провідник при натисканні на кнопку
+    updateTokenPhotoBtn.addEventListener('click', () => {
+      tokenPhotoInput.value = '';
+      tokenPhotoInput.click();
+    });
+
+    // Обробка вибору файлу
+    tokenPhotoInput.addEventListener('change', async () => {
+      const file = tokenPhotoInput.files[0];
+      if (!file) return;
+
+      try {
+        const currentSheet = characterSheets[activeSheetIndex];
+        if (!currentSheet) {
+          alert('Немає активного персонажа');
+          return;
+        }
+
+        // Обрізаємо фото до кругу 128x128
+        const croppedBlob = await cropImageToCircle(file, 128, 128);
+        if (!croppedBlob) {
+          alert('Помилка при обробці зображення');
+          return;
+        }
+
+        // Завантажуємо обрізане фото на Uploadcare
+        const formData = new FormData();
+        formData.append('UPLOADCARE_STORE', '1');
+        formData.append('UPLOADCARE_PUB_KEY', UPLOADCARE_PUBLIC_KEY);
+        formData.append('file', croppedBlob, 'token-photo.png');
+
+        const response = await fetch('https://upload.uploadcare.com/base/', {
+          method: 'POST',
+          body: formData,
+        });
+
+        const result = await response.json();
+
+        if (!result?.file) {
+          alert('Помилка при завантаженні фото токена.');
+          return;
+        }
+
+        const tokenImageUrl = `https://ucarecdn.com/${result.file}/`;
+
+        // Шукаємо токен цього персонажа
+        const allItems = await OBR.scene.items.getItems();
+        const tokenToUpdate = allItems.find(item => 
+          item.layer === 'CHARACTER' && 
+          item.metadata?.characterSheet?.characterName === currentSheet.characterName &&
+          item.metadata?.characterSheet?.playerName === currentSheet.playerName
+        );
+
+        if (!tokenToUpdate) {
+          alert('Токен персонажа не знайдено на карті. Спочатку створіть токен.');
+          return;
+        }
+
+        // Оновлюємо URL зображення токена
+        await OBR.scene.items.updateItems([tokenToUpdate.id], items => {
+          items.forEach(item => {
+            if (item.image) {
+              item.image.url = tokenImageUrl;
+            }
+          });
+        });
+
+        // Зберігаємо URL фото токена в метаданих персонажа
+        if (characterSheets[activeSheetIndex]) {
+          characterSheets[activeSheetIndex].tokenPhoto = tokenImageUrl;
+          await saveSheetData();
+        }
+
+        alert('Фото токена оновлено!');
+      } catch (error) {
+        console.error('Помилка при оновленні фото токена:', error);
+        alert('Помилка при оновленні фото токена');
+      }
+    });
+  }
+}
+
+// Функція для обрізки зображення до кругу
+async function cropImageToCircle(file, width, height) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    
+    reader.onload = (e) => {
+      const img = new Image();
+      
+      img.onload = () => {
+        // Використовуємо вищу роздільність для кращої якості (512x512, потім зменшимо до 128x128)
+        const highResSize = 512;
+        const canvas = document.createElement('canvas');
+        canvas.width = highResSize;
+        canvas.height = highResSize;
+        const ctx = canvas.getContext('2d', { alpha: true });
+        
+        // Покращені налаштування рендерингу
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        
+        // Визначаємо розміри для обрізки (квадрат по меншій стороні)
+        const size = Math.min(img.width, img.height);
+        const x = (img.width - size) / 2;
+        const y = (img.height - size) / 2;
+        
+        // Малюємо круглу маску
+        ctx.beginPath();
+        ctx.arc(highResSize / 2, highResSize / 2, highResSize / 2, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
+        
+        // Малюємо зображення в маску з високою якістю
+        ctx.drawImage(
+          img,
+          x, y, size, size,  // Вихідна область (квадрат по центру)
+          0, 0, highResSize, highResSize // Цільова область (512x512)
+        );
+        
+        // Тепер зменшуємо до потрібного розміру для кращої якості
+        const finalCanvas = document.createElement('canvas');
+        finalCanvas.width = width;
+        finalCanvas.height = height;
+        const finalCtx = finalCanvas.getContext('2d', { alpha: true });
+        
+        finalCtx.imageSmoothingEnabled = true;
+        finalCtx.imageSmoothingQuality = 'high';
+        
+        finalCtx.drawImage(canvas, 0, 0, highResSize, highResSize, 0, 0, width, height);
+        
+        // Конвертуємо canvas в Blob з максимальною якістю
+        finalCanvas.toBlob((blob) => {
+          resolve(blob);
+        }, 'image/png', 1.0);
+      };
+      
+      img.onerror = () => reject(new Error('Не вдалося завантажити зображення'));
+      img.src = e.target.result;
+    };
+    
+    reader.onerror = () => reject(new Error('Не вдалося прочитати файл'));
+    reader.readAsDataURL(file);
   });
 }
 
@@ -1017,6 +1638,14 @@ function setupInterface() {
     
     setupPhotoButtons();
     
+    // Ініціалізуємо заглушку фото
+    const photoImg = document.getElementById('characterPhotoImg');
+    const placeholder = document.getElementById('photoPlaceholder');
+    if (photoImg && placeholder) {
+        photoImg.style.display = 'none';
+        placeholder.style.display = 'flex';
+    }
+    
     setupStatButtons();
     
     setupStatEditButtons();
@@ -1037,12 +1666,29 @@ function setupInterface() {
 
     // Додаємо підписку на зміни метаданих
     OBR.room.onMetadataChange(async (metadata) => {
-        if (weaponEditing || skillEditing) return;
+        if (weaponEditing || skillEditing || isSaving) return;
+        
         const sheets = metadata[DARQIE_SHEETS_KEY] || [];
-        // Оновлюємо тільки якщо дані дійсно змінились
-        if (JSON.stringify(characterSheets) !== JSON.stringify(sheets)) {
-            await checkCharacterAndRedirect();
+        
+        // Оновлюємо тільки ІНШІ персонажі, не активний
+        if (sheets.length > 0) {
+            const hasChanges = sheets.some((sheet, index) => {
+                if (index === activeSheetIndex) return false; // Не чіпаємо активний
+                return JSON.stringify(characterSheets[index]) !== JSON.stringify(sheet);
+            });
+            
+            if (hasChanges) {
+                // Оновлюємо всі персонажі крім активного
+                sheets.forEach((sheet, index) => {
+                    if (index !== activeSheetIndex) {
+                        characterSheets[index] = sheet;
+                    }
+                });
+                await updateCharacterDropdown();
+            }
         }
+        
+        await checkCharacterAndRedirect();
     });
 
     // Додаємо підписку на повідомлення про призначення персонажа
@@ -1298,6 +1944,33 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // === ФУНКЦІЯ АВТОМАТИЧНОГО ЗБЕРЕЖЕННЯ АКТИВНОГО БЛОКУ ===
+  function finishCurrentEditing() {
+    // Зберігаємо зброю якщо редагується
+    if (weaponEditing) {
+      const acceptBtn = document.getElementById('weaponAcceptBtn');
+      if (acceptBtn) acceptBtn.click();
+    }
+    
+    // Зберігаємо навички якщо редагуються
+    if (skillEditing) {
+      const skillAcceptBtn = document.getElementById('skillAcceptBtn');
+      if (skillAcceptBtn) skillAcceptBtn.click();
+    }
+    
+    // Зберігаємо інвентар якщо редагується
+    if (editingInv) {
+      const invAcceptBtn = document.getElementById('inventoryAcceptBtn');
+      if (invAcceptBtn) invAcceptBtn.click();
+    }
+    
+    // Зберігаємо спорядження якщо редагується
+    if (editingEquip) {
+      const equipAcceptBtn = document.getElementById('equipmentAcceptBtn');
+      if (equipAcceptBtn) equipAcceptBtn.click();
+    }
+  }
+
   // --- Weapon block edit logic ---
   const editBtn = document.getElementById('weaponEditBtn');
   const acceptBtn = document.getElementById('weaponAcceptBtn');
@@ -1350,6 +2023,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (editBtn && acceptBtn && cancelBtn && addRowBtn) {
     renderWeaponTable(false);
     editBtn.addEventListener('click', () => {
+      finishCurrentEditing(); // Зберігаємо інші блоки перед редагуванням
       prevRows = JSON.parse(JSON.stringify(weaponRows));
       setEditingMode(true);
     });
@@ -1447,6 +2121,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (editBtnSkill && acceptBtnSkill && cancelBtnSkill && addRowBtnSkill) {
     renderSkillTable(false);
     editBtnSkill.addEventListener('click', () => {
+      finishCurrentEditing(); // Зберігаємо інші блоки перед редагуванням
       prevRowsSkill = JSON.parse(JSON.stringify(skillRows));
       setEditingModeSkill(true);
     });
@@ -1489,6 +2164,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (editBtnInv && acceptBtnInv && cancelBtnInv && addRowBtnInv) {
     renderInventoryTable(false);
     editBtnInv.addEventListener('click', () => {
+      finishCurrentEditing(); // Зберігаємо інші блоки перед редагуванням
       prevRowsInv = JSON.parse(JSON.stringify(inventoryRows));
       setEditingModeInventory(true);
     });
@@ -1546,6 +2222,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (editBtnEquip && acceptBtnEquip && cancelBtnEquip && addRowBtnEquip) {
     renderEquipmentTable(false);
     editBtnEquip.addEventListener('click', () => {
+      finishCurrentEditing(); // Зберігаємо інші блоки перед редагуванням
       prevRowsEquip = JSON.parse(JSON.stringify(equipmentRows));
       setEditingModeEquipment(true);
     });
@@ -1643,7 +2320,7 @@ function renderWeaponTable(editing = false) {
     // --- Додаю можливість натискати на поле "Бонус" лише у режимі перегляду ---
     if (!editing) {
       inputBonus.style.cursor = 'pointer';
-      inputBonus.title = 'Кинути d20 з цим бонусом атаки';
+      inputBonus.title = 'Кинути d20 з цим бонусом шкоди';
       inputBonus.addEventListener('click', e => {
         // Перевіряємо, чи це справжній клік користувача
         if (e.detail !== 1 || !e.isTrusted) {
@@ -1696,7 +2373,7 @@ function renderWeaponTable(editing = false) {
     // --- Додаю можливість натискати на поле "Шкода" лише у режимі перегляду ---
     if (!editing) {
       inputDamage.style.cursor = 'pointer';
-      inputDamage.title = 'Кинути кубик шкоди';
+      inputDamage.title = 'Кинути на попадання';
       inputDamage.addEventListener('click', e => {
         // Перевіряємо, чи це справжній клік користувача
         if (e.detail !== 1 || !e.isTrusted) {
@@ -1787,7 +2464,7 @@ function renderSkillTable(editing = false) {
     chatIcon.style.color = '#b0b0b0';
     chatIcon.style.fontSize = '0.9em';
     chatIcon.style.transition = 'color 0.15s';
-    chatIcon.title = 'Чат навички';
+    chatIcon.title = 'Поділитись';
     chatIcon.addEventListener('click', async (e) => {
       e.stopPropagation();
       await broadcastOpenSkillPopover(row.name || '', row.desc || '');
@@ -2183,7 +2860,7 @@ function loadCoinsData() {
   if (kinInput) kinInput.value = coinsData.kin || 0;
 }
 
-async function sendDiceRollRequest(type, style, bonus) {
+async function sendDiceRollRequest(type, style, bonus, count = 1) {
   try {
     // Захист від повторної відправки запиту протягом 500мс
     const now = Date.now();
@@ -2213,6 +2890,7 @@ async function sendDiceRollRequest(type, style, bonus) {
       type, 
       style, 
       bonus, 
+      count,
       advantage: advantageType,
       connectionId, 
       playerName, 
@@ -2554,7 +3232,7 @@ async function rollWeaponDamage(damageString) {
   }
   
   // Для шкоди використовуємо стиль GALAXY
-  sendDiceRollRequest(parsed.dice, 'GALAXY', parsed.bonus);
+  sendDiceRollRequest(parsed.dice, 'GALAXY', parsed.bonus, parsed.count);
 }
 
 // Функція для автоматичного зняття чекбоксів переваги/похибки після кидка

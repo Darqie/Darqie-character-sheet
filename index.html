@@ -5,14 +5,23 @@
   <meta content="width=device-width, initial-scale=1.0" name="viewport" />
   <title>Лист Персонажа</title>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Unicase:wght@700&display=swap" rel="stylesheet" />
-  <link crossorigin="anonymous" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" referrerpolicy="no-referrer" rel="stylesheet" />
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
   <link href="style.css" rel="stylesheet" />
 </head>
 <body>
   <!-- Блок очікування -->
   <div id="waitingBlock" class="waiting-block">
-    <i class="fas fa-hourglass-half waiting-icon"></i>
-    <h2>Зачекайте, поки ГМ не видасть вам персонажа</h2>
+    <div class="waiting-container">
+      <div class="dice-spinner">
+        <i class="fas fa-dice-d20"></i>
+      </div>
+      <h2 class="waiting-title">Готуємо пригоду</h2>
+      <p class="waiting-subtitle">Зачекайте, поки Майстер Гри не видасть вам персонажа</p>
+      <div class="loading-bar">
+        <div class="loading-bar-fill"></div>
+      </div>
+    </div>
   </div>
 
   <!-- Основний контент -->
@@ -25,10 +34,13 @@
           <i class="fa-solid fa-user-shield character-icon"></i>
           <select id="characterSelect"></select>
           <button id="addCharacterButton" title="Додати персонажа">
-            <i class="fas fa-plus"></i>
+            <i class="fas fa-user-plus"></i>
           </button>
           <button id="deleteCharacterButton" title="Видалити персонажа">
             <i class="fas fa-trash-alt"></i>
+          </button>
+          <button id="createTokenButton" title="Токен">
+            <i class="fas fa-map-marker-alt"></i>
           </button>
         </div>
         <div class="player-name-block">
@@ -205,8 +217,10 @@
                 <thead>
                   <tr>
                     <th>Назва</th>
-                    <th class="weapon-table-center"><i class="fas fa-dice" title="Бонус"></i></th>
-                    <th class="weapon-table-center"><i class="fas fa-dice-d20" title="Шкода"></i></th>
+                    <th class="weapon-table-center">
+                      <span class="material-symbols-outlined" style="font-size: 16px;" title="Шкода">swords</span>
+                    </th>
+                    <th class="weapon-table-center"><i class="fas fa-dice-d20" title="Попадання"></i></th>
                     <th style="width:32px;"></th>
                   </tr>
                 </thead>
@@ -325,14 +339,22 @@
             <button id="replacePhotoButton" title="Завантажити фотографію">
               <i class="fas fa-upload"></i>
             </button>
+            <button id="updateTokenPhotoButton" title="Оновити фото токена">
+              <i class="fas fa-sync-alt"></i>
+            </button>
             <button id="deletePhotoButton" title="Видалити фотографію">
               <i class="fas fa-trash-alt"></i>
             </button>
           </div>
-          <img alt="Натисніть для завантаження фотографії" 
+          <div class="photo-placeholder" id="photoPlaceholder">
+            <div class="placeholder-content">
+              <i class="fas fa-dragon"></i>
+              <p>Завантажити портрет</p>
+            </div>
+          </div>
+          <img alt="" 
                id="characterPhotoImg" 
-               src="/no-image-placeholder.svg"
-               title="Натисніть для завантаження фотографії" />
+               style="display: none;" />
         </div>
 
         <div class="quick-stats-block">
@@ -353,7 +375,7 @@
             </div>
           </div>
           <div class="quick-stat-item">
-            <i class="fas fa-plus" title="Лікування"></i>
+            <i class="fas fa-plus" title="Тимчасове здоров'я"></i>
             <div class="stat-input-wrapper">
               <button class="stat-btn minus">−</button>
               <input id="health" placeholder="0" type="number" min="0" max="99" step="1" />
@@ -361,7 +383,7 @@
             </div>
           </div>
           <div class="quick-stat-item">
-            <i class="fas fa-spa" title="Ініціатива"></i>
+            <i class="fas fa-spa" title="Квіти лікорісу"></i>
             <div class="stat-input-wrapper">
               <button class="stat-btn minus">−</button>
               <input id="initiative" placeholder="0" type="number" min="0" max="99" step="1" />
@@ -370,7 +392,7 @@
           </div>
           <div class="quick-stats-bottom-row">
             <div class="quick-stat-item">
-              <i class="fas fa-heart" title="ХП"></i>
+              <i class="fas fa-heart" title="Здоров'я"></i>
               <div class="stat-input-wrapper">
                 <button class="stat-btn minus">−</button>
                 <input id="healthPoints" placeholder="0" type="number" min="0" max="99" step="1" />
@@ -386,6 +408,7 @@
         </div>
 
         <input accept="image/*" id="photoFileInput" style="display: none;" type="file" />
+        <input accept="image/*" id="tokenPhotoFileInput" style="display: none;" type="file" />
       </div>
     </div>
   </div>
@@ -506,7 +529,7 @@
           <textarea id="skillModalDesc" class="skill-desc-textarea" readonly></textarea>
         </div>
         <div class="modal-actions" style="display:flex; gap: 10px; justify-content:flex-end; margin-top:10px;">
-          <button id="skillModalSendBtn" class="modal-accept-btn" title="Надіслати в чат"><i class="fas fa-paper-plane"></i></button>
+          <button id="skillModalSendBtn" class="modal-accept-btn" title="Поділитись"><i class="fas fa-paper-plane"></i></button>
         </div>
       </div>
     </div>
