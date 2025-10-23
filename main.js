@@ -2305,7 +2305,7 @@ function renderWeaponTable(editing = false) {
     const inputBonus = document.createElement('input');
     inputBonus.type = 'text';
     inputBonus.className = 'weapon-bonus';
-    inputBonus.placeholder = '+0';
+    inputBonus.placeholder = '1d6+2';
     inputBonus.value = row.bonus;
     if (editing) {
       inputBonus.disabled = false;
@@ -2317,10 +2317,10 @@ function renderWeaponTable(editing = false) {
     inputBonus.addEventListener('input', e => {
       weaponRows[idx].bonus = e.target.value;
     });
-    // --- Додаю можливість натискати на поле "Бонус" лише у режимі перегляду ---
+    // --- Додаю можливість натискати на поле "Бонус" (тепер це Шкода) лише у режимі перегляду ---
     if (!editing) {
       inputBonus.style.cursor = 'pointer';
-      inputBonus.title = 'Кинути d20 з цим бонусом шкоди';
+      inputBonus.title = 'Кинути кубики шкоди';
       inputBonus.addEventListener('click', e => {
         // Перевіряємо, чи це справжній клік користувача
         if (e.detail !== 1 || !e.isTrusted) {
@@ -2337,28 +2337,19 @@ function renderWeaponTable(editing = false) {
           return;
         }
         
-        // Парсимо бонус
-        let bonus = 0;
-        const bonusValue = row.bonus.trim();
-        if (bonusValue) {
-          // Видаляємо + з початку, якщо є
-          const cleanBonus = bonusValue.startsWith('+') ? bonusValue.slice(1) : bonusValue;
-          bonus = parseInt(cleanBonus) || 0;
-        }
-        
-        // Для атаки використовуємо стиль NEBULA
-        sendDiceRollRequest('D20', 'NEBULA', bonus);
+        // Кидок кубиків шкоди (використовуємо значення з поля bonus)
+        rollWeaponDamage(row.bonus);
       });
     }
     tdBonus.appendChild(inputBonus);
     tr.appendChild(tdBonus); // Додаємо поле бонусу до рядка
     
-    // Шкода
+    // Шкода (тепер це Попадання - d20 з бонусом)
     const tdDamage = document.createElement('td');
     const inputDamage = document.createElement('input');
     inputDamage.type = 'text';
     inputDamage.className = 'weapon-damage';
-    inputDamage.placeholder = '1d6';
+    inputDamage.placeholder = '+0';
     inputDamage.value = row.damage;
     if (editing) {
       inputDamage.disabled = false;
@@ -2370,10 +2361,10 @@ function renderWeaponTable(editing = false) {
     inputDamage.addEventListener('input', e => {
       weaponRows[idx].damage = e.target.value;
     });
-    // --- Додаю можливість натискати на поле "Шкода" лише у режимі перегляду ---
+    // --- Додаю можливість натискати на поле "Шкода" (тепер це Попадання) лише у режимі перегляду ---
     if (!editing) {
       inputDamage.style.cursor = 'pointer';
-      inputDamage.title = 'Кинути на попадання';
+      inputDamage.title = 'Кинути з бонусом на попадання';
       inputDamage.addEventListener('click', e => {
         // Перевіряємо, чи це справжній клік користувача
         if (e.detail !== 1 || !e.isTrusted) {
@@ -2385,8 +2376,17 @@ function renderWeaponTable(editing = false) {
           return;
         }
         
-        // Кидок шкоди
-        rollWeaponDamage(row.damage);
+        // Парсимо бонус з поля damage
+        let bonus = 0;
+        const bonusValue = row.damage.trim();
+        if (bonusValue) {
+          // Видаляємо + з початку, якщо є
+          const cleanBonus = bonusValue.startsWith('+') ? bonusValue.slice(1) : bonusValue;
+          bonus = parseInt(cleanBonus) || 0;
+        }
+        
+        // Для попадання використовуємо стиль NEBULA
+        sendDiceRollRequest('D20', 'NEBULA', bonus);
       });
     }
     tdDamage.appendChild(inputDamage);
