@@ -39,9 +39,21 @@ function getSafeTokenImageUrl(rawUrl) {
   return value;
 }
 
+function isUploadcareUrl(url) {
+  return /^https:\/\/ucarecdn\.com\/.+/i.test((url || '').trim());
+}
+
+function resolveTokenImageUrlFromSheet(sheet) {
+  if (!sheet) return getTokenPlaceholderUrl();
+  if (isUploadcareUrl(sheet.tokenPhoto)) return sheet.tokenPhoto.trim();
+  if (isUploadcareUrl(sheet.characterPhoto)) return sheet.characterPhoto.trim();
+  return getTokenPlaceholderUrl();
+}
+
 async function normalizeLegacyTokenImageUrls() {
   try {
-    if (!isGM) return;
+    const role = await OBR.player.getRole();
+    if (role !== 'GM') return;
 
     const allItems = await OBR.scene.items.getItems();
     const tokenIdsToFix = allItems
@@ -54,15 +66,19 @@ async function normalizeLegacyTokenImageUrls() {
 
     if (tokenIdsToFix.length === 0) return;
 
-    await OBR.scene.items.updateItems(tokenIdsToFix, (items) => {
-      items.forEach((item) => {
-        if (item.image) {
-          item.image.url = getSafeTokenImageUrl(item.image.url);
-        }
+    try {
+      await OBR.scene.items.updateItems(tokenIdsToFix, (items) => {
+        items.forEach((item) => {
+          if (item.image) {
+            item.image.url = getSafeTokenImageUrl(item.image.url);
+          }
+        });
       });
-    });
+    } catch (_) {
+      // Ігноруємо помилки прав доступу/стану сцени, щоб не шуміти гравцям в консолі.
+    }
   } catch (error) {
-    console.error('Помилка при міграції URL токенів:', error);
+    // Ігноруємо: це фоновий best-effort fix для legacy токенів.
   }
 }
 
@@ -1659,8 +1675,8 @@ function setupCharacterButtons() {
         // Створюємо токен в центрі екрану (0, 0 - це центр viewport)
         const center = { x: 0, y: 0 };
 
-        // Завжди використовуємо заглушку для всіх токенів
-        const imageUrl = getTokenPlaceholderUrl();
+        // Використовуємо фото токена/персонажа з Uploadcare, якщо воно є.
+        const imageUrl = resolveTokenImageUrlFromSheet(currentSheet);
 
         // Створюємо токен персонажа (займає 1 клітинку на карті)
         let tokenBuilder = buildImage(
@@ -3667,14 +3683,14 @@ async function openSkillPopoverFromBroadcast(skillName, skillDescription, initia
     try {
       await OBR.popover.open({
         id: 'darqie-skill-popover',
-        url: `/skill-popover.html?${query}`,
+        url: `/skill-popover-v2.html?${query}`,
         height: 260,
         width: 420,
       });
     } catch (e1) {
       await OBR.popover.open({
         id: 'darqie-skill-popover',
-        url: `skill-popover.html?${query}`,
+        url: `skill-popover-v2.html?${query}`,
         height: 260,
         width: 420,
       });
