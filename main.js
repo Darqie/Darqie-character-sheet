@@ -235,21 +235,70 @@ function buildOffloadedSupabaseRowFromSheet(sheet) {
   const row = {};
 
   Object.entries(OFFLOADED_SHEET_FIELD_TO_DB).forEach(([sheetField, dbCol]) => {
-    row[dbCol] = sheet?.[sheetField] ?? '';
+    if (sheet?.[sheetField] !== undefined) {
+      row[dbCol] = sheet[sheetField];
+    }
   });
 
   Object.entries(OFFLOADED_JSON_FIELD_TO_DB).forEach(([sheetField, dbCol]) => {
-    row[dbCol] = Array.isArray(sheet?.[sheetField])
-      ? JSON.parse(JSON.stringify(sheet[sheetField]))
-      : [];
+    if (sheet?.[sheetField] !== undefined) {
+      row[dbCol] = Array.isArray(sheet[sheetField])
+        ? JSON.parse(JSON.stringify(sheet[sheetField]))
+        : [];
+    }
   });
 
-  const coins = sheet?.coins || { sen: 0, gin: 0, kin: 0 };
-  row.coins_sen = parseInt(coins.sen, 10) || 0;
-  row.coins_gin = parseInt(coins.gin, 10) || 0;
-  row.coins_kin = parseInt(coins.kin, 10) || 0;
+  if (sheet?.coins !== undefined) {
+    const coins = sheet?.coins || { sen: 0, gin: 0, kin: 0 };
+    row.coins_sen = parseInt(coins.sen, 10) || 0;
+    row.coins_gin = parseInt(coins.gin, 10) || 0;
+    row.coins_kin = parseInt(coins.kin, 10) || 0;
+  }
 
   return row;
+}
+
+function mergeRoomSheetsWithLocalCache(roomSheets, localSheets) {
+  const roomList = Array.isArray(roomSheets) ? roomSheets : [];
+  const localList = Array.isArray(localSheets) ? localSheets : [];
+
+  return roomList.map((roomSheet, index) => {
+    const merged = roomSheet ? { ...roomSheet } : roomSheet;
+    if (!merged || typeof merged !== 'object') return merged;
+
+    const localByIndex = localList[index];
+    const sameIdentity = Boolean(
+      localByIndex &&
+      merged.characterName &&
+      localByIndex.characterName &&
+      merged.characterName === localByIndex.characterName
+    );
+    const localSheet = sameIdentity ? localByIndex : null;
+    if (!localSheet) return merged;
+
+    // Room metadata зберігає урізану версію листа, тому відновлюємо offloaded-поля з локального кешу.
+    MODAL_FIELDS.forEach((key) => {
+      if (localSheet[key] !== undefined) merged[key] = localSheet[key];
+    });
+
+    Object.keys(OFFLOADED_SHEET_FIELD_TO_DB).forEach((key) => {
+      if (localSheet[key] !== undefined) merged[key] = localSheet[key];
+    });
+
+    Object.keys(OFFLOADED_JSON_FIELD_TO_DB).forEach((key) => {
+      if (localSheet[key] !== undefined) {
+        merged[key] = Array.isArray(localSheet[key])
+          ? JSON.parse(JSON.stringify(localSheet[key]))
+          : [];
+      }
+    });
+
+    if (localSheet.coins !== undefined) {
+      merged.coins = JSON.parse(JSON.stringify(localSheet.coins || { sen: 0, gin: 0, kin: 0 }));
+    }
+
+    return merged;
+  });
 }
 
 function applyOffloadedSupabaseRowToSheet(sheet, row) {
@@ -930,7 +979,8 @@ async function updateCharacterDropdown() {
   
   if (!characterSelect) return;
 
-  characterSheets = await getMetadata();
+  const roomSheets = await getMetadata();
+  characterSheets = mergeRoomSheetsWithLocalCache(roomSheets, characterSheets);
   const visibleSheets = characterSheets
     .map((sheet, index) => ({ ...sheet, index }))
     .filter(sheet => isGM || sheet.playerName === currentPlayerName);
@@ -2129,7 +2179,7 @@ async function checkCharacterAndRedirect() {
                 if (mainContent) mainContent.style.display = 'flex';
                 // Оновлюємо дані тільки якщо вони змінились
                 if (!isAnyEditingActive() && !areSheetsEqualForRoomComparison(characterSheets, sheets)) {
-                    characterSheets = sheets;
+              characterSheets = mergeRoomSheetsWithLocalCache(sheets, characterSheets);
                     await updateCharacterDropdown();
                 }
             } else {
@@ -2141,7 +2191,7 @@ async function checkCharacterAndRedirect() {
             if (mainContent) mainContent.style.display = 'flex';
             // Для ГМ також оновлюємо тільки при зміні
             if (!isAnyEditingActive() && !areSheetsEqualForRoomComparison(characterSheets, sheets)) {
-                characterSheets = sheets;
+            characterSheets = mergeRoomSheetsWithLocalCache(sheets, characterSheets);
                 await updateCharacterDropdown();
             }
         }
@@ -2205,7 +2255,8 @@ function setupInterface() {
                 // Оновлюємо всі персонажі крім активного
                 sheets.forEach((sheet, index) => {
                     if (index !== activeSheetIndex) {
-                        characterSheets[index] = sheet;
+                const merged = mergeRoomSheetsWithLocalCache([sheet], [characterSheets[index]]);
+                characterSheets[index] = merged[0];
                     }
                 });
                 await updateCharacterDropdown();
