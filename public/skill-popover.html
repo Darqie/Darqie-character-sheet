@@ -193,47 +193,6 @@
     <div class="skill-description" id="skillDescription">Опис навички</div>
     <div class="player-name-top" id="playerNameTop">Гравець</div>
   </div>
-  <script>
-    // Отримуємо параметри з URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const skillName = urlParams.get('name') || 'Назва навички';
-    const skillDescription = urlParams.get('desc') || 'Опис навички';
-    const playerName = urlParams.get('player') || 'Гравець';
-
-    // Встановлюємо значення
-    document.getElementById('skillName').textContent = decodeURIComponent(skillName);
-    document.getElementById('skillDescription').innerText = decodeURIComponent(skillDescription);
-    document.getElementById('playerNameTop').textContent = decodeURIComponent(playerName);
-
-    // Автоматично розтягуємо textarea
-    // const textarea = document.getElementById('skillDescription');
-    // textarea.style.height = 'auto';
-    // textarea.style.height = (textarea.scrollHeight) + 'px';
-
-    // Закриття по Escape
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') {
-        if (window.OBR && window.OBR.popover) {
-          window.OBR.popover.close();
-        }
-      }
-    });
-
-    // Через 5 секунд надсилаємо сигнал на закриття через метадані
-    if (window.OBR && window.OBR.onReady) {
-      window.OBR.onReady(() => {
-        setTimeout(async () => {
-          const meta = await window.OBR.room.getMetadata();
-          await window.OBR.room.setMetadata({
-            ...meta,
-            darqie: {
-              ...(meta.darqie || {}),
-              closeSkillPopover: Date.now()
-            }
-          });
-        }, 5000);
-      });
-    }
-  </script>
+  <script src="/skill-popover.js"></script>
 </body>
 </html> 

@@ -23,6 +23,24 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   },
 });
 
+const TOKEN_PLACEHOLDER_PATH = '/character-token-placeholder.png';
+const TOKEN_PLACEHOLDER_FALLBACK_URL = 'https://darqie.github.io/Darqie-character-sheet/character-token-placeholder.png';
+
+function getTokenPlaceholderUrl() {
+  const isLocalDevHost = /^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname);
+  if (isLocalDevHost) return TOKEN_PLACEHOLDER_FALLBACK_URL;
+  return `${window.location.origin}${TOKEN_PLACEHOLDER_PATH}`;
+}
+
+function getSafeTokenImageUrl(rawUrl) {
+  const value = (rawUrl || '').trim();
+  if (!value) return getTokenPlaceholderUrl();
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(value)) {
+    return getTokenPlaceholderUrl();
+  }
+  return value;
+}
+
 const MODAL_FIELDS = [
   'characterClassLevel',
   'characterRace',
@@ -1324,9 +1342,14 @@ async function syncCharacterTokenOwner(sheet, previousPlayerName = null) {
 
     if (!characterToken) return;
 
+    const normalizedImageUrl = getSafeTokenImageUrl(characterToken.image?.url);
+
     await OBR.scene.items.updateItems([characterToken.id], (items) => {
       items.forEach((item) => {
         item.createdUserId = ownerUserId;
+        if (item.image) {
+          item.image.url = normalizedImageUrl;
+        }
         if (item.metadata?.characterSheet) {
           item.metadata.characterSheet.playerName = sheet.playerName || '';
           item.metadata.characterSheet.ownerUserId = ownerUserId;
@@ -1611,7 +1634,7 @@ function setupCharacterButtons() {
         const center = { x: 0, y: 0 };
 
         // Завжди використовуємо заглушку для всіх токенів
-        const imageUrl = window.location.origin + '/character-token-placeholder.png';
+        const imageUrl = getTokenPlaceholderUrl();
 
         // Створюємо токен персонажа (займає 1 клітинку на карті)
         let tokenBuilder = buildImage(
