@@ -23,13 +23,11 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   },
 });
 
-const TOKEN_PLACEHOLDER_PATH = '/character-token-placeholder.png';
-const TOKEN_PLACEHOLDER_FALLBACK_URL = 'https://darqie.github.io/Darqie-character-sheet/character-token-placeholder.png';
+const TOKEN_PLACEHOLDER_URL = 'https://darqie.github.io/Darqie-character-sheet/character-token-placeholder.png';
+const SKILL_POPOVER_VERSION = '2026-03-21-2';
 
 function getTokenPlaceholderUrl() {
-  const isLocalDevHost = /^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname);
-  if (isLocalDevHost) return TOKEN_PLACEHOLDER_FALLBACK_URL;
-  return `${window.location.origin}${TOKEN_PLACEHOLDER_PATH}`;
+  return TOKEN_PLACEHOLDER_URL;
 }
 
 function getSafeTokenImageUrl(rawUrl) {
@@ -39,6 +37,33 @@ function getSafeTokenImageUrl(rawUrl) {
     return getTokenPlaceholderUrl();
   }
   return value;
+}
+
+async function normalizeLegacyTokenImageUrls() {
+  try {
+    if (!isGM) return;
+
+    const allItems = await OBR.scene.items.getItems();
+    const tokenIdsToFix = allItems
+      .filter((item) =>
+        item.layer === 'CHARACTER' &&
+        item.metadata?.characterSheet &&
+        /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(item.image?.url || '')
+      )
+      .map((item) => item.id);
+
+    if (tokenIdsToFix.length === 0) return;
+
+    await OBR.scene.items.updateItems(tokenIdsToFix, (items) => {
+      items.forEach((item) => {
+        if (item.image) {
+          item.image.url = getSafeTokenImageUrl(item.image.url);
+        }
+      });
+    });
+  } catch (error) {
+    console.error('Помилка при міграції URL токенів:', error);
+  }
 }
 
 const MODAL_FIELDS = [
@@ -781,7 +806,8 @@ function loadSheetData() {
                                 photoUrl !== '/no-image-placeholder.svg' &&
                                 !photoUrl.includes('index.html') &&
                                 !photoUrl.includes('obrref') &&
-                                !photoUrl.includes('localhost');
+                                !photoUrl.includes('localhost') &&
+                                !photoUrl.includes('127.0.0.1');
         
         if (isValidPhotoUrl) {
           // Є фото - показуємо його
@@ -2229,6 +2255,9 @@ OBR.onReady(async () => {
     currentPlayerName = await OBR.player.getName();
     isGM = (await OBR.player.getRole()) === 'GM';
 
+    // Виправляємо старі токени, які посилаються на localhost і ламаються у гравців.
+    await normalizeLegacyTokenImageUrls();
+
     // Налаштування інтерфейсу
     setupInterface(); // Викликаємо setupInterface для ініціалізації
 
@@ -3632,7 +3661,8 @@ async function openSkillPopoverFromBroadcast(skillName, skillDescription, initia
     const query = new URLSearchParams({
       name: skillName || '',
       desc: skillDescription || '',
-      player: initiatorName || ''
+      player: initiatorName || '',
+      v: SKILL_POPOVER_VERSION,
     }).toString();
     try {
       await OBR.popover.open({
