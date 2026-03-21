@@ -444,6 +444,11 @@ let editingEquip = false;
 let lastRollRequestTime = 0;
 let isSaving = false;
 let saveQueue = [];
+let tokenHealthSyncInFlight = false;
+let pendingTokenHealthSync = null;
+let lastTokenHealthSyncKey = '';
+let lastTokenHealthReconcileAt = 0;
+const TOKEN_HEALTH_RECONCILE_INTERVAL_MS = 12000;
 let modalClickTimeout;
 
 // Ініціалізуємо глобальні змінні
@@ -1287,7 +1292,7 @@ async function updateTokenLabel(newName) {
 }
 
 // Функція для оновлення іконки здоров'я на токені
-async function updateTokenHealth(newHealth, tempHealth = null) {
+async function performTokenHealthSync(newHealth, tempHealth = null, forceReconcile = false) {
   try {
     const currentSheet = characterSheets[activeSheetIndex];
     if (!currentSheet) return;
@@ -1298,6 +1303,19 @@ async function updateTokenHealth(newHealth, tempHealth = null) {
     // Якщо tempHealth не передано, беремо з поточного персонажа (поле healing)
     if (tempHealth === null) {
       tempHealth = currentSheet.healing || 0;
+    }
+
+    newHealth = parseInt(newHealth, 10) || 0;
+    tempHealth = parseInt(tempHealth, 10) || 0;
+
+    const identity = `${currentSheet.characterName || ''}|${currentSheet.playerName || ''}`;
+    const syncKey = `${identity}|${newHealth}|${tempHealth}`;
+    const now = Date.now();
+    const shouldReconcile = forceReconcile || (now - lastTokenHealthReconcileAt >= TOKEN_HEALTH_RECONCILE_INTERVAL_MS);
+
+    // Якщо значення HP не змінювались і ще не час reconcile — пропускаємо звернення до API.
+    if (!shouldReconcile && syncKey === lastTokenHealthSyncKey) {
+      return;
     }
     
     // Формуємо текст з урахуванням тимчасового здоров'я
@@ -1411,9 +1429,35 @@ async function updateTokenHealth(newHealth, tempHealth = null) {
           });
         });
       }
+
+      lastTokenHealthSyncKey = syncKey;
+      if (shouldReconcile) {
+        lastTokenHealthReconcileAt = now;
+      }
     }
   } catch (error) {
     console.error('Помилка при оновленні іконки здоров\'я:', error);
+  }
+}
+
+async function updateTokenHealth(newHealth, tempHealth = null, options = {}) {
+  pendingTokenHealthSync = {
+    newHealth: parseInt(newHealth, 10) || 0,
+    tempHealth: tempHealth === null ? null : (parseInt(tempHealth, 10) || 0),
+    forceReconcile: options?.forceReconcile === true,
+  };
+
+  if (tokenHealthSyncInFlight) return;
+
+  tokenHealthSyncInFlight = true;
+  try {
+    while (pendingTokenHealthSync) {
+      const request = pendingTokenHealthSync;
+      pendingTokenHealthSync = null;
+      await performTokenHealthSync(request.newHealth, request.tempHealth, request.forceReconcile);
+    }
+  } finally {
+    tokenHealthSyncInFlight = false;
   }
 }
 
@@ -2417,7 +2461,7 @@ OBR.onReady(async () => {
           // не потрібно було вручну "перещолкувати" поле здоров'я.
           await updateTokenHealth(hp, tempHp);
         }
-    }, 2500);
+    }, 4000);
 
     // Глобальний обробник показу поповера навичок від інших гравців
     if (!window.__skillPopoverBroadcastHandler) {
