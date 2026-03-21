@@ -449,6 +449,49 @@ let pendingTokenHealthSync = null;
 let lastTokenHealthSyncKey = '';
 let lastTokenHealthReconcileAt = 0;
 const TOKEN_HEALTH_RECONCILE_INTERVAL_MS = 12000;
+let lastTokenACSyncKey = '';
+let lastTokenACReconcileAt = 0;
+const TOKEN_AC_RECONCILE_INTERVAL_MS = 12000;
+
+function isTokenForSheet(item, sheet) {
+  if (!item || item.layer !== 'CHARACTER') return false;
+  const tokenSheet = item.metadata?.characterSheet;
+  if (!tokenSheet) return false;
+
+  if (sheet?.characterName && tokenSheet.characterName) {
+    return tokenSheet.characterName === sheet.characterName;
+  }
+
+  if (sheet?.playerName && tokenSheet.playerName) {
+    return tokenSheet.playerName === sheet.playerName;
+  }
+
+  return false;
+}
+
+function getActiveSheetCombatValues() {
+  const sheet = characterSheets[activeSheetIndex];
+  if (!sheet) return null;
+
+  const healthPointsInput = document.getElementById('healthPoints');
+  const tempHealthInput = document.getElementById('health');
+  const armorClassInput = document.getElementById('armorClass');
+
+  const hp = parseInt(healthPointsInput?.value, 10);
+  const tempHp = parseInt(tempHealthInput?.value, 10);
+  const ac = parseInt(armorClassInput?.value, 10);
+
+  const resolvedHp = Number.isNaN(hp) ? (parseInt(sheet.healthPoints, 10) || 0) : hp;
+  const resolvedTempHp = Number.isNaN(tempHp) ? (parseInt(sheet.healing, 10) || 0) : tempHp;
+  const resolvedAc = Number.isNaN(ac) ? (parseInt(sheet.armorClass, 10) || 10) : ac;
+
+  // Тримаємо локальний кеш синхронним з тим, що зараз у листі на екрані.
+  sheet.healthPoints = String(resolvedHp);
+  sheet.healing = String(resolvedTempHp);
+  sheet.armorClass = String(resolvedAc);
+
+  return { sheet, hp: resolvedHp, tempHp: resolvedTempHp, ac: resolvedAc };
+}
 let modalClickTimeout;
 
 // Ініціалізуємо глобальні змінні
@@ -1325,14 +1368,7 @@ async function performTokenHealthSync(newHealth, tempHealth = null, forceReconci
     
     // Шукаємо токени поточного персонажа на активній сцені
     const allItems = await OBR.scene.items.getItems();
-    const characterTokens = allItems.filter(item => 
-      item.layer === 'CHARACTER' &&
-      item.metadata?.characterSheet &&
-      (
-        (currentSheet.characterName && item.metadata?.characterSheet?.characterName === currentSheet.characterName) ||
-        (currentSheet.playerName && item.metadata?.characterSheet?.playerName === currentSheet.playerName)
-      )
-    );
+    const characterTokens = allItems.filter((item) => isTokenForSheet(item, currentSheet));
 
     if (characterTokens.length > 0) {
       const tokenIdsToUpdate = characterTokens
@@ -1470,32 +1506,31 @@ async function updateTokenAC(newAC) {
     const sceneReady = await OBR.scene.isReady();
     if (!sceneReady) return;
 
-    // Шукаємо іконку класу броні поточного персонажа
-    const allItems = await OBR.scene.items.getItems();
-    const acBadge = allItems.find(item => 
-      item.metadata?.acBadge === true &&
-      item.metadata?.playerName === currentSheet.playerName &&
-      item.layer === 'ATTACHMENT'
-    );
-    
-    if (acBadge) {
-      // Оновлюємо текст іконки класу броні
-      await OBR.scene.items.updateItems([acBadge.id], (items) => {
-        items.forEach(item => {
-          item.text.plainText = `🛡${newAC}`;
-        });
-      });
+    newAC = parseInt(newAC, 10) || 10;
+    const identity = `${currentSheet.characterName || ''}|${currentSheet.playerName || ''}`;
+    const syncKey = `${identity}|${newAC}`;
+    const now = Date.now();
+    const shouldReconcile = (now - lastTokenACReconcileAt >= TOKEN_AC_RECONCILE_INTERVAL_MS);
+
+    if (!shouldReconcile && syncKey === lastTokenACSyncKey) {
+      return;
     }
-    
-    // Також оновлюємо AC в метаданих токена
-    const characterToken = allItems.find(item => 
-      item.metadata?.characterSheet?.playerName === currentSheet.playerName &&
-      item.layer === 'CHARACTER' &&
-      item.metadata?.characterSheet
-    );
-    
-    if (characterToken) {
-      await OBR.scene.items.updateItems([characterToken.id], (items) => {
+
+    // Шукаємо токени поточного персонажа на активній сцені
+    const allItems = await OBR.scene.items.getItems();
+    const characterTokens = allItems.filter((item) => isTokenForSheet(item, currentSheet));
+
+    if (characterTokens.length > 0) {
+      const tokenIdsToUpdate = characterTokens
+        .filter((token) => {
+          const tokenAc = parseInt(token.metadata?.['com.owlbear.token']?.ac, 10) || 10;
+          const sheetAc = parseInt(token.metadata?.characterSheet?.armorClass, 10) || 10;
+          return tokenAc !== newAC || sheetAc !== newAC;
+        })
+        .map((token) => token.id);
+
+      if (tokenIdsToUpdate.length > 0) {
+        await OBR.scene.items.updateItems(tokenIdsToUpdate, (items) => {
         items.forEach(item => {
           if (item.metadata?.['com.owlbear.token']) {
             item.metadata['com.owlbear.token'].ac = newAC;
@@ -1504,7 +1539,35 @@ async function updateTokenAC(newAC) {
             item.metadata.characterSheet.armorClass = newAC;
           }
         });
+        });
+      }
+
+      const badgeIdsToUpdate = [];
+
+      characterTokens.forEach((token) => {
+        const acBadge = allItems.find((item) =>
+          item.layer === 'ATTACHMENT' &&
+          item.metadata?.acBadge === true &&
+          item.attachedTo === token.id
+        );
+
+        if (acBadge && acBadge.text?.plainText !== `🛡${newAC}`) {
+          badgeIdsToUpdate.push(acBadge.id);
+        }
       });
+
+      if (badgeIdsToUpdate.length > 0) {
+        await OBR.scene.items.updateItems(badgeIdsToUpdate, (items) => {
+          items.forEach((item) => {
+            item.text.plainText = `🛡${newAC}`;
+          });
+        });
+      }
+
+      lastTokenACSyncKey = syncKey;
+      if (shouldReconcile) {
+        lastTokenACReconcileAt = now;
+      }
     }
   } catch (error) {
     console.error('Помилка при оновленні іконки класу броні:', error);
@@ -2453,13 +2516,12 @@ OBR.onReady(async () => {
     setInterval(async () => {
         await checkCharacterAndRedirect();
 
-        const activeSheet = characterSheets[activeSheetIndex];
-        if (activeSheet) {
-          const hp = parseInt(activeSheet.healthPoints, 10) || 0;
-          const tempHp = parseInt(activeSheet.healing, 10) || 0;
+        const combatValues = getActiveSheetCombatValues();
+        if (combatValues) {
           // Ресинк HP на активній сцені, щоб після копіювання токена/зміни сцени
           // не потрібно було вручну "перещолкувати" поле здоров'я.
-          await updateTokenHealth(hp, tempHp);
+          await updateTokenHealth(combatValues.hp, combatValues.tempHp);
+          await updateTokenAC(combatValues.ac);
         }
     }, 4000);
 
