@@ -536,27 +536,5 @@
   </div>
   
   <script src="main.js" type="module"></script>
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      const helpIcon = document.querySelector('.help-block i');
-      const mainContent = document.getElementById('mainContent');
-      const closeModal = document.querySelector('.close-modal');
-      const modal = document.getElementById('characterInfoModal');
-      function closeHelp() {
-        if (mainContent) mainContent.classList.remove('darken-bg');
-      }
-      if (helpIcon && mainContent) {
-        helpIcon.addEventListener('click', function() {
-          mainContent.classList.add('darken-bg');
-        });
-      }
-      if (closeModal) {
-        closeModal.addEventListener('click', closeHelp);
-      }
-      document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') closeHelp();
-      });
-    });
-  </script>
 </body>
 </html>

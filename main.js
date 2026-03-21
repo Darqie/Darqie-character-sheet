@@ -1,4 +1,303 @@
 import OBR, { buildImage, buildLabel } from '@owlbear-rodeo/sdk';
+import { createClient } from '@supabase/supabase-js';
+
+// === SUPABASE ===
+const SUPABASE_URL = 'https://yoaazfbttqfanxackrvv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlvYWF6ZmJ0dHFmYW54YWNrcnZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwOTYwMDIsImV4cCI6MjA4OTY3MjAwMn0.NnU7pE9CsVKduI6ZPUmoTql1Vxxw4YFcbXRvJiOUu8E';
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const MODAL_FIELDS = [
+  'characterClassLevel',
+  'characterRace',
+  'background',
+  'alignment',
+  'appearance',
+  'languages',
+  'bonds',
+  'personalityTraits',
+  'features',
+  'notes',
+];
+
+const MODAL_FIELD_TO_ID = {
+  characterClassLevel: 'modalCharacterClass',
+  characterRace: 'modalCharacterRace',
+  background: 'modalBackground',
+  alignment: 'modalAlignment',
+  appearance: 'modalAppearance',
+  languages: 'modalLanguages',
+  bonds: 'modalBonds',
+  personalityTraits: 'modalPersonalityTraits',
+  features: 'modalFeatures',
+  notes: 'modalNotes',
+};
+
+const MODAL_FIELD_TO_DB = {
+  characterClassLevel: 'character_class_level',
+  characterRace: 'character_race',
+  background: 'background',
+  alignment: 'alignment',
+  appearance: 'appearance',
+  languages: 'languages',
+  bonds: 'bonds',
+  personalityTraits: 'personality_traits',
+  features: 'features',
+  notes: 'notes',
+};
+
+const OFFLOADED_SHEET_FIELD_TO_DB = {
+  strengthScore: 'strength_score',
+  dexterityScore: 'dexterity_score',
+  constitutionScore: 'constitution_score',
+  intelligenceScore: 'intelligence_score',
+  wisdomScore: 'wisdom_score',
+  charismaScore: 'charisma_score',
+  armorClass: 'armor_class',
+  healthPoints: 'health_points',
+  speed: 'speed',
+  initiative: 'initiative',
+  maxHealthPoints: 'max_health_points',
+  healing: 'healing',
+  maxWeight: 'max_weight',
+  currentWeight: 'current_weight',
+  weaponTitle: 'weapon_title',
+  inventoryTitle: 'inventory_title',
+  equipmentTitle: 'equipment_title',
+};
+
+const OFFLOADED_JSON_FIELD_TO_DB = {
+  weapons: 'weapons_json',
+  skills: 'skills_json',
+  inventory: 'inventory_json',
+  equipment: 'equipment_json',
+};
+
+function getModalInfoFromSheet(sheet) {
+  const info = {};
+  MODAL_FIELDS.forEach((key) => {
+    info[key] = sheet?.[key] || '';
+  });
+  return info;
+}
+
+function applyModalInfoToSheet(sheet, modalInfo) {
+  if (!sheet || !modalInfo) return;
+  MODAL_FIELDS.forEach((key) => {
+    if (typeof modalInfo[key] === 'string') {
+      sheet[key] = modalInfo[key];
+    }
+  });
+}
+
+function applyModalInfoToInputs(modalInfo) {
+  if (!modalInfo) return;
+  MODAL_FIELDS.forEach((key) => {
+    const inputId = MODAL_FIELD_TO_ID[key];
+    const el = document.getElementById(inputId);
+    if (el && typeof modalInfo[key] === 'string') {
+      el.value = modalInfo[key];
+      el.style.height = 'auto';
+      el.style.height = el.scrollHeight + 'px';
+    }
+  });
+}
+
+function stripModalFieldsForRoomMetadata(sheet) {
+  if (!sheet) return sheet;
+  const roomSheet = { ...sheet };
+  MODAL_FIELDS.forEach((key) => {
+    delete roomSheet[key];
+  });
+
+  Object.keys(OFFLOADED_SHEET_FIELD_TO_DB).forEach((key) => {
+    delete roomSheet[key];
+  });
+
+  Object.keys(OFFLOADED_JSON_FIELD_TO_DB).forEach((key) => {
+    delete roomSheet[key];
+  });
+
+  delete roomSheet.coins;
+  return roomSheet;
+}
+
+function normalizeSheetsForRoomComparison(sheets) {
+  return (Array.isArray(sheets) ? sheets : []).map((sheet) => stripModalFieldsForRoomMetadata(sheet));
+}
+
+function areSheetsEqualForRoomComparison(leftSheets, rightSheets) {
+  return JSON.stringify(normalizeSheetsForRoomComparison(leftSheets)) === JSON.stringify(normalizeSheetsForRoomComparison(rightSheets));
+}
+
+function isAnyEditingActive() {
+  const modal = document.getElementById('characterInfoModal');
+  const modalTextEditing = !!modal?.querySelector('textarea:not([readonly])');
+  return weaponEditing || skillEditing || editingInv || editingEquip || isSaving || modalTextEditing;
+}
+
+function toSupabaseModalRow(modalInfo) {
+  const row = {};
+  MODAL_FIELDS.forEach((key) => {
+    row[MODAL_FIELD_TO_DB[key]] = modalInfo?.[key] || '';
+  });
+  return row;
+}
+
+function fromSupabaseModalRow(row) {
+  if (!row) return null;
+  const modalInfo = {};
+  MODAL_FIELDS.forEach((key) => {
+    const dbCol = MODAL_FIELD_TO_DB[key];
+    if (typeof row[dbCol] === 'string') {
+      modalInfo[key] = row[dbCol];
+    }
+  });
+  return modalInfo;
+}
+
+function buildOffloadedSupabaseRowFromSheet(sheet) {
+  const row = {};
+
+  Object.entries(OFFLOADED_SHEET_FIELD_TO_DB).forEach(([sheetField, dbCol]) => {
+    row[dbCol] = sheet?.[sheetField] ?? '';
+  });
+
+  Object.entries(OFFLOADED_JSON_FIELD_TO_DB).forEach(([sheetField, dbCol]) => {
+    row[dbCol] = Array.isArray(sheet?.[sheetField])
+      ? JSON.parse(JSON.stringify(sheet[sheetField]))
+      : [];
+  });
+
+  const coins = sheet?.coins || { sen: 0, gin: 0, kin: 0 };
+  row.coins_sen = parseInt(coins.sen, 10) || 0;
+  row.coins_gin = parseInt(coins.gin, 10) || 0;
+  row.coins_kin = parseInt(coins.kin, 10) || 0;
+
+  return row;
+}
+
+function applyOffloadedSupabaseRowToSheet(sheet, row) {
+  if (!sheet || !row) return;
+
+  Object.entries(OFFLOADED_SHEET_FIELD_TO_DB).forEach(([sheetField, dbCol]) => {
+    if (row[dbCol] !== null && row[dbCol] !== undefined) {
+      sheet[sheetField] = String(row[dbCol]);
+    }
+  });
+
+  Object.entries(OFFLOADED_JSON_FIELD_TO_DB).forEach(([sheetField, dbCol]) => {
+    if (Array.isArray(row[dbCol])) {
+      sheet[sheetField] = JSON.parse(JSON.stringify(row[dbCol]));
+    }
+  });
+
+  if (row.coins_sen !== null || row.coins_gin !== null || row.coins_kin !== null) {
+    sheet.coins = {
+      sen: parseInt(row.coins_sen, 10) || 0,
+      gin: parseInt(row.coins_gin, 10) || 0,
+      kin: parseInt(row.coins_kin, 10) || 0,
+    };
+  }
+}
+
+// Зберегти всі поля модалки у Supabase (кожне поле у своїй колонці)
+async function saveModalInfoToSupabase(roomId, playerName, characterName, modalInfo) {
+  if (!roomId || !characterName) return;
+
+  const modalRow = toSupabaseModalRow(modalInfo);
+
+  try {
+    const sheet = characterSheets[activeSheetIndex];
+    const offloadedRow = buildOffloadedSupabaseRowFromSheet(sheet);
+    const { error } = await supabase
+      .from('character_sheets')
+      .upsert(
+        {
+          room_id: roomId,
+          player_name: playerName,
+          character_name: characterName,
+          ...modalRow,
+          ...offloadedRow,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'room_id,character_name' }
+      );
+    if (error) console.error('[Supabase] Помилка збереження інформації модалки:', error);
+  } catch (e) {
+    console.error('[Supabase] CSP або мережева помилка:', e);
+  }
+}
+
+// Отримати всі поля модалки із Supabase
+async function loadModalInfoFromSupabase(roomId, characterName) {
+  if (!roomId || !characterName) return null;
+
+  try {
+    const modalColumns = MODAL_FIELDS.map((key) => MODAL_FIELD_TO_DB[key]);
+    const scalarColumns = Object.values(OFFLOADED_SHEET_FIELD_TO_DB);
+    const jsonColumns = Object.values(OFFLOADED_JSON_FIELD_TO_DB);
+    const allColumns = [...new Set([...modalColumns, ...scalarColumns, ...jsonColumns, 'coins_sen', 'coins_gin', 'coins_kin'])].join(',');
+    const { data, error } = await supabase
+      .from('character_sheets')
+      .select(allColumns)
+      .eq('room_id', roomId)
+      .eq('character_name', characterName)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('[Supabase] Помилка читання інформації модалки:', error);
+      return null;
+    }
+
+    const rowInfo = fromSupabaseModalRow(data);
+    if (characterSheets[activeSheetIndex]) {
+      applyOffloadedSupabaseRowToSheet(characterSheets[activeSheetIndex], data);
+    }
+    if (rowInfo && MODAL_FIELDS.some((key) => typeof rowInfo[key] === 'string' && rowInfo[key] !== '')) {
+      return rowInfo;
+    }
+
+    // Backward compatibility: старий формат, коли JSON лежав в колонці appearance
+    if (typeof data?.appearance === 'string' && data.appearance) {
+      try {
+        const parsed = JSON.parse(data.appearance);
+        if (parsed && parsed.modalInfo && typeof parsed.modalInfo === 'object') {
+          return parsed.modalInfo;
+        }
+      } catch (_) {
+        return { appearance: data.appearance };
+      }
+    }
+
+    return null;
+  } catch (e) {
+    console.error('[Supabase] CSP або мережева помилка:', e);
+    return null;
+  }
+}
+
+async function saveActiveCharacterModalInfoToSupabase() {
+  const sheet = characterSheets[activeSheetIndex];
+  if (!sheet) return;
+
+  const modalInfo = getModalInfoFromSheet(sheet);
+  await saveModalInfoToSupabase(
+    OBR.room.id,
+    sheet.playerName || '',
+    sheet.characterName || '',
+    modalInfo
+  );
+}
+
+async function hydrateActiveCharacterFromSupabase() {
+  const sheet = characterSheets[activeSheetIndex];
+  if (!sheet || !sheet.characterName) return;
+
+  const modalInfo = await loadModalInfoFromSupabase(OBR.room.id, sheet.characterName || '');
+  if (modalInfo) {
+    applyModalInfoToSheet(sheet, modalInfo);
+  }
+}
 
 // === КОНСТАНТИ ===
 const DARQIE_SHEETS_KEY = 'darqie.characterSheets';
@@ -20,6 +319,7 @@ let editingEquip = false;
 let lastRollRequestTime = 0;
 let isSaving = false;
 let saveQueue = [];
+let modalClickTimeout;
 
 // Ініціалізуємо глобальні змінні
 window.weaponEditing = false;
@@ -376,12 +676,15 @@ async function saveSheetData() {
   if (equipmentLabel && sheet.equipmentTitle) equipmentLabel.textContent = sheet.equipmentTitle;
 
   try {
+    await saveActiveCharacterModalInfoToSupabase();
+
     // Отримуємо СВІЖІ метадані перед збереженням
     const currentMetadata = await OBR.room.getMetadata();
     const currentSheets = currentMetadata[DARQIE_SHEETS_KEY] || [];
     
-    // ВАЖЛИВО: Оновлюємо ТІЛЬКИ наш лист персонажа, не чіпаючи інші
-    currentSheets[activeSheetIndex] = { ...sheet };
+    // ВАЖЛИВО: модальні поля з довгим текстом зберігаються в Supabase,
+    // тому прибираємо їх з room metadata, щоб не впиратися в ліміт 16 КБ.
+    currentSheets[activeSheetIndex] = stripModalFieldsForRoomMetadata(sheet);
     
     // Зберігаємо оновлені дані
     await OBR.room.setMetadata({ 
@@ -391,6 +694,11 @@ async function saveSheetData() {
 
     // Оновлюємо локальні дані
     characterSheets = currentSheets;
+
+    // Якщо власник листа змінився (включно з очищенням) — передаємо токен новому власнику
+    if (isGM && sheet.playerName !== previousPlayerName) {
+      await syncCharacterTokenOwner(sheet, previousPlayerName);
+    }
 
     // Повідомлення про призначення персонажа
     if (isGM && sheet.playerName && sheet.playerName !== previousPlayerName) {
@@ -578,6 +886,7 @@ async function updateCharacterDropdown() {
 
   characterSelect.value = activeSheetIndex;
 
+  await hydrateActiveCharacterFromSupabase();
   loadSheetData();
   populatePlayerSelect();
 }
@@ -728,8 +1037,9 @@ function connectInputsToSave() {
   // Підключення вибору персонажа
   const characterSelect = document.getElementById('characterSelect');
   if (characterSelect) {
-    characterSelect.addEventListener('change', () => {
+    characterSelect.addEventListener('change', async () => {
       activeSheetIndex = parseInt(characterSelect.value, 10);
+      await hydrateActiveCharacterFromSupabase();
       loadSheetData();
       populatePlayerSelect();
     });
@@ -913,7 +1223,10 @@ async function updateTokenAC(newAC) {
   try {
     const currentSheet = characterSheets[activeSheetIndex];
     if (!currentSheet) return;
-    
+
+    const sceneReady = await OBR.scene.isReady();
+    if (!sceneReady) return;
+
     // Шукаємо іконку класу броні поточного персонажа
     const allItems = await OBR.scene.items.getItems();
     const acBadge = allItems.find(item => 
@@ -929,8 +1242,6 @@ async function updateTokenAC(newAC) {
           item.text.plainText = `🛡${newAC}`;
         });
       });
-      
-      console.log('Іконка класу броні оновлена:', newAC);
     }
     
     // Також оновлюємо AC в метаданих токена
@@ -955,6 +1266,145 @@ async function updateTokenAC(newAC) {
   } catch (error) {
     console.error('Помилка при оновленні іконки класу броні:', error);
   }
+}
+
+async function getOwnerUserIdByPlayerName(playerName) {
+  const players = await OBR.party.getPlayers();
+
+  if (playerName) {
+    const owner = players.find((p) => p.name === playerName);
+    if (owner) return owner.id;
+  }
+
+  // Якщо власник не заданий/не знайдений — fallback до GM.
+  // У деяких кімнатах GM може не потрапляти в OBR.party.getPlayers(),
+  // тому додатково перевіряємо поточного користувача.
+  const gmFromParty = players.find((p) => p.role === 'GM');
+  if (gmFromParty) return gmFromParty.id;
+
+  const myRole = await OBR.player.getRole();
+  if (myRole === 'GM') {
+    const myId = await OBR.player.getId();
+    return myId;
+  }
+
+  return null;
+}
+
+async function syncCharacterTokenOwner(sheet, previousPlayerName = null) {
+  try {
+    if (!sheet?.characterName) return;
+
+    const ownerUserId = await getOwnerUserIdByPlayerName(sheet.playerName);
+    if (!ownerUserId) return;
+
+    const allItems = await OBR.scene.items.getItems();
+    const characterToken = allItems.find((item) =>
+      item.layer === 'CHARACTER' &&
+      item.metadata?.characterSheet?.characterName === sheet.characterName &&
+      item.metadata?.characterSheet
+    );
+
+    if (!characterToken) return;
+
+    await OBR.scene.items.updateItems([characterToken.id], (items) => {
+      items.forEach((item) => {
+        item.createdUserId = ownerUserId;
+        if (item.metadata?.characterSheet) {
+          item.metadata.characterSheet.playerName = sheet.playerName || '';
+          item.metadata.characterSheet.ownerUserId = ownerUserId;
+        }
+      });
+    });
+
+    // Перевіряємо, чи платформа реально прийняла зміну власника.
+    // Якщо ні — виконуємо перевипуск токена з новим createdUserId.
+    const refreshedItems = await OBR.scene.items.getItems();
+    const updatedToken = refreshedItems.find((i) => i.id === characterToken.id);
+    if (updatedToken && updatedToken.createdUserId !== ownerUserId) {
+      await recreateCharacterTokenWithOwner(characterToken, sheet, ownerUserId);
+      return;
+    }
+
+    const attachments = await OBR.scene.items.getItemAttachments([characterToken.id]);
+    const badgeIds = attachments
+      .filter((item) => item.metadata?.healthBadge === true || item.metadata?.acBadge === true)
+      .map((item) => item.id);
+
+    if (badgeIds.length > 0) {
+      await OBR.scene.items.updateItems(badgeIds, (items) => {
+        items.forEach((item) => {
+          item.createdUserId = ownerUserId;
+          if (item.metadata) {
+            item.metadata.playerName = sheet.playerName || '';
+          }
+        });
+      });
+    }
+  } catch (error) {
+    console.error('Помилка при синхронізації власника токена:', error);
+  }
+}
+
+async function recreateCharacterTokenWithOwner(characterToken, sheet, ownerUserId) {
+  const attachments = await OBR.scene.items.getItemAttachments([characterToken.id]);
+  const badgeItems = attachments.filter((item) => item.metadata?.healthBadge === true || item.metadata?.acBadge === true);
+
+  let tokenBuilder = buildImage(characterToken.image, characterToken.grid)
+    .position(characterToken.position)
+    .rotation(characterToken.rotation)
+    .scale(characterToken.scale)
+    .visible(characterToken.visible)
+    .locked(characterToken.locked)
+    .zIndex(characterToken.zIndex)
+    .layer(characterToken.layer)
+    .name(characterToken.name)
+    .text(characterToken.text)
+    .textItemType(characterToken.textItemType)
+    .metadata({
+      ...characterToken.metadata,
+      characterSheet: {
+        ...(characterToken.metadata?.characterSheet || {}),
+        playerName: sheet.playerName || '',
+        ownerUserId: ownerUserId,
+      },
+    })
+    .createdUserId(ownerUserId);
+
+  if (characterToken.disableHit) tokenBuilder = tokenBuilder.disableHit(true);
+  if (characterToken.disableAutoZIndex) tokenBuilder = tokenBuilder.disableAutoZIndex(true);
+
+  const newToken = tokenBuilder.build();
+  await OBR.scene.items.addItems([newToken]);
+
+  const newBadges = badgeItems.map((badge) => {
+    let badgeBuilder = buildLabel()
+      .position(badge.position)
+      .rotation(badge.rotation)
+      .scale(badge.scale)
+      .visible(badge.visible)
+      .locked(badge.locked)
+      .zIndex(badge.zIndex)
+      .layer('ATTACHMENT')
+      .attachedTo(newToken.id)
+      .name(badge.name)
+      .text(badge.text)
+      .style(badge.style)
+      .metadata({
+        ...badge.metadata,
+        playerName: sheet.playerName || '',
+      })
+      .createdUserId(ownerUserId);
+
+    if (badge.disableHit) badgeBuilder = badgeBuilder.disableHit(true);
+    return badgeBuilder.build();
+  });
+
+  if (newBadges.length > 0) {
+    await OBR.scene.items.addItems(newBadges);
+  }
+
+  await OBR.scene.items.deleteItems([characterToken.id, ...badgeItems.map((i) => i.id)]);
 }
 
 
@@ -1119,11 +1569,12 @@ function setupCharacterButtons() {
         const allItems = await OBR.scene.items.getItems();
         const existingToken = allItems.find(item => 
           item.layer === 'CHARACTER' && 
-          item.metadata?.characterSheet?.characterName === currentSheet.characterName &&
-          item.metadata?.characterSheet?.playerName === currentSheet.playerName
+          item.metadata?.characterSheet?.characterName === currentSheet.characterName
         );
 
         if (existingToken) {
+          // Якщо токен вже існує, синхронізуємо його власника з поточним листом
+          await syncCharacterTokenOwner(currentSheet);
           // Якщо токен вже існує, фокусуємо камеру на ньому
           const bounds = await OBR.scene.items.getItemBounds([existingToken.id]);
           await OBR.viewport.animateToBounds(bounds);
@@ -1131,18 +1582,8 @@ function setupCharacterButtons() {
           return;
         }
 
-        // Отримуємо ID власника персонажа (гравця)
-        const playerName = currentSheet.playerName;
-        let ownerUserId = null;
-        
-        if (playerName) {
-          // Шукаємо гравця за ім'ям у списку учасників кімнати
-          const players = await OBR.party.getPlayers();
-          const owner = players.find(p => p.name === playerName);
-          if (owner) {
-            ownerUserId = owner.id;
-          }
-        }
+        // Отримуємо ID власника персонажа (якщо не задано — буде GM)
+        const ownerUserId = await getOwnerUserIdByPlayerName(currentSheet.playerName);
 
         // Отримуємо центр поточного viewport
         const width = await OBR.viewport.getWidth();
@@ -1156,7 +1597,7 @@ function setupCharacterButtons() {
         const imageUrl = window.location.origin + '/character-token-placeholder.png';
 
         // Створюємо токен персонажа (займає 1 клітинку на карті)
-        let tokenItem = buildImage(
+        let tokenBuilder = buildImage(
           {
             height: 128,
             width: 128,
@@ -1188,13 +1629,13 @@ function setupCharacterButtons() {
               armorClass: currentSheet.armorClass,
               ownerUserId: ownerUserId
             }
-          })
-          .build();
-        
-        // Якщо знайшли власника персонажа, встановлюємо createdUserId ПЕРЕД додаванням на сцену
+          });
+
         if (ownerUserId) {
-          tokenItem.createdUserId = ownerUserId;
+          tokenBuilder = tokenBuilder.createdUserId(ownerUserId);
         }
+
+        const tokenItem = tokenBuilder.build();
         
         // Додаємо токен на сцену спочатку, щоб отримати його bounds
         await OBR.scene.items.addItems([tokenItem]);
@@ -1211,7 +1652,7 @@ function setupCharacterButtons() {
           : `♥${currentSheet.healthPoints || 0}`;
         console.log('Текст на токені:', healthText);
         
-        const healthBadge = buildLabel()
+        let healthBadgeBuilder = buildLabel()
           .position({ 
             x: tokenBounds.max.x - 10,  // Справа, трохи зміщено вліво від краю
             y: tokenBounds.min.y + 10   // Зверху, трохи зміщено вниз від краю
@@ -1224,11 +1665,10 @@ function setupCharacterButtons() {
             healthBadge: true,
             characterName: currentSheet.characterName,
             playerName: currentSheet.playerName
-          })
-          .build();
+          });
 
         // Створюємо іконку класу броні (attachment) - зліва зверху токена
-        const acBadge = buildLabel()
+        let acBadgeBuilder = buildLabel()
           .position({ 
             x: tokenBounds.min.x + 10,  // Зліва, трохи зміщено вправо від краю
             y: tokenBounds.min.y + 10   // Зверху, трохи зміщено вниз від краю
@@ -1241,14 +1681,15 @@ function setupCharacterButtons() {
             acBadge: true,
             characterName: currentSheet.characterName,
             playerName: currentSheet.playerName
-          })
-          .build();
+          });
 
-        // Якщо знайшли власника персонажа, встановлюємо createdUserId для іконок
         if (ownerUserId) {
-          healthBadge.createdUserId = ownerUserId;
-          acBadge.createdUserId = ownerUserId;
+          healthBadgeBuilder = healthBadgeBuilder.createdUserId(ownerUserId);
+          acBadgeBuilder = acBadgeBuilder.createdUserId(ownerUserId);
         }
+
+        const healthBadge = healthBadgeBuilder.build();
+        const acBadge = acBadgeBuilder.build();
 
         // Додаємо іконки здоров'я та класу броні на сцену
         await OBR.scene.items.addItems([healthBadge, acBadge]);
@@ -1604,7 +2045,7 @@ async function checkCharacterAndRedirect() {
                 if (waitingBlock) waitingBlock.style.display = 'none';
                 if (mainContent) mainContent.style.display = 'flex';
                 // Оновлюємо дані тільки якщо вони змінились
-                if (JSON.stringify(characterSheets) !== JSON.stringify(sheets)) {
+                if (!isAnyEditingActive() && !areSheetsEqualForRoomComparison(characterSheets, sheets)) {
                     characterSheets = sheets;
                     await updateCharacterDropdown();
                 }
@@ -1616,7 +2057,7 @@ async function checkCharacterAndRedirect() {
             if (waitingBlock) waitingBlock.style.display = 'none';
             if (mainContent) mainContent.style.display = 'flex';
             // Для ГМ також оновлюємо тільки при зміні
-            if (JSON.stringify(characterSheets) !== JSON.stringify(sheets)) {
+            if (!isAnyEditingActive() && !areSheetsEqualForRoomComparison(characterSheets, sheets)) {
                 characterSheets = sheets;
                 await updateCharacterDropdown();
             }
@@ -1666,7 +2107,7 @@ function setupInterface() {
 
     // Додаємо підписку на зміни метаданих
     OBR.room.onMetadataChange(async (metadata) => {
-        if (weaponEditing || skillEditing || isSaving) return;
+      if (isAnyEditingActive()) return;
         
         const sheets = metadata[DARQIE_SHEETS_KEY] || [];
         
@@ -1674,7 +2115,7 @@ function setupInterface() {
         if (sheets.length > 0) {
             const hasChanges = sheets.some((sheet, index) => {
                 if (index === activeSheetIndex) return false; // Не чіпаємо активний
-                return JSON.stringify(characterSheets[index]) !== JSON.stringify(sheet);
+              return !areSheetsEqualForRoomComparison([characterSheets[index]], [sheet]);
             });
             
             if (hasChanges) {
@@ -1717,6 +2158,27 @@ function setupInterface() {
       setupModifierButtons();
     }, 100);
 }
+
+// === ІНІЦІАЛІЗАЦІЯ HELP-БЛОКУ ===
+document.addEventListener('DOMContentLoaded', function() {
+  const helpIcon = document.querySelector('.help-block i');
+  const mainContent = document.getElementById('mainContent');
+  const closeModal = document.querySelector('.close-modal');
+  function closeHelp() {
+    if (mainContent) mainContent.classList.remove('darken-bg');
+  }
+  if (helpIcon && mainContent) {
+    helpIcon.addEventListener('click', function() {
+      mainContent.classList.add('darken-bg');
+    });
+  }
+  if (closeModal) {
+    closeModal.addEventListener('click', closeHelp);
+  }
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeHelp();
+  });
+});
 
 // === ІНІЦІАЛІЗАЦІЯ ===
 OBR.onReady(async () => {
@@ -1805,6 +2267,17 @@ async function openCharacterInfoModal() {
     updateModalInfo(currentCharacter);
     modal.style.display = 'block';
     document.body.style.overflow = 'hidden';
+    // Завантажуємо всі поля модалки із Supabase (може бути новіша версія)
+    const modalInfoFromDb = await loadModalInfoFromSupabase(
+      OBR.room.id,
+      currentCharacter.characterName || ''
+    );
+    if (modalInfoFromDb) {
+      if (characterSheets[activeSheetIndex]) {
+        applyModalInfoToSheet(characterSheets[activeSheetIndex], modalInfoFromDb);
+      }
+      applyModalInfoToInputs(modalInfoFromDb);
+    }
   } else {
     // Якщо персонаж не вибраний, показуємо повідомлення
     const modalBody = document.querySelector('.modal-body');
@@ -1847,6 +2320,7 @@ function closeCharacterInfoModal() {
     characterSheets[activeSheetIndex].personalityTraits = document.getElementById('modalPersonalityTraits')?.value || '';
     characterSheets[activeSheetIndex].features = document.getElementById('modalFeatures')?.value || '';
     characterSheets[activeSheetIndex].notes = document.getElementById('modalNotes')?.value || '';
+    saveActiveCharacterModalInfoToSupabase();
   }
   if (typeof debouncedSaveSheetData === 'function') debouncedSaveSheetData();
 }
@@ -1867,7 +2341,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // console.log("📋 [CHARACTER] DOMContentLoaded: Modifier buttons setup completed");
 
   // Закриття модального вікна при кліку поза ним
-  let modalClickTimeout;
   window.addEventListener('click', (event) => {
     if (event.target === modal) {
       // Перевіряємо, чи не відбувається редагування в модальному вікні
@@ -1898,7 +2371,7 @@ document.addEventListener('DOMContentLoaded', () => {
     { field: 'Background', textarea: 'modalBackground', edit: 'editModalBackground', accept: 'acceptModalBackground', cancel: 'cancelModalBackground', mainField: 'background' },
     { field: 'Alignment', textarea: 'modalAlignment', edit: 'editModalAlignment', accept: 'acceptModalAlignment', cancel: 'cancelModalAlignment', mainField: 'alignment' },
     { field: 'Appearance', textarea: 'modalAppearance', edit: 'editModalAppearance', accept: 'acceptModalAppearance', cancel: 'cancelModalAppearance', mainField: 'appearance' },
-    { field: 'Languages', textarea: 'modallanguages', edit: 'editModalLanguages', accept: 'acceptModalLanguages', cancel: 'cancelModalLanguages', mainField: 'languages' },
+    { field: 'Languages', textarea: 'modalLanguages', edit: 'editModalLanguages', accept: 'acceptModalLanguages', cancel: 'cancelModalLanguages', mainField: 'languages' },
     { field: 'Bonds', textarea: 'modalBonds', edit: 'editModalBonds', accept: 'acceptModalBonds', cancel: 'cancelModalBonds', mainField: 'bonds' },
     { field: 'PersonalityTraits', textarea: 'modalPersonalityTraits', edit: 'editModalPersonalityTraits', accept: 'acceptModalPersonalityTraits', cancel: 'cancelModalPersonalityTraits', mainField: 'personalityTraits' },
     { field: 'Features', textarea: 'modalFeatures', edit: 'editModalFeatures', accept: 'acceptModalFeatures', cancel: 'cancelModalFeatures', mainField: 'features' },
@@ -1939,6 +2412,7 @@ document.addEventListener('DOMContentLoaded', () => {
           characterSheets[activeSheetIndex][mainField] = ta.value;
           // Зберігаємо тільки при натисканні кнопки підтвердження
           saveSheetData();
+          saveActiveCharacterModalInfoToSupabase();
         }
       });
     }

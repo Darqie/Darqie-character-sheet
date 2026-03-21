@@ -1,11 +1,11 @@
 import { defineConfig } from 'vite';
+import basicSsl from '@vitejs/plugin-basic-ssl';
 
 export default defineConfig({
-  plugins: [],
+  plugins: [basicSsl()],
   server: {
     port: 5174,
     host: true,
-    https: false, // Вимикаємо HTTPS
     headers: {
       'Access-Control-Allow-Origin': 'https://www.owlbear.rodeo',
       'Access-Control-Allow-Methods': 'GET,HEAD,PUT,PATCH,POST,DELETE',

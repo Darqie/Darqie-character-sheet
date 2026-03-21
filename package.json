@@ -12,7 +12,8 @@
     "@vitejs/plugin-basic-ssl": "^2.0.0",
     "vite": "^6.3.5"
   },
-"dependencies": {
-  "@owlbear-rodeo/sdk": "owlbear-rodeo/sdk#main"
-}
+  "dependencies": {
+    "@owlbear-rodeo/sdk": "owlbear-rodeo/sdk#main",
+    "@supabase/supabase-js": "^2.99.3"
+  }
 }
