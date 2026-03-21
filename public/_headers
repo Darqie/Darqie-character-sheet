@@ -9,3 +9,7 @@
 /no-image-placeholder.svg
   Content-Type: image/svg+xml
   Access-Control-Allow-Origin: *
+
+/character-token-placeholder.png
+  Content-Type: image/png
+  Access-Control-Allow-Origin: *

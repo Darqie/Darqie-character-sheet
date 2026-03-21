@@ -23,7 +23,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   },
 });
 
-const TOKEN_PLACEHOLDER_URL = 'https://darqie.github.io/Darqie-character-sheet/character-token-placeholder.png';
+const TOKEN_PLACEHOLDER_URL = 'https://raw.githubusercontent.com/Darqie/Darqie-character-sheet/main/public/character-token-placeholder.png';
 const SKILL_POPOVER_VERSION = '2026-03-21-2';
 
 function getTokenPlaceholderUrl() {
@@ -3674,6 +3674,12 @@ async function showSkillNotification(skillName, skillDescription, playerName) {
 // Відкриття поповера з навичкою (з іменем ініціатора)
 async function openSkillPopoverFromBroadcast(skillName, skillDescription, initiatorName) {
   try {
+    const role = await OBR.player.getRole();
+    if (role !== 'GM') {
+      await showSkillNotification(skillName, skillDescription, initiatorName || '');
+      return;
+    }
+
     const query = new URLSearchParams({
       name: skillName || '',
       desc: skillDescription || '',
