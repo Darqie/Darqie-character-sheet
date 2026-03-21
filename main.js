@@ -768,8 +768,9 @@ async function saveSheetData() {
       [DARQIE_SHEETS_KEY]: currentSheets 
     });
 
-    // Оновлюємо локальні дані
-    characterSheets = currentSheets;
+    // НЕ робимо characterSheets = currentSheets, бо currentSheets — це стрипована версія
+    // без полів Supabase (MODAL_FIELDS, OFFLOADED_*). Змінна `sheet` вже є прямим
+    // посиланням на characterSheets[activeSheetIndex] і вже оновлена вище.
 
     // Якщо власник листа змінився (включно з очищенням) — передаємо токен новому власнику
     if (isGM && sheet.playerName !== previousPlayerName) {
