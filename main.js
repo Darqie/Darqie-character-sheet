@@ -1291,6 +1291,9 @@ async function updateTokenHealth(newHealth, tempHealth = null) {
   try {
     const currentSheet = characterSheets[activeSheetIndex];
     if (!currentSheet) return;
+
+    const sceneReady = await OBR.scene.isReady();
+    if (!sceneReady) return;
     
     // Якщо tempHealth не передано, беремо з поточного персонажа (поле healing)
     if (tempHealth === null) {
@@ -1302,34 +1305,30 @@ async function updateTokenHealth(newHealth, tempHealth = null) {
       ? `♥${newHealth}(${tempHealth})` 
       : `♥${newHealth}`;
     
-    // Шукаємо іконку здоров'я поточного персонажа
+    // Шукаємо токени поточного персонажа на активній сцені
     const allItems = await OBR.scene.items.getItems();
-    const healthBadge = allItems.find(item => 
-      item.metadata?.healthBadge === true &&
-      item.metadata?.playerName === currentSheet.playerName &&
-      item.layer === 'ATTACHMENT'
-    );
-    
-    if (healthBadge) {
-      // Оновлюємо текст іконки здоров'я
-      await OBR.scene.items.updateItems([healthBadge.id], (items) => {
-        items.forEach(item => {
-          item.text.plainText = healthText;
-        });
-      });
-      
-      console.log('Іконка здоров\'я оновлена:', healthText);
-    }
-    
-    // Також оновлюємо здоров'я в метаданих токена
-    const characterToken = allItems.find(item => 
-      item.metadata?.characterSheet?.playerName === currentSheet.playerName &&
+    const characterTokens = allItems.filter(item => 
       item.layer === 'CHARACTER' &&
-      item.metadata?.characterSheet
+      item.metadata?.characterSheet &&
+      (
+        (currentSheet.characterName && item.metadata?.characterSheet?.characterName === currentSheet.characterName) ||
+        (currentSheet.playerName && item.metadata?.characterSheet?.playerName === currentSheet.playerName)
+      )
     );
-    
-    if (characterToken) {
-      await OBR.scene.items.updateItems([characterToken.id], (items) => {
+
+    if (characterTokens.length > 0) {
+      const tokenIdsToUpdate = characterTokens
+        .filter((token) => {
+          const tokenHp = parseInt(token.metadata?.['com.owlbear.token']?.hp, 10) || 0;
+          const sheetHp = parseInt(token.metadata?.characterSheet?.healthPoints, 10) || 0;
+          const sheetTempHp = parseInt(token.metadata?.characterSheet?.healing, 10) || 0;
+          return tokenHp !== newHealth || sheetHp !== newHealth || sheetTempHp !== tempHealth;
+        })
+        .map((token) => token.id);
+
+      // Оновлюємо здоров'я в метаданих токенів персонажа лише коли є розбіжність.
+      if (tokenIdsToUpdate.length > 0) {
+        await OBR.scene.items.updateItems(tokenIdsToUpdate, (items) => {
         items.forEach(item => {
           if (item.metadata?.['com.owlbear.token']) {
             item.metadata['com.owlbear.token'].hp = newHealth;
@@ -1339,7 +1338,79 @@ async function updateTokenHealth(newHealth, tempHealth = null) {
             item.metadata.characterSheet.healing = tempHealth;
           }
         });
+        });
+      }
+
+      const badgeIdsToUpdate = [];
+      const badgesToCreate = [];
+
+      characterTokens.forEach((token) => {
+        const healthBadge = allItems.find((item) =>
+          item.layer === 'ATTACHMENT' &&
+          item.metadata?.healthBadge === true &&
+          item.attachedTo === token.id
+        );
+
+        if (healthBadge) {
+          if (healthBadge.text?.plainText !== healthText) {
+            badgeIdsToUpdate.push(healthBadge.id);
+          }
+          return;
+        }
+
+        badgesToCreate.push(token);
       });
+
+      if (badgeIdsToUpdate.length > 0) {
+        await OBR.scene.items.updateItems(badgeIdsToUpdate, (items) => {
+          items.forEach((item) => {
+            item.text.plainText = healthText;
+          });
+        });
+      }
+
+      if (badgesToCreate.length > 0) {
+        const newHealthBadges = [];
+
+        for (const token of badgesToCreate) {
+          const tokenBounds = await OBR.scene.items.getItemBounds([token.id]);
+          let badgeBuilder = buildLabel()
+            .position({
+              x: tokenBounds.max.x - 10,
+              y: tokenBounds.min.y + 10,
+            })
+            .layer('ATTACHMENT')
+            .attachedTo(token.id)
+            .plainText(healthText)
+            .locked(true)
+            .metadata({
+              healthBadge: true,
+              characterName: currentSheet.characterName,
+              playerName: currentSheet.playerName,
+            });
+
+          if (token.createdUserId) {
+            badgeBuilder = badgeBuilder.createdUserId(token.createdUserId);
+          }
+
+          newHealthBadges.push(badgeBuilder.build());
+        }
+
+        await OBR.scene.items.addItems(newHealthBadges);
+        await OBR.scene.items.updateItems(newHealthBadges.map((b) => b.id), (items) => {
+          items.forEach((item) => {
+            item.scale = { x: 1, y: 1 };
+            item.style.pointerWidth = 0;
+            item.style.pointerHeight = 0;
+            item.style.backgroundColor = '#000000';
+            item.style.backgroundOpacity = 0.5;
+            item.style.cornerRadius = 8;
+            item.locked = true;
+            item.disableHit = true;
+            item.zIndex = 1000;
+          });
+        });
+      }
     }
   } catch (error) {
     console.error('Помилка при оновленні іконки здоров\'я:', error);
@@ -2337,7 +2408,16 @@ OBR.onReady(async () => {
     // Періодична перевірка наявності персонажа
     setInterval(async () => {
         await checkCharacterAndRedirect();
-    }, 1000);
+
+        const activeSheet = characterSheets[activeSheetIndex];
+        if (activeSheet) {
+          const hp = parseInt(activeSheet.healthPoints, 10) || 0;
+          const tempHp = parseInt(activeSheet.healing, 10) || 0;
+          // Ресинк HP на активній сцені, щоб після копіювання токена/зміни сцени
+          // не потрібно було вручну "перещолкувати" поле здоров'я.
+          await updateTokenHealth(hp, tempHp);
+        }
+    }, 2500);
 
     // Глобальний обробник показу поповера навичок від інших гравців
     if (!window.__skillPopoverBroadcastHandler) {
