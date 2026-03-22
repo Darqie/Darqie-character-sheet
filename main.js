@@ -3015,6 +3015,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       }
       setEditingModeInventory(false);
+      // Збереження інвентаря в базу даних
+      const sheetIdx = activeSheetIndex;
+      saveSheetData(sheetIdx);
     });
     cancelBtnInv.addEventListener('click', () => {
       inventoryRows = JSON.parse(JSON.stringify(prevRowsInv));
@@ -3073,6 +3076,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       }
       setEditingModeEquipment(false);
+      // Збереження спорядження в базу даних (також оновлює AC)
+      const sheetIdx = activeSheetIndex;
+      saveSheetData(sheetIdx);
     });
     cancelBtnEquip.addEventListener('click', () => {
       equipmentRows = JSON.parse(JSON.stringify(prevRowsEquip));
