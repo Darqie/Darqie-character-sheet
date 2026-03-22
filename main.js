@@ -1324,6 +1324,25 @@ function connectInputsToSave() {
       setTimeout(() => saveSheetData(sheetIdx), 50);
     });
   }
+
+  // Швидкі характеристики під фото повинні зберігатися одразу при зміні,
+  // включно зі змінами через кнопки +/- які генерують лише input event.
+  [
+    'armorClass',
+    'speed',
+    'health',
+    'initiative',
+    'healthPoints',
+    'maxHealthPoints',
+  ].forEach((inputId) => {
+    const input = document.getElementById(inputId);
+    if (input) {
+      input.addEventListener('input', () => {
+        const sheetIdx = activeSheetIndex;
+        debouncedSaveSheetData(sheetIdx);
+      });
+    }
+  });
 }
 
 // Функція для оновлення імені персонажа в dropdown
