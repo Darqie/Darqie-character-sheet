@@ -625,8 +625,8 @@ function updateMaxWeight() {
       strengthValue = 0;
     }
     
-    // Максимальна вага = 50 + значення сили, але не більше 999
-    const maxWeight = Math.min(50 + strengthValue, 999);
+    // Максимальна вага = 20 + значення сили, але не більше 999
+    const maxWeight = Math.min(20 + strengthValue, 999);
     maxWeightInput.value = maxWeight;
   }
 }
