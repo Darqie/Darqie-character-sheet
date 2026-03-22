@@ -742,20 +742,21 @@ function updateCurrentWeight() {
 // === РОБОТА З ДАНИМИ ===
 const debouncedSaveSheetData = debounce(saveSheetData, DEBOUNCE_DELAY);
 
-async function saveSheetData() {
-  if (characterSheets.length === 0) return;
+async function saveSheetData(targetSheetIndex = null) {
+  const sheetIndexToSave = targetSheetIndex ?? activeSheetIndex;
+  if (characterSheets.length === 0 || sheetIndexToSave < 0 || sheetIndexToSave >= characterSheets.length) return;
   
   // Якщо вже зберігаємо, додаємо в чергу
   if (isSaving) {
-    if (!saveQueue.includes(activeSheetIndex)) {
-      saveQueue.push(activeSheetIndex);
+    if (!saveQueue.includes(sheetIndexToSave)) {
+      saveQueue.push(sheetIndexToSave);
     }
     return;
   }
   
   isSaving = true;
 
-  const sheet = characterSheets[activeSheetIndex];
+  const sheet = characterSheets[sheetIndexToSave];
   const elements = getSheetInputElements();
   const previousPlayerName = sheet.playerName;
 
@@ -857,7 +858,7 @@ async function saveSheetData() {
     
     // ВАЖЛИВО: модальні поля з довгим текстом зберігаються в Supabase,
     // тому прибираємо їх з room metadata, щоб не впиратися в ліміт 16 КБ.
-    currentSheets[activeSheetIndex] = stripModalFieldsForRoomMetadata(sheet);
+    currentSheets[sheetIndexToSave] = stripModalFieldsForRoomMetadata(sheet);
     
     // Зберігаємо оновлені дані
     await OBR.room.setMetadata({ 
@@ -892,9 +893,9 @@ async function saveSheetData() {
     // Обробляємо чергу збережень
     if (saveQueue.length > 0) {
       const nextIndex = saveQueue.shift();
-      if (nextIndex === activeSheetIndex) {
-        // Якщо в черзі той самий персонаж, зберігаємо ще раз
-        setTimeout(() => saveSheetData(), 100);
+      if (nextIndex >= 0 && nextIndex < characterSheets.length) {
+        // Якщо в черзі той самий персонаж або інший, зберігаємо з правильним індексом
+        setTimeout(() => saveSheetData(nextIndex), 100);
       }
     }
   }
@@ -1119,11 +1120,13 @@ function connectInputsToSave() {
   Object.values(elements).forEach(el => {
     if (el) {
       el.addEventListener('blur', () => {
-        setTimeout(() => saveSheetData(), 50);
+        const sheetIdx = activeSheetIndex;
+        setTimeout(() => saveSheetData(sheetIdx), 50);
       });
       el.addEventListener('keyup', (e) => {
         if (e.key === 'Enter') {
-          saveSheetData();
+          const sheetIdx = activeSheetIndex;
+          saveSheetData(sheetIdx);
         }
       });
     }
@@ -1186,15 +1189,18 @@ function connectInputsToSave() {
         }
       });
       input.addEventListener('blur', () => {
-      });
-      input.addEventListener('blur', () => {
-        setTimeout(() => saveSheetData(), 50);
+        const sheetIdx = activeSheetIndex;
+        setTimeout(() => saveSheetData(sheetIdx), 50);
       });
       input.addEventListener('change', () => {
-        saveSheetData();
+        const sheetIdx = activeSheetIndex;
+        saveSheetData(sheetIdx);
       });
       input.addEventListener('keyup', (e) => {
-        if (e.key === 'Enter') saveSheetData();
+        if (e.key === 'Enter') {
+          const sheetIdx = activeSheetIndex;
+          saveSheetData(sheetIdx);
+        }
       });
     }
   });
@@ -1205,7 +1211,8 @@ function connectInputsToSave() {
    'inspirationCheckbox', 'advantageCheckbox', 'disadvantageCheckbox'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', function() {
-      debouncedSaveSheetData();
+      const sheetIdx = activeSheetIndex;
+      debouncedSaveSheetData(sheetIdx);
       if (id.startsWith('deathSavesFailure')) updateDeathOverlay();
     });
   });
@@ -1214,6 +1221,12 @@ function connectInputsToSave() {
   const characterSelect = document.getElementById('characterSelect');
   if (characterSelect) {
     characterSelect.addEventListener('change', async () => {
+      // Силу зберегти попередній символ перед переключенням
+      const previousIndex = activeSheetIndex;
+      if (previousIndex >= 0 && previousIndex < characterSheets.length) {
+        await saveSheetData(previousIndex);
+      }
+      
       activeSheetIndex = parseInt(characterSelect.value, 10);
       await hydrateActiveCharacterFromSupabase();
       loadSheetData();
@@ -1236,13 +1249,25 @@ function connectInputsToSave() {
   const armorClassInput = document.getElementById('armorClass');
 
   if (speedInput) {
-    speedInput.addEventListener('blur', updateSpeed);
+    speedInput.addEventListener('blur', () => {
+      const sheetIdx = activeSheetIndex;
+      updateSpeed();
+      setTimeout(() => saveSheetData(sheetIdx), 50);
+    });
   }
   if (maxHealthInput) {
-    maxHealthInput.addEventListener('blur', updateMaxHealth);
+    maxHealthInput.addEventListener('blur', () => {
+      const sheetIdx = activeSheetIndex;
+      updateMaxHealth();
+      setTimeout(() => saveSheetData(sheetIdx), 50);
+    });
   }
   if (armorClassInput) {
-    armorClassInput.addEventListener('blur', updateArmorClass);
+    armorClassInput.addEventListener('blur', () => {
+      const sheetIdx = activeSheetIndex;
+      updateArmorClass();
+      setTimeout(() => saveSheetData(sheetIdx), 50);
+    });
     // Також додаємо оновлення іконки AC на токені
     armorClassInput.addEventListener('input', () => {
       const newAC = parseInt(armorClassInput.value) || 10;
@@ -2106,7 +2131,8 @@ function setupPhotoButtons() {
 
         if (characterSheets[activeSheetIndex]) {
           characterSheets[activeSheetIndex].characterPhoto = imageUrl;
-          await saveSheetData();
+          const sheetIdx = activeSheetIndex;
+          await saveSheetData(sheetIdx);
         }
       } else {
         alert('Помилка при завантаженні фото.');
@@ -2127,7 +2153,8 @@ function setupPhotoButtons() {
       photoImg.style.display = 'none';
       const placeholder = document.getElementById('photoPlaceholder');
       if (placeholder) placeholder.style.display = 'flex';
-      await saveSheetData();
+      const sheetIdx = activeSheetIndex;
+      await saveSheetData(sheetIdx);
     }
   });
 
@@ -2206,7 +2233,8 @@ function setupPhotoButtons() {
         // Зберігаємо URL фото токена в метаданих персонажа
         if (characterSheets[activeSheetIndex]) {
           characterSheets[activeSheetIndex].tokenPhoto = tokenImageUrl;
-          await saveSheetData();
+          const sheetIdx = activeSheetIndex;
+          await saveSheetData(sheetIdx);
         }
 
         alert('Фото токена оновлено!');
@@ -2645,7 +2673,10 @@ function closeCharacterInfoModal() {
     characterSheets[activeSheetIndex].notes = document.getElementById('modalNotes')?.value || '';
     saveActiveCharacterModalInfoToSupabase();
   }
-  if (typeof debouncedSaveSheetData === 'function') debouncedSaveSheetData();
+  if (typeof debouncedSaveSheetData === 'function') {
+    const sheetIdx = activeSheetIndex;
+    debouncedSaveSheetData(sheetIdx);
+  }
 }
 
 // Додаємо обробники подій для модального вікна
@@ -2734,7 +2765,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (characterSheets[activeSheetIndex]) {
           characterSheets[activeSheetIndex][mainField] = ta.value;
           // Зберігаємо тільки при натисканні кнопки підтвердження
-          saveSheetData();
+          const sheetIdx = activeSheetIndex;
+          saveSheetData(sheetIdx);
           saveActiveCharacterModalInfoToSupabase();
         }
       });
@@ -2811,7 +2843,8 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       if (characterSheets[activeSheetIndex]) {
         characterSheets[activeSheetIndex].weapons = JSON.parse(JSON.stringify(weaponRows));
-        debouncedSaveSheetData();
+        const sheetIdx = activeSheetIndex;
+        debouncedSaveSheetData(sheetIdx);
         updateCurrentWeight();
       }
     }
@@ -2909,7 +2942,8 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       if (characterSheets[activeSheetIndex]) {
         characterSheets[activeSheetIndex].skills = JSON.parse(JSON.stringify(skillRows));
-        debouncedSaveSheetData();
+        const sheetIdx = activeSheetIndex;
+        debouncedSaveSheetData(sheetIdx);
         updateCurrentWeight();
       }
     }
@@ -3348,7 +3382,8 @@ function renderSkillTable(editing = false) {
 function syncSkillsToSheet() {
   if (characterSheets[activeSheetIndex]) {
     characterSheets[activeSheetIndex].skills = JSON.parse(JSON.stringify(skillRows));
-    debouncedSaveSheetData();
+    const sheetIdx = activeSheetIndex;
+    debouncedSaveSheetData(sheetIdx);
   }
 }
 
@@ -3394,7 +3429,8 @@ function renderInventoryTable(editing = false) {
     inputName.addEventListener('input', (e) => {
       inventoryRows[idx].name = e.target.value;
       if (!editingInv) {
-        debouncedSaveSheetData();
+        const sheetIdx = activeSheetIndex;
+        debouncedSaveSheetData(sheetIdx);
       }
       updateCurrentWeight();
     });
@@ -3410,7 +3446,8 @@ function renderInventoryTable(editing = false) {
     inputCount.addEventListener('input', (e) => {
       inventoryRows[idx].count = e.target.value;
       if (!editingInv) {
-        debouncedSaveSheetData();
+        const sheetIdx = activeSheetIndex;
+        debouncedSaveSheetData(sheetIdx);
       }
       updateCurrentWeight();
     });
@@ -3426,7 +3463,8 @@ function renderInventoryTable(editing = false) {
     inputWeight.addEventListener('input', (e) => {
       inventoryRows[idx].weight = e.target.value;
       if (!editingInv) {
-        debouncedSaveSheetData();
+        const sheetIdx = activeSheetIndex;
+        debouncedSaveSheetData(sheetIdx);
       }
       updateCurrentWeight();
     });
@@ -3495,7 +3533,8 @@ function renderEquipmentTable(editing = false) {
     inputName.addEventListener('input', (e) => {
       equipmentRows[idx].name = e.target.value;
       if (!editingEquip) {
-        debouncedSaveSheetData();
+        const sheetIdx = activeSheetIndex;
+        debouncedSaveSheetData(sheetIdx);
       }
       updateCurrentWeight();
       updateArmorClass();
@@ -3512,7 +3551,8 @@ function renderEquipmentTable(editing = false) {
     inputArmor.addEventListener('input', (e) => {
       equipmentRows[idx].armor = e.target.value;
       if (!editingEquip) {
-        debouncedSaveSheetData();
+        const sheetIdx = activeSheetIndex;
+        debouncedSaveSheetData(sheetIdx);
       }
       updateCurrentWeight();
       updateArmorClass();
@@ -3529,7 +3569,8 @@ function renderEquipmentTable(editing = false) {
     inputWeight.addEventListener('input', (e) => {
       equipmentRows[idx].weight = e.target.value;
       if (!editingEquip) {
-        debouncedSaveSheetData();
+        const sheetIdx = activeSheetIndex;
+        debouncedSaveSheetData(sheetIdx);
       }
       updateCurrentWeight();
       updateArmorClass();
@@ -3599,7 +3640,8 @@ if (weaponLabel) {
   weaponLabel.addEventListener('blur', () => {
     if (!weaponEditing) {
       characterSheets[activeSheetIndex].weaponTitle = weaponLabel.textContent;
-      debouncedSaveSheetData();
+      const sheetIdx = activeSheetIndex;
+      debouncedSaveSheetData(sheetIdx);
     }
   });
 }
@@ -3608,7 +3650,8 @@ if (inventoryLabel) {
   inventoryLabel.addEventListener('blur', () => {
     if (!editingInv) {
       characterSheets[activeSheetIndex].inventoryTitle = inventoryLabel.textContent;
-      debouncedSaveSheetData();
+      const sheetIdx = activeSheetIndex;
+      debouncedSaveSheetData(sheetIdx);
     }
   });
 }
@@ -3617,7 +3660,8 @@ if (equipmentLabel) {
   equipmentLabel.addEventListener('blur', () => {
     if (!editingEquip) {
       characterSheets[activeSheetIndex].equipmentTitle = equipmentLabel.textContent;
-      debouncedSaveSheetData();
+      const sheetIdx = activeSheetIndex;
+      debouncedSaveSheetData(sheetIdx);
     }
   });
 }
@@ -3633,7 +3677,8 @@ document.addEventListener('DOMContentLoaded', function() {
     coinsData.gin = parseInt(ginInput.value) || 0;
     coinsData.kin = parseInt(kinInput.value) || 0;
     characterSheets[activeSheetIndex].coins = JSON.parse(JSON.stringify(coinsData));
-    saveSheetData();
+    const sheetIdx = activeSheetIndex;
+    saveSheetData(sheetIdx);
   }
 
   [senInput, ginInput, kinInput].forEach(input => {
