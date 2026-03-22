@@ -483,7 +483,7 @@ function getActiveSheetCombatValues() {
 
   const resolvedHp = Number.isNaN(hp) ? (parseInt(sheet.healthPoints, 10) || 0) : hp;
   const resolvedTempHp = Number.isNaN(tempHp) ? (parseInt(sheet.healing, 10) || 0) : tempHp;
-  const resolvedAc = Number.isNaN(ac) ? (parseInt(sheet.armorClass, 10) || 10) : ac;
+  const resolvedAc = Number.isNaN(ac) ? (parseInt(sheet.armorClass, 10) || 5) : ac;
 
   // Тримаємо локальний кеш синхронним з тим, що зараз у листі на екрані.
   sheet.healthPoints = String(resolvedHp);
@@ -684,8 +684,8 @@ function updateArmorClass() {
       totalArmor += armor;
     });
     
-    // Базова броня = 10 + броня зі спорядження
-    const armorClass = Math.min(10 + totalArmor, 99);
+    // Базова броня = 5 + броня зі спорядження
+    const armorClass = Math.min(5 + totalArmor, 99);
     armorClassInput.value = armorClass;
     
     // Оновлюємо клас броні на токені
@@ -1929,7 +1929,7 @@ function setupCharacterButtons() {
             'com.owlbear.token': {
               hp: parseInt(currentSheet.healthPoints) || 0,
               maxHp: parseInt(currentSheet.maxHealthPoints) || 0,
-              ac: parseInt(currentSheet.armorClass) || 10
+              ac: parseInt(currentSheet.armorClass) || 5
             },
             characterSheet: {
               characterName: currentSheet.characterName,
@@ -1986,7 +1986,7 @@ function setupCharacterButtons() {
           })
           .layer('ATTACHMENT')
           .attachedTo(tokenItem.id)
-          .plainText(`🛡${currentSheet.armorClass || 10}`)
+          .plainText(`🛡${currentSheet.armorClass || 5}`)
           .locked(true)  // Блокуємо переміщення та редагування
           .metadata({
             acBadge: true,
