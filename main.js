@@ -1286,7 +1286,7 @@ function connectInputsToSave() {
     });
   }
   
-  // Оновлення здоров'я на токені при зміні
+  // Оновлення здоров'я на токені та у базі при зміні
   const healthPointsInput = document.getElementById('healthPoints');
   if (healthPointsInput) {
     healthPointsInput.addEventListener('input', () => {
@@ -1295,9 +1295,13 @@ function connectInputsToSave() {
       const tempHealth = parseInt(healthInput?.value) || 0;
       updateTokenHealth(newHealth, tempHealth);
     });
+    healthPointsInput.addEventListener('blur', () => {
+      const sheetIdx = activeSheetIndex;
+      setTimeout(() => saveSheetData(sheetIdx), 50);
+    });
   }
   
-  // Оновлення тимчасового здоров'я (поле "лікування") на токені при зміні
+  // Оновлення тимчасового здоров'я (поле "лікування") на токені та у базі при зміні
   const healthInput = document.getElementById('health');
   if (healthInput) {
     healthInput.addEventListener('input', () => {
@@ -1305,6 +1309,19 @@ function connectInputsToSave() {
       const newHealth = parseInt(healthPointsInput?.value) || 0;
       const tempHealth = parseInt(healthInput.value) || 0;
       updateTokenHealth(newHealth, tempHealth);
+    });
+    healthInput.addEventListener('blur', () => {
+      const sheetIdx = activeSheetIndex;
+      setTimeout(() => saveSheetData(sheetIdx), 50);
+    });
+  }
+  
+  // Оновлення ініціативи
+  const initiativeInput = document.getElementById('initiative');
+  if (initiativeInput) {
+    initiativeInput.addEventListener('blur', () => {
+      const sheetIdx = activeSheetIndex;
+      setTimeout(() => saveSheetData(sheetIdx), 50);
     });
   }
 }
