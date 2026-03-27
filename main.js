@@ -428,6 +428,7 @@ function applyFullSupabaseRowToSheet(sheet, row) {
 
   // Запам'ятовуємо оригінальне ім'я для детектування перейменувань
   sheet._originalCharacterName = sheet.characterName;
+  sheet._updatedAt = row.updated_at || sheet._updatedAt || null;
 }
 
 // Backward-compat alias
@@ -677,8 +678,54 @@ async function setupSupabaseRealtime(roomId) {
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') {
         console.log('[Supabase Realtime] Підписано на зміни character_sheets');
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        console.warn('[Supabase Realtime] Канал нестабільний, увімкнено polling fallback');
       }
     });
+}
+
+/**
+ * Fallback-синхронізація на випадок, коли realtime-подія пропущена/затримана.
+ * Підтягує актуальні рядки з Supabase та застосовує зміни до локального кешу й DOM.
+ */
+async function syncAllCharactersFromSupabase(roomId) {
+  const rows = await loadAllCharactersFromSupabase(roomId);
+  if (!Array.isArray(rows)) return;
+
+  for (const row of rows) {
+    if (!row?.character_name) continue;
+    const sheetIdx = characterSheets.findIndex(s => s.characterName === row.character_name);
+
+    if (sheetIdx === -1) {
+      await handleRealtimeInsert(row);
+      continue;
+    }
+
+    const localUpdatedAt = characterSheets[sheetIdx]?._updatedAt || null;
+    const incomingUpdatedAt = row.updated_at || null;
+    if (localUpdatedAt && incomingUpdatedAt && localUpdatedAt === incomingUpdatedAt) {
+      continue;
+    }
+
+    const updatedSheet = { ...characterSheets[sheetIdx] };
+    applyFullSupabaseRowToSheet(updatedSheet, row);
+    characterSheets[sheetIdx] = updatedSheet;
+
+    if (sheetIdx === activeSheetIndex) {
+      applyRealtimeUpdateToDOM(updatedSheet);
+    }
+  }
+}
+
+function setupSupabasePollingFallback(roomId) {
+  if (fallbackSyncIntervalId) {
+    clearInterval(fallbackSyncIntervalId);
+    fallbackSyncIntervalId = null;
+  }
+
+  fallbackSyncIntervalId = setInterval(async () => {
+    await syncAllCharactersFromSupabase(roomId);
+  }, 1200);
 }
 
 /** Обробляє UPDATE від іншого клієнта */
@@ -868,6 +915,7 @@ let lastTokenACSyncKey = '';
 let lastTokenACReconcileAt = 0;
 const TOKEN_AC_RECONCILE_INTERVAL_MS = 12000;
 let realtimeChannel = null;
+let fallbackSyncIntervalId = null;
 
 function isTokenForSheet(item, sheet) {
   if (!item || item.layer !== 'CHARACTER') return false;
@@ -3019,6 +3067,7 @@ OBR.onReady(async () => {
 
     // Підписка на Supabase Realtime (синхронізація між гравцями)
     await setupSupabaseRealtime(OBR.room.id);
+    setupSupabasePollingFallback(OBR.room.id);
 
     // Перезавантаження даних при зміні сцени
     OBR.scene.onReadyChange(async (isReady) => {
