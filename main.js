@@ -28,6 +28,19 @@ const SKILL_POPOVER_VERSION = '2026-03-21-2';
 const SUPABASE_PHOTO_BUCKET = 'character-photos';
 
 /**
+ * Генерує простий хеш для імені персонажа (ASCII-сумісний шлях у Storage)
+ */
+function hashCharacterName(name) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    const char = name.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return Math.abs(hash).toString(36);
+}
+
+/**
  * Завантажує файл зображення в Supabase Storage.
  * Повертає публічний URL або null при помилці.
  */
@@ -2538,9 +2551,10 @@ function setupPhotoButtons() {
     try {
       const sheet = characterSheets[activeSheetIndex];
       const charName = sheet?.characterName || 'unknown';
+      const charHash = hashCharacterName(charName);
       const roomId = OBR.room.id;
       const ext = file.name.split('.').pop() || 'jpg';
-      const storagePath = `${roomId}/${charName}/character.${ext}`;
+      const storagePath = `${roomId}/${charHash}/character.${ext}`;
 
       const imageUrl = await uploadPhotoToSupabase(file, storagePath);
 
@@ -2611,9 +2625,10 @@ function setupPhotoButtons() {
 
         // Завантажуємо обрізане фото в Supabase Storage
         const charName = currentSheet.characterName || 'unknown';
+        const charHash = hashCharacterName(charName);
         const roomId = OBR.room.id;
         const tokenFile = new File([croppedBlob], 'token.png', { type: 'image/png' });
-        const storagePath = `${roomId}/${charName}/token.png`;
+        const storagePath = `${roomId}/${charHash}/token.png`;
 
         const tokenImageUrl = await uploadPhotoToSupabase(tokenFile, storagePath);
 
@@ -2919,14 +2934,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // === ІНІЦІАЛІЗАЦІЯ ===
 OBR.onReady(async () => {
-    // Налаштування Supabase Anonymous Auth для Storage uploads
-    const { data: authData } = await supabase.auth.getSession();
-    if (!authData?.session) {
-      const { error } = await supabase.auth.signInAnonymously();
-      if (error) console.warn('[Supabase Auth] Не вдалося залогіниться анонімно:', error);
-      else console.log('[Supabase Auth] Анонімно залоговані');
-    }
-
     // Очищаємо старий запит
     await clearOldRollRequest();
     
