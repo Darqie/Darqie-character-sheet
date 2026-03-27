@@ -33,6 +33,15 @@ const SUPABASE_PHOTO_BUCKET = 'character-photos';
  */
 async function uploadPhotoToSupabase(file, storagePath) {
   try {
+    // Спочатку спробуємо залогіниться анонімно щоб мати auth context
+    const { data: authData } = await supabase.auth.getSession();
+    if (!authData?.session) {
+      const { error: signInError } = await supabase.auth.signInAnonymously();
+      if (signInError) {
+        console.warn('[Supabase Auth] Не вдалося залогіниться анонімно, спробуємо завантажити без auth context:', signInError);
+      }
+    }
+
     const { error: uploadError } = await supabase.storage
       .from(SUPABASE_PHOTO_BUCKET)
       .upload(storagePath, file, { upsert: true, contentType: file.type || 'image/png' });
@@ -2910,6 +2919,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // === ІНІЦІАЛІЗАЦІЯ ===
 OBR.onReady(async () => {
+    // Налаштування Supabase Anonymous Auth для Storage uploads
+    const { data: authData } = await supabase.auth.getSession();
+    if (!authData?.session) {
+      const { error } = await supabase.auth.signInAnonymously();
+      if (error) console.warn('[Supabase Auth] Не вдалося залогіниться анонімно:', error);
+      else console.log('[Supabase Auth] Анонімно залоговані');
+    }
+
     // Очищаємо старий запит
     await clearOldRollRequest();
     
