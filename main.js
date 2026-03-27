@@ -918,6 +918,7 @@ let lastTokenACReconcileAt = 0;
 const TOKEN_AC_RECONCILE_INTERVAL_MS = 12000;
 let realtimeChannel = null;
 let fallbackSyncIntervalId = null;
+let modalOpenRequestId = 0;
 
 function isTokenForSheet(item, sheet) {
   if (!item || item.layer !== 'CHARACTER') return false;
@@ -3138,10 +3139,10 @@ function updateModalInfo(character) {
       el.style.height = (el.scrollHeight) + 'px';
     }
   };
-  setValue('modalCharacterClass', character.characterClassLevel || 'Не вказано');
-  setValue('modalCharacterRace', character.characterRace || 'Не вказано');
-  setValue('modalBackground', character.background || 'Не вказано');
-  setValue('modalAlignment', character.alignment || 'Не вказано');
+  setValue('modalCharacterClass', character.characterClassLevel || '');
+  setValue('modalCharacterRace', character.characterRace || '');
+  setValue('modalBackground', character.background || '');
+  setValue('modalAlignment', character.alignment || '');
   setValue('modalAppearance', character.appearance || '');
   setValue('modalLanguages', character.languages || '');
   setValue('modalBonds', character.bonds || '');
@@ -3162,6 +3163,8 @@ function updateModalInfo(character) {
 async function openCharacterInfoModal() {
   const modal = document.getElementById('characterInfoModal');
   const currentCharacter = await getCurrentCharacter();
+  const openRequestId = ++modalOpenRequestId;
+  const openSheetIndex = activeSheetIndex;
   // Додаю прокручування сторінки вгору при відкритті модалки
   window.scrollTo({ top: 0, behavior: 'smooth' });
   if (currentCharacter) {
@@ -3173,7 +3176,12 @@ async function openCharacterInfoModal() {
       OBR.room.id,
       currentCharacter.characterName || ''
     );
-    if (modalInfoFromDb) {
+    const stillSameOpen = modalOpenRequestId === openRequestId;
+    const modalStillOpen = modal.style.display === 'block';
+    const stillSameCharacter = activeSheetIndex === openSheetIndex;
+    const isEditingNow = !!modal.querySelector('textarea:not([readonly])');
+
+    if (modalInfoFromDb && stillSameOpen && modalStillOpen && stillSameCharacter && !isEditingNow) {
       if (characterSheets[activeSheetIndex]) {
         applyModalInfoToSheet(characterSheets[activeSheetIndex], modalInfoFromDb);
       }
@@ -3187,22 +3195,6 @@ async function openCharacterInfoModal() {
     document.body.style.overflow = 'hidden';
   }
 
-  // Додаємо обробники для запобігання закриття модального вікна при роботі з textarea
-  modal.addEventListener('click', (event) => {
-    // Запобігаємо закриттю при кліку всередині модального вікна
-    event.stopPropagation();
-  });
-
-  // Запобігаємо закриттю при фокусі на textarea
-  modal.querySelectorAll('textarea').forEach(textarea => {
-    textarea.addEventListener('focus', () => {
-      clearTimeout(modalClickTimeout);
-    });
-    
-    textarea.addEventListener('click', (event) => {
-      event.stopPropagation();
-    });
-  });
 }
 
 // Функція для закриття модального вікна
