@@ -2528,7 +2528,7 @@ function setupPhotoButtons() {
 
     try {
       const sheet = characterSheets[activeSheetIndex];
-      const charName = encodeURIComponent(sheet?.characterName || 'unknown');
+      const charName = sheet?.characterName || 'unknown';
       const roomId = OBR.room.id;
       const ext = file.name.split('.').pop() || 'jpg';
       const storagePath = `${roomId}/${charName}/character.${ext}`;
@@ -2601,7 +2601,7 @@ function setupPhotoButtons() {
         }
 
         // Завантажуємо обрізане фото в Supabase Storage
-        const charName = encodeURIComponent(currentSheet.characterName || 'unknown');
+        const charName = currentSheet.characterName || 'unknown';
         const roomId = OBR.room.id;
         const tokenFile = new File([croppedBlob], 'token.png', { type: 'image/png' });
         const storagePath = `${roomId}/${charName}/token.png`;
