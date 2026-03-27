@@ -303,31 +303,33 @@ function buildFullSupabaseRow(sheet, roomId) {
 
   // JSON-масиви
   Object.entries(OFFLOADED_JSON_FIELD_TO_DB).forEach(([sheetField, dbCol]) => {
-    row[dbCol] = Array.isArray(sheet?.[sheetField])
-      ? JSON.parse(JSON.stringify(sheet[sheetField]))
-      : [];
+    if (Array.isArray(sheet?.[sheetField])) {
+      row[dbCol] = JSON.parse(JSON.stringify(sheet[sheetField]));
+    }
   });
 
   // Монети
-  const coins = sheet?.coins || { sen: 0, gin: 0, kin: 0 };
-  row.coins_sen = parseInt(coins.sen, 10) || 0;
-  row.coins_gin = parseInt(coins.gin, 10) || 0;
-  row.coins_kin = parseInt(coins.kin, 10) || 0;
+  if (sheet?.coins !== undefined) {
+    const coins = sheet?.coins || { sen: 0, gin: 0, kin: 0 };
+    row.coins_sen = parseInt(coins.sen, 10) || 0;
+    row.coins_gin = parseInt(coins.gin, 10) || 0;
+    row.coins_kin = parseInt(coins.kin, 10) || 0;
+  }
 
   // Додаткові поля, які не мають своїх колонок (зберігаються в extra_data)
-  row.extra_data = {
-    characterPhoto: sheet?.characterPhoto || '',
-    tokenPhoto: sheet?.tokenPhoto || '',
-    inspiration: sheet?.inspiration || false,
-    advantage: sheet?.advantage || false,
-    disadvantage: sheet?.disadvantage || false,
-    deathSavesSuccess: Array.isArray(sheet?.deathSavesSuccess) ? sheet.deathSavesSuccess : [false, false, false],
-    deathSavesFailure: Array.isArray(sheet?.deathSavesFailure) ? sheet.deathSavesFailure : [false, false, false],
-    proficienciesAndLanguages: sheet?.proficienciesAndLanguages || '',
-    alliesAndOrganizations: sheet?.alliesAndOrganizations || '',
-    characterHistory: sheet?.characterHistory || '',
-    additionalFeatures: sheet?.additionalFeatures || '',
-  };
+  const extra = {};
+  if (sheet?.characterPhoto !== undefined) extra.characterPhoto = sheet.characterPhoto;
+  if (sheet?.tokenPhoto !== undefined) extra.tokenPhoto = sheet.tokenPhoto;
+  if (typeof sheet?.inspiration === 'boolean') extra.inspiration = sheet.inspiration;
+  if (typeof sheet?.advantage === 'boolean') extra.advantage = sheet.advantage;
+  if (typeof sheet?.disadvantage === 'boolean') extra.disadvantage = sheet.disadvantage;
+  if (Array.isArray(sheet?.deathSavesSuccess)) extra.deathSavesSuccess = sheet.deathSavesSuccess;
+  if (Array.isArray(sheet?.deathSavesFailure)) extra.deathSavesFailure = sheet.deathSavesFailure;
+  if (sheet?.proficienciesAndLanguages !== undefined) extra.proficienciesAndLanguages = sheet.proficienciesAndLanguages;
+  if (sheet?.alliesAndOrganizations !== undefined) extra.alliesAndOrganizations = sheet.alliesAndOrganizations;
+  if (sheet?.characterHistory !== undefined) extra.characterHistory = sheet.characterHistory;
+  if (sheet?.additionalFeatures !== undefined) extra.additionalFeatures = sheet.additionalFeatures;
+  row.extra_data = extra;
 
   return row;
 }
@@ -1489,6 +1491,7 @@ async function updateCharacterDropdown() {
 
   if (!characterSelect) return;
 
+  const previousSheets = Array.isArray(characterSheets) ? characterSheets : [];
   const roomId = OBR.room.id;
   const rows = await loadAllCharactersFromSupabase(roomId);
 
@@ -1500,12 +1503,21 @@ async function updateCharacterDropdown() {
     if (registry.length > 0) {
       const rowsByName = {};
       rows.forEach(r => { rowsByName[r.character_name] = r; });
+      const localByName = {};
+      previousSheets.forEach(s => {
+        if (s?.characterName) localByName[s.characterName] = s;
+      });
 
       const rebuilt = registry
         .map(entry => {
           const row = rowsByName[entry.characterName];
           if (row) return sheetFromSupabaseRow(row);
-          // Персонаж є в реєстрі, але ще не в Supabase
+          // Якщо рядок тимчасово не повернувся з Supabase, зберігаємо повний локальний кеш,
+          // щоб не втратити поля при наступному autosave.
+          if (localByName[entry.characterName]) {
+            return JSON.parse(JSON.stringify(localByName[entry.characterName]));
+          }
+          // Фолбек лише для справді нового персонажа, який ще не записався у БД.
           return { characterName: entry.characterName, playerName: entry.playerName };
         })
         .filter(Boolean);
