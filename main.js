@@ -1514,10 +1514,23 @@ async function populatePlayerSelect() {
 // === НАЛАШТУВАННЯ ПОДІЙ ===
 function connectInputsToSave() {
   const elements = getSheetInputElements();
+  const numberInputIds = new Set([
+    'armorClass', 'healthPoints', 'speed', 'initiative', 'health', 'maxHealthPoints',
+    'strengthScore', 'dexterityScore', 'constitutionScore', 'intelligenceScore', 'wisdomScore', 'charismaScore',
+    'maxWeight', 'currentWeight'
+  ]);
 
   // Підключення основних полів з обробниками тільки на blur і Enter
-  Object.values(elements).forEach(el => {
+  Object.entries(elements).forEach(([key, el]) => {
     if (el) {
+      // Для текстових/селект полів зберігаємо також під час введення (через debounce)
+      // щоб інші гравці бачили оновлення без довгої затримки до blur.
+      if (key !== 'characterPhoto' && !numberInputIds.has(el.id)) {
+        el.addEventListener('input', () => {
+          const sheetIdx = activeSheetIndex;
+          debouncedSaveSheetData(sheetIdx);
+        });
+      }
       el.addEventListener('blur', () => {
         const sheetIdx = activeSheetIndex;
         setTimeout(() => saveSheetData(sheetIdx), 50);
@@ -3165,6 +3178,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnCancel = document.getElementById(cancel);
     let prevValue = '';
     if (btnEdit && btnAccept && btnCancel && ta) {
+      ta.addEventListener('input', () => {
+        if (!ta.readOnly && characterSheets[activeSheetIndex]) {
+          characterSheets[activeSheetIndex][mainField] = ta.value;
+          const sheetIdx = activeSheetIndex;
+          debouncedSaveSheetData(sheetIdx);
+        }
+      });
+
       btnEdit.addEventListener('click', () => {
         prevValue = ta.value;
         ta.readOnly = false;
