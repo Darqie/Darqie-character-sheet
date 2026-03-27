@@ -25,6 +25,33 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 
 const TOKEN_PLACEHOLDER_URL = 'https://raw.githubusercontent.com/Darqie/Darqie-character-sheet/main/public/character-token-placeholder.png';
 const SKILL_POPOVER_VERSION = '2026-03-21-2';
+const SUPABASE_PHOTO_BUCKET = 'character-photos';
+
+/**
+ * Завантажує файл зображення в Supabase Storage.
+ * Повертає публічний URL або null при помилці.
+ */
+async function uploadPhotoToSupabase(file, storagePath) {
+  try {
+    const { error: uploadError } = await supabase.storage
+      .from(SUPABASE_PHOTO_BUCKET)
+      .upload(storagePath, file, { upsert: true, contentType: file.type || 'image/png' });
+
+    if (uploadError) {
+      console.error('[Supabase Storage] Помилка завантаження:', uploadError);
+      return null;
+    }
+
+    const { data } = supabase.storage
+      .from(SUPABASE_PHOTO_BUCKET)
+      .getPublicUrl(storagePath);
+
+    return data?.publicUrl || null;
+  } catch (e) {
+    console.error('[Supabase Storage] Мережева помилка:', e);
+    return null;
+  }
+}
 
 function getTokenPlaceholderUrl() {
   return TOKEN_PLACEHOLDER_URL;
@@ -2499,21 +2526,16 @@ function setupPhotoButtons() {
     const file = photoInput.files[0];
     if (!file) return;
 
-    const formData = new FormData();
-    formData.append('UPLOADCARE_STORE', '1');
-    formData.append('UPLOADCARE_PUB_KEY', UPLOADCARE_PUBLIC_KEY);
-    formData.append('file', file);
-
     try {
-      const response = await fetch('https://upload.uploadcare.com/base/', {
-        method: 'POST',
-        body: formData,
-      });
+      const sheet = characterSheets[activeSheetIndex];
+      const charName = (sheet?.characterName || 'unknown').replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+      const roomId = OBR.room.id;
+      const ext = file.name.split('.').pop() || 'jpg';
+      const storagePath = `${roomId}/${charName}/character.${ext}`;
 
-      const result = await response.json();
+      const imageUrl = await uploadPhotoToSupabase(file, storagePath);
 
-      if (result?.file) {
-        const imageUrl = `https://ucarecdn.com/${result.file}/`;
+      if (imageUrl) {
         photoImg.src = imageUrl;
         photoImg.style.display = 'block';
         const placeholder = document.getElementById('photoPlaceholder');
@@ -2529,7 +2551,7 @@ function setupPhotoButtons() {
       }
     } catch (err) {
       console.error('Photo upload error:', err);
-      alert('Помилка з\'єднання із Uploadcare.');
+      alert('Помилка завантаження фото.');
     }
   });
 
@@ -2578,25 +2600,18 @@ function setupPhotoButtons() {
           return;
         }
 
-        // Завантажуємо обрізане фото на Uploadcare
-        const formData = new FormData();
-        formData.append('UPLOADCARE_STORE', '1');
-        formData.append('UPLOADCARE_PUB_KEY', UPLOADCARE_PUBLIC_KEY);
-        formData.append('file', croppedBlob, 'token-photo.png');
+        // Завантажуємо обрізане фото в Supabase Storage
+        const charName = (currentSheet.characterName || 'unknown').replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+        const roomId = OBR.room.id;
+        const tokenFile = new File([croppedBlob], 'token.png', { type: 'image/png' });
+        const storagePath = `${roomId}/${charName}/token.png`;
 
-        const response = await fetch('https://upload.uploadcare.com/base/', {
-          method: 'POST',
-          body: formData,
-        });
+        const tokenImageUrl = await uploadPhotoToSupabase(tokenFile, storagePath);
 
-        const result = await response.json();
-
-        if (!result?.file) {
+        if (!tokenImageUrl) {
           alert('Помилка при завантаженні фото токена.');
           return;
         }
-
-        const tokenImageUrl = `https://ucarecdn.com/${result.file}/`;
 
         // Шукаємо токен цього персонажа
         const allItems = await OBR.scene.items.getItems();
