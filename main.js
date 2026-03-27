@@ -1135,11 +1135,13 @@ async function saveSheetData(targetSheetIndex = null) {
   const sheet = characterSheets[sheetIndexToSave];
   const elements = getSheetInputElements();
   const previousPlayerName = sheet.playerName;
+  const modal = document.getElementById('characterInfoModal');
+  const isModalOpen = modal && modal.style.display === 'block';
 
   // Збереження основних полів
   for (const key in elements) {
     if (['characterClassLevel','characterRace','background','alignment'].includes(key)) {
-      // Якщо є textarea модалки — беремо з неї
+      // Беремо з модалки лише коли вона відкрита; інакше не перезаписуємо прихованими/застарілими значеннями.
       const modalMap = {
         characterClassLevel: 'modalCharacterClass',
         characterRace: 'modalCharacterRace',
@@ -1147,7 +1149,7 @@ async function saveSheetData(targetSheetIndex = null) {
         alignment: 'modalAlignment',
       };
       const modalEl = document.getElementById(modalMap[key]);
-      if (modalEl) {
+      if (isModalOpen && modalEl) {
         sheet[key] = modalEl.value;
         continue;
       }
@@ -1268,6 +1270,9 @@ function loadSheetData() {
   if (!sheet) return;
   
   const elements = getSheetInputElements();
+
+  // Тримаємо модалку синхронізованою з активним листом, щоб уникнути міжперсонажного "протікання" значень.
+  applyModalInfoToInputs(getModalInfoFromSheet(sheet));
 
   // Завантаження основних полів
   for (const key in elements) {
