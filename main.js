@@ -291,7 +291,9 @@ function buildFullSupabaseRow(sheet, roomId) {
 
   // Поля модалки
   MODAL_FIELDS.forEach((key) => {
-    row[MODAL_FIELD_TO_DB[key]] = sheet?.[key] || '';
+    if (sheet?.[key] !== undefined) {
+      row[MODAL_FIELD_TO_DB[key]] = sheet[key];
+    }
   });
 
   // Скалярні поля
@@ -572,7 +574,31 @@ async function saveSheetToSupabase(sheet) {
         .eq('character_name', oldName);
       sheet._originalCharacterName = sheet.characterName;
     }
-    const row = buildFullSupabaseRow(sheet, roomId);
+
+    // Захист від "затирання": перед збереженням зливаємо локальний лист
+    // з актуальним рядком у Supabase, якщо він існує.
+    let sheetToSave = sheet;
+    try {
+      const { data: existingRow, error: existingError } = await supabase
+        .from('character_sheets')
+        .select('*')
+        .eq('room_id', roomId)
+        .eq('character_name', sheet.characterName)
+        .single();
+
+      if (!existingError && existingRow) {
+        const mergedSheet = {};
+        applyFullSupabaseRowToSheet(mergedSheet, existingRow);
+        Object.keys(sheet).forEach((key) => {
+          if (sheet[key] !== undefined) mergedSheet[key] = sheet[key];
+        });
+        sheetToSave = mergedSheet;
+      }
+    } catch (_) {
+      // Якщо merge не вдався, зберігаємо наявний локальний стан як fallback.
+    }
+
+    const row = buildFullSupabaseRow(sheetToSave, roomId);
     const { error } = await supabase
       .from('character_sheets')
       .upsert(row, { onConflict: 'room_id,character_name' });
@@ -667,8 +693,9 @@ function handleRealtimeUpdate(newRow) {
   applyFullSupabaseRowToSheet(updatedSheet, newRow);
   characterSheets[sheetIdx] = updatedSheet;
 
-  // Оновлюємо DOM тільки якщо це активний персонаж і не редагується
-  if (sheetIdx === activeSheetIndex && !isAnyEditingActive()) {
+  // Оновлюємо DOM для активного персонажа одразу.
+  // Функція applyRealtimeUpdateToDOM сама не перезапише поле у фокусі.
+  if (sheetIdx === activeSheetIndex) {
     applyRealtimeUpdateToDOM(updatedSheet);
   }
 }
@@ -732,6 +759,19 @@ function applyRealtimeUpdateToDOM(updatedSheet) {
       el.value = updatedSheet[key] || '';
     }
   }
+
+  // Оновлюємо поля модалки (Class/Race/Background/Alignment тощо),
+  // але не чіпаємо те textarea, яке зараз редагується/у фокусі.
+  MODAL_FIELDS.forEach((key) => {
+    const modalId = MODAL_FIELD_TO_ID[key];
+    const modalEl = document.getElementById(modalId);
+    if (!modalEl) return;
+    if (modalEl.id === focusedId || !modalEl.readOnly) return;
+
+    modalEl.value = updatedSheet[key] || '';
+    modalEl.style.height = 'auto';
+    modalEl.style.height = modalEl.scrollHeight + 'px';
+  });
 
   const success = updatedSheet.deathSavesSuccess || [false, false, false];
   const failure = updatedSheet.deathSavesFailure || [false, false, false];
@@ -801,7 +841,7 @@ async function migrateOBRDataIfNeeded(roomId) {
 // === КОНСТАНТИ ===
 const DARQIE_SHEETS_KEY = 'darqie.characterSheets'; // legacy — тепер лише для міграції
 const DARQIE_REGISTRY_KEY = 'darqie.v2.registry';   // мінімальний реєстр персонажів в OBR
-const DEBOUNCE_DELAY = 150;
+const DEBOUNCE_DELAY = 40;
 const UPLOADCARE_PUBLIC_KEY = '7d0fa9d84ac0680d6d83';
 const DICE_ROLL_KEY = "darqie.rollRequest";
 
@@ -1134,6 +1174,7 @@ async function saveSheetData(targetSheetIndex = null) {
 
   const sheet = characterSheets[sheetIndexToSave];
   const elements = getSheetInputElements();
+  const previousCharacterName = sheet.characterName;
   const previousPlayerName = sheet.playerName;
   const modal = document.getElementById('characterInfoModal');
   const isModalOpen = modal && modal.style.display === 'block';
@@ -1231,8 +1272,13 @@ async function saveSheetData(targetSheetIndex = null) {
     // Зберігаємо ВСЕ в Supabase (єдине джерело правди)
     await saveSheetToSupabase(sheet);
 
-    // Оновлюємо мінімальний реєстр у OBR room metadata (тільки імена + playerName)
-    await updateOBRRegistry();
+    // Оновлюємо реєстр тільки коли змінилися ключові поля (щоб не гальмувати кожен input).
+    const registryNeedsUpdate =
+      sheet.characterName !== previousCharacterName ||
+      sheet.playerName !== previousPlayerName;
+    if (registryNeedsUpdate) {
+      await updateOBRRegistry();
+    }
 
     // Якщо власник листа змінився — передаємо токен новому власнику
     if (isGM && sheet.playerName !== previousPlayerName) {
@@ -1599,6 +1645,9 @@ function connectInputsToSave() {
             }
           }
         }
+
+        const sheetIdx = activeSheetIndex;
+        debouncedSaveSheetData(sheetIdx);
       });
       input.addEventListener('blur', () => {
         const sheetIdx = activeSheetIndex;
