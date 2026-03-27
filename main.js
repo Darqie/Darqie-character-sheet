@@ -231,31 +231,59 @@ function fromSupabaseModalRow(row) {
   return modalInfo;
 }
 
-function buildOffloadedSupabaseRowFromSheet(sheet) {
-  const row = {};
+// Формує повний рядок Supabase із УСІМа полями персонажа
+function buildFullSupabaseRow(sheet, roomId) {
+  const row = {
+    room_id: roomId,
+    character_name: sheet?.characterName || '',
+    player_name: sheet?.playerName || '',
+    updated_at: new Date().toISOString(),
+  };
 
+  // Поля модалки
+  MODAL_FIELDS.forEach((key) => {
+    row[MODAL_FIELD_TO_DB[key]] = sheet?.[key] || '';
+  });
+
+  // Скалярні поля
   Object.entries(OFFLOADED_SHEET_FIELD_TO_DB).forEach(([sheetField, dbCol]) => {
-    if (sheet?.[sheetField] !== undefined) {
-      row[dbCol] = sheet[sheetField];
-    }
+    if (sheet?.[sheetField] !== undefined) row[dbCol] = sheet[sheetField];
   });
 
+  // JSON-масиви
   Object.entries(OFFLOADED_JSON_FIELD_TO_DB).forEach(([sheetField, dbCol]) => {
-    if (sheet?.[sheetField] !== undefined) {
-      row[dbCol] = Array.isArray(sheet[sheetField])
-        ? JSON.parse(JSON.stringify(sheet[sheetField]))
-        : [];
-    }
+    row[dbCol] = Array.isArray(sheet?.[sheetField])
+      ? JSON.parse(JSON.stringify(sheet[sheetField]))
+      : [];
   });
 
-  if (sheet?.coins !== undefined) {
-    const coins = sheet?.coins || { sen: 0, gin: 0, kin: 0 };
-    row.coins_sen = parseInt(coins.sen, 10) || 0;
-    row.coins_gin = parseInt(coins.gin, 10) || 0;
-    row.coins_kin = parseInt(coins.kin, 10) || 0;
-  }
+  // Монети
+  const coins = sheet?.coins || { sen: 0, gin: 0, kin: 0 };
+  row.coins_sen = parseInt(coins.sen, 10) || 0;
+  row.coins_gin = parseInt(coins.gin, 10) || 0;
+  row.coins_kin = parseInt(coins.kin, 10) || 0;
+
+  // Додаткові поля, які не мають своїх колонок (зберігаються в extra_data)
+  row.extra_data = {
+    characterPhoto: sheet?.characterPhoto || '',
+    tokenPhoto: sheet?.tokenPhoto || '',
+    inspiration: sheet?.inspiration || false,
+    advantage: sheet?.advantage || false,
+    disadvantage: sheet?.disadvantage || false,
+    deathSavesSuccess: Array.isArray(sheet?.deathSavesSuccess) ? sheet.deathSavesSuccess : [false, false, false],
+    deathSavesFailure: Array.isArray(sheet?.deathSavesFailure) ? sheet.deathSavesFailure : [false, false, false],
+    proficienciesAndLanguages: sheet?.proficienciesAndLanguages || '',
+    alliesAndOrganizations: sheet?.alliesAndOrganizations || '',
+    characterHistory: sheet?.characterHistory || '',
+    additionalFeatures: sheet?.additionalFeatures || '',
+  };
 
   return row;
+}
+
+// Backward-compat alias
+function buildOffloadedSupabaseRowFromSheet(sheet) {
+  return buildFullSupabaseRow(sheet, OBR.room.id);
 }
 
 function mergeRoomSheetsWithLocalCache(roomSheets, localSheets) {
@@ -301,21 +329,30 @@ function mergeRoomSheetsWithLocalCache(roomSheets, localSheets) {
   });
 }
 
-function applyOffloadedSupabaseRowToSheet(sheet, row) {
+// Застосовує ВСІЙ Supabase рядок до об'єкта листа (включаючи extra_data)
+function applyFullSupabaseRowToSheet(sheet, row) {
   if (!sheet || !row) return;
 
+  if (row.character_name) sheet.characterName = row.character_name;
+  if (row.player_name !== undefined) sheet.playerName = row.player_name;
+
+  // Поля модалки
+  MODAL_FIELDS.forEach((key) => {
+    const dbCol = MODAL_FIELD_TO_DB[key];
+    if (row[dbCol] !== null && row[dbCol] !== undefined) sheet[key] = row[dbCol];
+  });
+
+  // Скалярні поля
   Object.entries(OFFLOADED_SHEET_FIELD_TO_DB).forEach(([sheetField, dbCol]) => {
-    if (row[dbCol] !== null && row[dbCol] !== undefined) {
-      sheet[sheetField] = String(row[dbCol]);
-    }
+    if (row[dbCol] !== null && row[dbCol] !== undefined) sheet[sheetField] = String(row[dbCol]);
   });
 
+  // JSON-масиви
   Object.entries(OFFLOADED_JSON_FIELD_TO_DB).forEach(([sheetField, dbCol]) => {
-    if (Array.isArray(row[dbCol])) {
-      sheet[sheetField] = JSON.parse(JSON.stringify(row[dbCol]));
-    }
+    if (Array.isArray(row[dbCol])) sheet[sheetField] = JSON.parse(JSON.stringify(row[dbCol]));
   });
 
+  // Монети
   if (row.coins_sen !== null || row.coins_gin !== null || row.coins_kin !== null) {
     sheet.coins = {
       sen: parseInt(row.coins_sen, 10) || 0,
@@ -323,6 +360,28 @@ function applyOffloadedSupabaseRowToSheet(sheet, row) {
       kin: parseInt(row.coins_kin, 10) || 0,
     };
   }
+
+  // extra_data — поля без власних колонок
+  const extra = row.extra_data || {};
+  sheet.characterPhoto = extra.characterPhoto || '';
+  sheet.tokenPhoto = extra.tokenPhoto || '';
+  sheet.inspiration = extra.inspiration || false;
+  sheet.advantage = extra.advantage || false;
+  sheet.disadvantage = extra.disadvantage || false;
+  sheet.deathSavesSuccess = Array.isArray(extra.deathSavesSuccess) ? extra.deathSavesSuccess : [false, false, false];
+  sheet.deathSavesFailure = Array.isArray(extra.deathSavesFailure) ? extra.deathSavesFailure : [false, false, false];
+  sheet.proficienciesAndLanguages = extra.proficienciesAndLanguages || '';
+  sheet.alliesAndOrganizations = extra.alliesAndOrganizations || '';
+  sheet.characterHistory = extra.characterHistory || '';
+  sheet.additionalFeatures = extra.additionalFeatures || '';
+
+  // Запам'ятовуємо оригінальне ім'я для детектування перейменувань
+  sheet._originalCharacterName = sheet.characterName;
+}
+
+// Backward-compat alias
+function applyOffloadedSupabaseRowToSheet(sheet, row) {
+  applyFullSupabaseRowToSheet(sheet, row);
 }
 
 // Зберегти всі поля модалки у Supabase (кожне поле у своїй колонці)
@@ -358,13 +417,9 @@ async function loadModalInfoFromSupabase(roomId, characterName) {
   if (!roomId || !characterName) return null;
 
   try {
-    const modalColumns = MODAL_FIELDS.map((key) => MODAL_FIELD_TO_DB[key]);
-    const scalarColumns = Object.values(OFFLOADED_SHEET_FIELD_TO_DB);
-    const jsonColumns = Object.values(OFFLOADED_JSON_FIELD_TO_DB);
-    const allColumns = [...new Set([...modalColumns, ...scalarColumns, ...jsonColumns, 'coins_sen', 'coins_gin', 'coins_kin'])].join(',');
     const { data, error } = await supabase
       .from('character_sheets')
-      .select(allColumns)
+      .select('*')
       .eq('room_id', roomId)
       .eq('character_name', characterName)
       .single();
@@ -374,15 +429,20 @@ async function loadModalInfoFromSupabase(roomId, characterName) {
       return null;
     }
 
-    const rowInfo = fromSupabaseModalRow(data);
-    if (characterSheets[activeSheetIndex]) {
-      applyOffloadedSupabaseRowToSheet(characterSheets[activeSheetIndex], data);
+    if (!data) return null;
+
+    // Застосовуємо всі поля до локального листа
+    const sheetIdx = characterSheets.findIndex(s => s.characterName === characterName);
+    if (sheetIdx !== -1) {
+      applyFullSupabaseRowToSheet(characterSheets[sheetIdx], data);
     }
+
+    const rowInfo = fromSupabaseModalRow(data);
     if (rowInfo && MODAL_FIELDS.some((key) => typeof rowInfo[key] === 'string' && rowInfo[key] !== '')) {
       return rowInfo;
     }
 
-    // Backward compatibility: старий формат, коли JSON лежав в колонці appearance
+    // Backward compatibility: старий формат
     if (typeof data?.appearance === 'string' && data.appearance) {
       try {
         const parsed = JSON.parse(data.appearance);
@@ -404,28 +464,294 @@ async function loadModalInfoFromSupabase(roomId, characterName) {
 async function saveActiveCharacterModalInfoToSupabase() {
   const sheet = characterSheets[activeSheetIndex];
   if (!sheet) return;
-
-  const modalInfo = getModalInfoFromSheet(sheet);
-  await saveModalInfoToSupabase(
-    OBR.room.id,
-    sheet.playerName || '',
-    sheet.characterName || '',
-    modalInfo
-  );
+  await saveSheetToSupabase(sheet);
 }
 
 async function hydrateActiveCharacterFromSupabase() {
   const sheet = characterSheets[activeSheetIndex];
   if (!sheet || !sheet.characterName) return;
 
-  const modalInfo = await loadModalInfoFromSupabase(OBR.room.id, sheet.characterName || '');
-  if (modalInfo) {
-    applyModalInfoToSheet(sheet, modalInfo);
+  try {
+    const { data } = await supabase
+      .from('character_sheets')
+      .select('*')
+      .eq('room_id', OBR.room.id)
+      .eq('character_name', sheet.characterName)
+      .single();
+    if (data) applyFullSupabaseRowToSheet(sheet, data);
+  } catch (e) {
+    console.error('[Supabase] hydrateActiveCharacterFromSupabase помилка:', e);
+  }
+}
+
+// === ПОВНЕ ЗБЕРЕЖЕННЯ / ЗАВАНТАЖЕННЯ / РЕАЛТАЙМ ЧЕРЕЗ SUPABASE ===
+
+/** Створює об'єкт листа з рядка Supabase */
+function sheetFromSupabaseRow(row) {
+  const sheet = {};
+  applyFullSupabaseRowToSheet(sheet, row);
+  return sheet;
+}
+
+/** Завантажує всіх персонажів кімнати з Supabase */
+async function loadAllCharactersFromSupabase(roomId) {
+  if (!roomId) return null;
+  try {
+    const { data, error } = await supabase
+      .from('character_sheets')
+      .select('*')
+      .eq('room_id', roomId);
+    if (error) { console.error('[Supabase] Помилка завантаження персонажів:', error); return null; }
+    return data || [];
+  } catch (e) {
+    console.error('[Supabase] Мережева помилка:', e);
+    return null;
+  }
+}
+
+/** Зберігає один лист у Supabase (з обробкою перейменування) */
+async function saveSheetToSupabase(sheet) {
+  if (!sheet || !sheet.characterName) return;
+  const roomId = OBR.room.id;
+  try {
+    const oldName = sheet._originalCharacterName;
+    // При перейменуванні — видаляємо старий рядок
+    if (oldName && oldName !== sheet.characterName) {
+      await supabase.from('character_sheets')
+        .delete()
+        .eq('room_id', roomId)
+        .eq('character_name', oldName);
+      sheet._originalCharacterName = sheet.characterName;
+    }
+    const row = buildFullSupabaseRow(sheet, roomId);
+    const { error } = await supabase
+      .from('character_sheets')
+      .upsert(row, { onConflict: 'room_id,character_name' });
+    if (error) console.error('[Supabase] Помилка збереження:', error);
+  } catch (e) {
+    console.error('[Supabase] Мережева помилка при збереженні:', e);
+  }
+}
+
+/** Записує мінімальний реєстр персонажів у OBR room metadata */
+async function updateOBRRegistry() {
+  try {
+    const registry = characterSheets.map((sheet) => ({
+      characterName: sheet.characterName || '',
+      playerName: sheet.playerName || '',
+    }));
+    const currentMetadata = await OBR.room.getMetadata();
+    await OBR.room.setMetadata({ ...currentMetadata, [DARQIE_REGISTRY_KEY]: registry });
+  } catch (e) {
+    console.error('[OBR] Помилка оновлення реєстру:', e);
+  }
+}
+
+/** Оновлює тільки dropdown і видимість, не перезавантажує дані */
+async function refreshDropdownOnly() {
+  const characterSelect = document.getElementById('characterSelect');
+  const waitingBlock = document.getElementById('waitingBlock');
+  const mainContent = document.getElementById('mainContent');
+  if (!characterSelect) return;
+
+  const visibleSheets = characterSheets
+    .map((sheet, index) => ({ ...sheet, index }))
+    .filter(sheet => isGM || sheet.playerName === currentPlayerName);
+
+  characterSelect.innerHTML = '';
+  visibleSheets.forEach(sheet => {
+    const option = document.createElement('option');
+    option.value = sheet.index;
+    option.textContent = sheet.characterName || `Персонаж ${sheet.index + 1}`;
+    characterSelect.appendChild(option);
+  });
+
+  if (visibleSheets.length === 0) {
+    if (!isGM) { if (waitingBlock) waitingBlock.style.display = 'flex'; if (mainContent) mainContent.style.display = 'none'; }
+    else { if (waitingBlock) waitingBlock.style.display = 'none'; if (mainContent) mainContent.style.display = 'flex'; }
+    return;
+  }
+  if (waitingBlock) waitingBlock.style.display = 'none';
+  if (mainContent) mainContent.style.display = 'flex';
+
+  const isActiveVisible = visibleSheets.some(s => s.index === activeSheetIndex);
+  if (!isActiveVisible) {
+    activeSheetIndex = visibleSheets[0].index;
+    loadSheetData();
+  }
+  characterSelect.value = activeSheetIndex;
+}
+
+/** Налаштовує Supabase Realtime підписку для кімнати */
+async function setupSupabaseRealtime(roomId) {
+  if (realtimeChannel) {
+    try { await supabase.removeChannel(realtimeChannel); } catch (_) {}
+    realtimeChannel = null;
+  }
+  realtimeChannel = supabase
+    .channel(`darqie-sheets-${roomId}`)
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'character_sheets', filter: `room_id=eq.${roomId}` }, (payload) => {
+      handleRealtimeUpdate(payload.new);
+    })
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'character_sheets', filter: `room_id=eq.${roomId}` }, (payload) => {
+      handleRealtimeInsert(payload.new);
+    })
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'character_sheets', filter: `room_id=eq.${roomId}` }, async (payload) => {
+      await handleRealtimeDelete(payload.old);
+    })
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('[Supabase Realtime] Підписано на зміни character_sheets');
+      }
+    });
+}
+
+/** Обробляє UPDATE від іншого клієнта */
+function handleRealtimeUpdate(newRow) {
+  if (!newRow?.character_name) return;
+  const charName = newRow.character_name;
+  const sheetIdx = characterSheets.findIndex(s => s.characterName === charName);
+  if (sheetIdx === -1) return;
+
+  // Оновлюємо локальний кеш
+  const updatedSheet = { ...characterSheets[sheetIdx] };
+  applyFullSupabaseRowToSheet(updatedSheet, newRow);
+  characterSheets[sheetIdx] = updatedSheet;
+
+  // Оновлюємо DOM тільки якщо це активний персонаж і не редагується
+  if (sheetIdx === activeSheetIndex && !isAnyEditingActive()) {
+    applyRealtimeUpdateToDOM(updatedSheet);
+  }
+}
+
+/** Обробляє INSERT від іншого клієнта (нового персонажа) */
+async function handleRealtimeInsert(newRow) {
+  if (!newRow?.character_name) return;
+  if (characterSheets.some(s => s.characterName === newRow.character_name)) return;
+
+  const newSheet = sheetFromSupabaseRow(newRow);
+  characterSheets = [...characterSheets, newSheet];
+  await refreshDropdownOnly();
+
+  if (!isGM && newSheet.playerName === currentPlayerName) {
+    activeSheetIndex = characterSheets.length - 1;
+    const sel = document.getElementById('characterSelect');
+    if (sel) sel.value = activeSheetIndex;
+    loadSheetData();
+  }
+}
+
+/** Обробляє DELETE від іншого клієнта */
+async function handleRealtimeDelete(oldRow) {
+  if (!oldRow?.character_name) return;
+  const sheetIdx = characterSheets.findIndex(s => s.characterName === oldRow.character_name);
+  if (sheetIdx === -1) return;
+
+  const wasActive = sheetIdx === activeSheetIndex;
+  characterSheets = characterSheets.filter((_, i) => i !== sheetIdx);
+
+  if (sheetIdx < activeSheetIndex) activeSheetIndex = Math.max(0, activeSheetIndex - 1);
+  else if (wasActive) activeSheetIndex = Math.max(0, Math.min(activeSheetIndex, characterSheets.length - 1));
+
+  await refreshDropdownOnly();
+  if (wasActive && characterSheets.length > 0) loadSheetData();
+}
+
+/**
+ * Застосовує оновлення від іншого гравця до DOM без перезаписування
+ * поля, яке зараз в фокусі користувача.
+ */
+function applyRealtimeUpdateToDOM(updatedSheet) {
+  const focusedId = document.activeElement?.id;
+  const elements = getSheetInputElements();
+
+  for (const [key, el] of Object.entries(elements)) {
+    if (!el || el.id === focusedId) continue;
+    if (key === 'characterPhoto') {
+      const photoUrl = updatedSheet.characterPhoto || '';
+      const placeholder = document.getElementById('photoPlaceholder');
+      const isValid = photoUrl && photoUrl !== '' && photoUrl !== '/no-image-placeholder.svg'
+        && !photoUrl.includes('index.html') && !photoUrl.includes('localhost') && !photoUrl.includes('127.0.0.1');
+      if (isValid) {
+        el.src = photoUrl; el.style.display = 'block';
+        if (placeholder) placeholder.style.display = 'none';
+      } else {
+        el.src = ''; el.style.display = 'none';
+        if (placeholder) placeholder.style.display = 'flex';
+      }
+    } else {
+      el.value = updatedSheet[key] || '';
+    }
+  }
+
+  const success = updatedSheet.deathSavesSuccess || [false, false, false];
+  const failure = updatedSheet.deathSavesFailure || [false, false, false];
+  ['deathSavesSuccess1','deathSavesSuccess2','deathSavesSuccess3'].forEach((id, i) => {
+    const el = document.getElementById(id); if (el && el.id !== focusedId) el.checked = success[i];
+  });
+  ['deathSavesFailure1','deathSavesFailure2','deathSavesFailure3'].forEach((id, i) => {
+    const el = document.getElementById(id); if (el && el.id !== focusedId) el.checked = failure[i];
+  });
+  const inEl = document.getElementById('inspirationCheckbox');
+  if (inEl && inEl.id !== focusedId) inEl.checked = updatedSheet.inspiration || false;
+  const adEl = document.getElementById('advantageCheckbox');
+  if (adEl && adEl.id !== focusedId) adEl.checked = updatedSheet.advantage || false;
+  const diEl = document.getElementById('disadvantageCheckbox');
+  if (diEl && diEl.id !== focusedId) diEl.checked = updatedSheet.disadvantage || false;
+
+  if (!weaponEditing && Array.isArray(updatedSheet.weapons)) {
+    weaponRows = JSON.parse(JSON.stringify(updatedSheet.weapons)); renderWeaponTable(false);
+  }
+  if (!skillEditing && Array.isArray(updatedSheet.skills)) {
+    skillRows = JSON.parse(JSON.stringify(updatedSheet.skills)); renderSkillTable(false);
+  }
+  if (!editingInv && Array.isArray(updatedSheet.inventory)) {
+    inventoryRows = JSON.parse(JSON.stringify(updatedSheet.inventory)); renderInventoryTable(false);
+  }
+  if (!editingEquip && Array.isArray(updatedSheet.equipment)) {
+    equipmentRows = JSON.parse(JSON.stringify(updatedSheet.equipment)); renderEquipmentTable(false);
+  }
+
+  coinsData = updatedSheet.coins ? JSON.parse(JSON.stringify(updatedSheet.coins)) : { sen: 0, gin: 0, kin: 0 };
+  loadCoinsData();
+  updateModifiers();
+  updateDeathOverlay();
+  updateCurrentWeight();
+}
+
+/** Мігрує старі дані з OBR room metadata до Supabase (одноразово) */
+async function migrateOBRDataIfNeeded(roomId) {
+  try {
+    const metadata = await OBR.room.getMetadata();
+    const oldSheets = metadata[DARQIE_SHEETS_KEY];
+    const newRegistry = metadata[DARQIE_REGISTRY_KEY];
+
+    if (!Array.isArray(oldSheets) || oldSheets.length === 0) return;
+    if (Array.isArray(newRegistry) && newRegistry.length > 0) return; // вже мігровано
+
+    console.log('[Migration] Мігруємо', oldSheets.length, 'персонажів з OBR до Supabase...');
+    for (const sheet of oldSheets) {
+      if (!sheet?.characterName) continue;
+      const { data } = await supabase
+        .from('character_sheets')
+        .select('character_name')
+        .eq('room_id', roomId)
+        .eq('character_name', sheet.characterName)
+        .single();
+      if (!data) {
+        await saveSheetToSupabase(sheet);
+        console.log('[Migration] Мігровано:', sheet.characterName);
+      }
+    }
+    console.log('[Migration] Міграцію завершено.');
+  } catch (e) {
+    console.error('[Migration] Помилка міграції:', e);
   }
 }
 
 // === КОНСТАНТИ ===
-const DARQIE_SHEETS_KEY = 'darqie.characterSheets';
+const DARQIE_SHEETS_KEY = 'darqie.characterSheets'; // legacy — тепер лише для міграції
+const DARQIE_REGISTRY_KEY = 'darqie.v2.registry';   // мінімальний реєстр персонажів в OBR
 const DEBOUNCE_DELAY = 150;
 const UPLOADCARE_PUBLIC_KEY = '7d0fa9d84ac0680d6d83';
 const DICE_ROLL_KEY = "darqie.rollRequest";
@@ -452,6 +778,7 @@ const TOKEN_HEALTH_RECONCILE_INTERVAL_MS = 12000;
 let lastTokenACSyncKey = '';
 let lastTokenACReconcileAt = 0;
 const TOKEN_AC_RECONCILE_INTERVAL_MS = 12000;
+let realtimeChannel = null;
 
 function isTokenForSheet(item, sheet) {
   if (!item || item.layer !== 'CHARACTER') return false;
@@ -850,27 +1177,13 @@ async function saveSheetData(targetSheetIndex = null) {
   if (equipmentLabel && sheet.equipmentTitle) equipmentLabel.textContent = sheet.equipmentTitle;
 
   try {
-    await saveActiveCharacterModalInfoToSupabase();
+    // Зберігаємо ВСЕ в Supabase (єдине джерело правди)
+    await saveSheetToSupabase(sheet);
 
-    // Отримуємо СВІЖІ метадані перед збереженням
-    const currentMetadata = await OBR.room.getMetadata();
-    const currentSheets = currentMetadata[DARQIE_SHEETS_KEY] || [];
-    
-    // ВАЖЛИВО: модальні поля з довгим текстом зберігаються в Supabase,
-    // тому прибираємо їх з room metadata, щоб не впиратися в ліміт 16 КБ.
-    currentSheets[sheetIndexToSave] = stripModalFieldsForRoomMetadata(sheet);
-    
-    // Зберігаємо оновлені дані
-    await OBR.room.setMetadata({ 
-      ...currentMetadata, 
-      [DARQIE_SHEETS_KEY]: currentSheets 
-    });
+    // Оновлюємо мінімальний реєстр у OBR room metadata (тільки імена + playerName)
+    await updateOBRRegistry();
 
-    // НЕ робимо characterSheets = currentSheets, бо currentSheets — це стрипована версія
-    // без полів Supabase (MODAL_FIELDS, OFFLOADED_*). Змінна `sheet` вже є прямим
-    // посиланням на characterSheets[activeSheetIndex] і вже оновлена вище.
-
-    // Якщо власник листа змінився (включно з очищенням) — передаємо токен новому власнику
+    // Якщо власник листа змінився — передаємо токен новому власнику
     if (isGM && sheet.playerName !== previousPlayerName) {
       await syncCharacterTokenOwner(sheet, previousPlayerName);
     }
@@ -1025,11 +1338,44 @@ async function updateCharacterDropdown() {
   const characterSelect = document.getElementById('characterSelect');
   const waitingBlock = document.getElementById('waitingBlock');
   const mainContent = document.getElementById('mainContent');
-  
+
   if (!characterSelect) return;
 
-  const roomSheets = await getMetadata();
-  characterSheets = mergeRoomSheetsWithLocalCache(roomSheets, characterSheets);
+  const roomId = OBR.room.id;
+  const rows = await loadAllCharactersFromSupabase(roomId);
+
+  if (rows !== null) {
+    // Зберігаємо порядок із OBR реєстру (якщо є)
+    const metadata = await OBR.room.getMetadata();
+    const registry = metadata[DARQIE_REGISTRY_KEY] || [];
+
+    if (registry.length > 0) {
+      const rowsByName = {};
+      rows.forEach(r => { rowsByName[r.character_name] = r; });
+
+      const rebuilt = registry
+        .map(entry => {
+          const row = rowsByName[entry.characterName];
+          if (row) return sheetFromSupabaseRow(row);
+          // Персонаж є в реєстрі, але ще не в Supabase
+          return { characterName: entry.characterName, playerName: entry.playerName };
+        })
+        .filter(Boolean);
+
+      // Додаємо персонажів з Supabase, яких нема в реєстрі
+      rows.forEach(row => {
+        if (!rebuilt.some(s => s.characterName === row.character_name)) {
+          rebuilt.push(sheetFromSupabaseRow(row));
+        }
+      });
+
+      characterSheets = rebuilt;
+    } else {
+      characterSheets = rows.map(row => sheetFromSupabaseRow(row));
+    }
+  }
+  // Якщо Supabase недоступний — використовуємо наявний локальний кеш
+
   const visibleSheets = characterSheets
     .map((sheet, index) => ({ ...sheet, index }))
     .filter(sheet => isGM || sheet.playerName === currentPlayerName);
@@ -1063,7 +1409,6 @@ async function updateCharacterDropdown() {
 
   characterSelect.value = activeSheetIndex;
 
-  await hydrateActiveCharacterFromSupabase();
   loadSheetData();
   populatePlayerSelect();
 }
@@ -1221,14 +1566,28 @@ function connectInputsToSave() {
   const characterSelect = document.getElementById('characterSelect');
   if (characterSelect) {
     characterSelect.addEventListener('change', async () => {
-      // Силу зберегти попередній символ перед переключенням
+      // Зберігаємо попередній персонаж перед переключенням
       const previousIndex = activeSheetIndex;
       if (previousIndex >= 0 && previousIndex < characterSheets.length) {
         await saveSheetData(previousIndex);
       }
-      
+
       activeSheetIndex = parseInt(characterSelect.value, 10);
-      await hydrateActiveCharacterFromSupabase();
+
+      // Завантажуємо свіжі дані з Supabase для вибраного персонажа
+      const sheet = characterSheets[activeSheetIndex];
+      if (sheet?.characterName) {
+        try {
+          const { data } = await supabase
+            .from('character_sheets')
+            .select('*')
+            .eq('room_id', OBR.room.id)
+            .eq('character_name', sheet.characterName)
+            .single();
+          if (data) applyFullSupabaseRowToSheet(characterSheets[activeSheetIndex], data);
+        } catch (_) {}
+      }
+
       loadSheetData();
       populatePlayerSelect();
     });
@@ -1827,8 +2186,9 @@ function setupCharacterButtons() {
   if (addBtn && isGM) {
     addBtn.addEventListener('click', async () => {
       try {
+        const idx = characterSheets.length;
         const newSheet = {
-          characterName: '',
+          characterName: `Персонаж ${idx + 1}`,
           playerName: '',
           characterClassLevel: '',
           background: '',
@@ -1847,41 +2207,34 @@ function setupCharacterButtons() {
           initiative: '',
           speed: '',
           proficienciesAndLanguages: '',
-          equipment: '',
           alliesAndOrganizations: '',
           characterHistory: '',
           additionalFeatures: '',
-          notes: '',
-          characterPhoto: '/no-image-placeholder.svg',
+          characterPhoto: '',
+          tokenPhoto: '',
           maxWeight: '',
           currentWeight: '',
           deathSavesSuccess: [false, false, false],
           deathSavesFailure: [false, false, false],
+          inspiration: false,
+          advantage: false,
+          disadvantage: false,
         };
 
-        // Отримуємо поточні дані
-        const currentMetadata = await OBR.room.getMetadata();
-        const currentSheets = currentMetadata[DARQIE_SHEETS_KEY] || [];
-        
-        // Додаємо нового персонажа
-        const updatedSheets = [...currentSheets, newSheet];
-        
-        // Зберігаємо оновлені дані
-        await OBR.room.setMetadata({
-          ...currentMetadata,
-          [DARQIE_SHEETS_KEY]: updatedSheets
-        });
+        // Зберігаємо в Supabase
+        await saveSheetToSupabase(newSheet);
 
-        // Оновлюємо локальні дані
-        characterSheets = updatedSheets;
+        // Додаємо до локального списку
+        characterSheets = [...characterSheets, newSheet];
         activeSheetIndex = characterSheets.length - 1;
 
-        // Оновлюємо інтерфейс
-        updateCharacterDropdown();
+        // Оновлюємо OBR реєстр
+        await updateOBRRegistry();
+
+        // Оновлюємо UI
+        await refreshDropdownOnly();
         loadSheetData();
         populatePlayerSelect();
-        
-        // console.log('Новий персонаж створено успішно');
       } catch (error) {
         console.error('Помилка при створенні персонажа:', error);
       }
@@ -1894,33 +2247,34 @@ function setupCharacterButtons() {
       try {
         if (!confirm('Ви дійсно хочете видалити цього персонажа?')) return;
 
-        // Отримуємо поточні дані
-        const currentMetadata = await OBR.room.getMetadata();
-        const currentSheets = currentMetadata[DARQIE_SHEETS_KEY] || [];
-        
-        // Видаляємо персонажа
-        const updatedSheets = currentSheets.filter((_, index) => index !== activeSheetIndex);
-        
-        // Зберігаємо оновлені дані
-        await OBR.room.setMetadata({
-          ...currentMetadata,
-          [DARQIE_SHEETS_KEY]: updatedSheets
-        });
+        const sheetToDelete = characterSheets[activeSheetIndex];
+        if (!sheetToDelete) return;
 
-        // Оновлюємо локальні дані
-        characterSheets = updatedSheets;
+        // Видаляємо з Supabase
+        if (sheetToDelete.characterName) {
+          const { error } = await supabase
+            .from('character_sheets')
+            .delete()
+            .eq('room_id', OBR.room.id)
+            .eq('character_name', sheetToDelete.characterName);
+          if (error) console.error('[Supabase] Помилка видалення:', error);
+        }
+
+        // Видаляємо з локального списку
+        characterSheets = characterSheets.filter((_, index) => index !== activeSheetIndex);
         if (characterSheets.length === 0) {
           activeSheetIndex = 0;
         } else {
           activeSheetIndex = Math.min(activeSheetIndex, characterSheets.length - 1);
         }
 
-        // Оновлюємо інтерфейс
-        updateCharacterDropdown();
+        // Оновлюємо OBR реєстр
+        await updateOBRRegistry();
+
+        // Оновлюємо UI
+        await refreshDropdownOnly();
         loadSheetData();
         populatePlayerSelect();
-        
-        // console.log('Персонаж видалено успішно');
       } catch (error) {
         console.error('Помилка при видаленні персонажа:', error);
       }
@@ -2404,42 +2758,25 @@ function updateDeathOverlay() {
   }
 }
 
-// Модифікуємо функцію checkCharacterAndRedirect
+// Перевіряє чи гравець має персонажа і показує/приховує UI
 async function checkCharacterAndRedirect() {
-    try {
-        const metadata = await OBR.room.getMetadata();
-        const sheets = metadata[DARQIE_SHEETS_KEY] || [];
-        const currentPlayerName = await OBR.player.getName();
-        
-        const hasCharacter = sheets.some(sheet => sheet.playerName === currentPlayerName);
-        const waitingBlock = document.getElementById('waitingBlock');
-        const mainContent = document.getElementById('mainContent');
+  try {
+    const visibleSheets = characterSheets
+      .filter(sheet => isGM || sheet.playerName === currentPlayerName);
 
-        if (!isGM) {
-            if (hasCharacter) {
-                if (waitingBlock) waitingBlock.style.display = 'none';
-                if (mainContent) mainContent.style.display = 'flex';
-                // Оновлюємо дані тільки якщо вони змінились
-                if (!isAnyEditingActive() && !areSheetsEqualForRoomComparison(characterSheets, sheets)) {
-              characterSheets = mergeRoomSheetsWithLocalCache(sheets, characterSheets);
-                    await updateCharacterDropdown();
-                }
-            } else {
-                if (waitingBlock) waitingBlock.style.display = 'flex';
-                if (mainContent) mainContent.style.display = 'none';
-            }
-        } else {
-            if (waitingBlock) waitingBlock.style.display = 'none';
-            if (mainContent) mainContent.style.display = 'flex';
-            // Для ГМ також оновлюємо тільки при зміні
-            if (!isAnyEditingActive() && !areSheetsEqualForRoomComparison(characterSheets, sheets)) {
-            characterSheets = mergeRoomSheetsWithLocalCache(sheets, characterSheets);
-                await updateCharacterDropdown();
-            }
-        }
-    } catch (error) {
-        console.error('Помилка при перевірці стану персонажа:', error);
+    const waitingBlock = document.getElementById('waitingBlock');
+    const mainContent = document.getElementById('mainContent');
+
+    if (!isGM && visibleSheets.length === 0) {
+      if (waitingBlock) waitingBlock.style.display = 'flex';
+      if (mainContent) mainContent.style.display = 'none';
+    } else {
+      if (waitingBlock) waitingBlock.style.display = 'none';
+      if (mainContent) mainContent.style.display = 'flex';
     }
+  } catch (error) {
+    console.error('Помилка при перевірці стану персонажа:', error);
+  }
 }
 
 // Модифікуємо функцію setupInterface
@@ -2480,32 +2817,32 @@ function setupInterface() {
         maxHealthPointsInput.style.zIndex = '10';
     }
 
-    // Додаємо підписку на зміни метаданих
+    // Підписка на зміни реєстру в OBR (додавання/видалення персонажів ДМ-ом)
     OBR.room.onMetadataChange(async (metadata) => {
+      const registry = metadata[DARQIE_REGISTRY_KEY] || [];
+
       if (isAnyEditingActive()) return;
-        
-        const sheets = metadata[DARQIE_SHEETS_KEY] || [];
-        
-        // Оновлюємо тільки ІНШІ персонажі, не активний
-        if (sheets.length > 0) {
-            const hasChanges = sheets.some((sheet, index) => {
-                if (index === activeSheetIndex) return false; // Не чіпаємо активний
-              return !areSheetsEqualForRoomComparison([characterSheets[index]], [sheet]);
-            });
-            
-            if (hasChanges) {
-                // Оновлюємо всі персонажі крім активного
-                sheets.forEach((sheet, index) => {
-                    if (index !== activeSheetIndex) {
-                const merged = mergeRoomSheetsWithLocalCache([sheet], [characterSheets[index]]);
-                characterSheets[index] = merged[0];
-                    }
-                });
-                await updateCharacterDropdown();
-            }
-        }
-        
-        await checkCharacterAndRedirect();
+
+      // Змінилась кількість персонажів — перезавантажуємо список із Supabase
+      if (registry.length !== characterSheets.length) {
+        await updateCharacterDropdown();
+        return;
+      }
+
+      // Перевіряємо чи змінились призначення гравців
+      const assignmentChanged = registry.some((entry, i) => {
+        const local = characterSheets[i];
+        return local && local.playerName !== entry.playerName;
+      });
+
+      if (assignmentChanged) {
+        registry.forEach((entry, i) => {
+          if (characterSheets[i]) characterSheets[i].playerName = entry.playerName;
+        });
+        await refreshDropdownOnly();
+      }
+
+      await checkCharacterAndRedirect();
     });
 
     // Додаємо підписку на повідомлення про призначення персонажа
@@ -2568,22 +2905,34 @@ OBR.onReady(async () => {
     // Виправляємо старі токени, які посилаються на localhost і ламаються у гравців.
     await normalizeLegacyTokenImageUrls();
 
+    // Мігруємо старі дані з OBR room metadata до Supabase (якщо потрібно)
+    await migrateOBRDataIfNeeded(OBR.room.id);
+
     // Налаштування інтерфейсу
-    setupInterface(); // Викликаємо setupInterface для ініціалізації
+    setupInterface();
+
+    // Підписка на Supabase Realtime (синхронізація між гравцями)
+    await setupSupabaseRealtime(OBR.room.id);
+
+    // Перезавантаження даних при зміні сцени
+    OBR.scene.onReadyChange(async (isReady) => {
+      if (isReady) {
+        // Сцена змінилась — перезавантажуємо список персонажів із Supabase
+        await updateCharacterDropdown();
+      }
+    });
 
     // Підписка на зміни в партії
     OBR.party.onChange(() => {
         populatePlayerSelect();
     });
 
-    // Періодична перевірка наявності персонажа
+    // Періодична перевірка видимості (без перезавантаження даних)
     setInterval(async () => {
         await checkCharacterAndRedirect();
 
         const combatValues = getActiveSheetCombatValues();
         if (combatValues) {
-          // Ресинк HP на активній сцені, щоб після копіювання токена/зміни сцени
-          // не потрібно було вручну "перещолкувати" поле здоров'я.
           await updateTokenHealth(combatValues.hp, combatValues.tempHp);
           await updateTokenAC(combatValues.ac);
         }
@@ -2604,13 +2953,11 @@ OBR.onReady(async () => {
     }
 });
 
-// Функція для отримання поточного персонажа
+// Функція для отримання поточного персонажа (використовує локальний кеш)
 async function getCurrentCharacter() {
-  const metadata = await OBR.room.getMetadata();
-  const sheets = metadata[DARQIE_SHEETS_KEY] || [];
-  const selectedCharacterId = document.getElementById('characterSelect').value;
-  if (selectedCharacterId === undefined || selectedCharacterId === null || selectedCharacterId === '') return null;
-  return sheets[parseInt(selectedCharacterId, 10)] || null;
+  const selectedValue = document.getElementById('characterSelect')?.value;
+  if (selectedValue === undefined || selectedValue === null || selectedValue === '') return null;
+  return characterSheets[parseInt(selectedValue, 10)] || null;
 }
 
 // Функція для оновлення інформації в модальному вікні
