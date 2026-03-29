@@ -174,7 +174,7 @@ const OFFLOADED_SHEET_FIELD_TO_DB = {
   strengthScore: 'strength_score',
   dexterityScore: 'dexterity_score',
   constitutionScore: 'constitution_score',
-  intelligenceScore: 'intelligence_score',
+  proficiencyScore: 'intelligence_score',
   wisdomScore: 'wisdom_score',
   charismaScore: 'charisma_score',
   armorClass: 'armor_class',
@@ -1026,7 +1026,7 @@ function getSheetInputElements() {
     strengthScore: document.getElementById('strengthScore'),
     dexterityScore: document.getElementById('dexterityScore'),
     constitutionScore: document.getElementById('constitutionScore'),
-    intelligenceScore: document.getElementById('intelligenceScore'),
+    proficiencyScore: document.getElementById('proficiencyScore'),
     wisdomScore: document.getElementById('wisdomScore'),
     charismaScore: document.getElementById('charismaScore'),
     maxHealthPoints: document.getElementById('maxHealthPoints'),
@@ -1052,7 +1052,7 @@ function updateModifiers() {
     ['strengthScore', 'strengthModifier'],
     ['dexterityScore', 'dexterityModifier'],
     ['constitutionScore', 'constitutionModifier'],
-    ['intelligenceScore', 'intelligenceModifier'],
+    ['proficiencyScore', 'proficiencyModifier'],
     ['wisdomScore', 'wisdomModifier'],
     ['charismaScore', 'charismaModifier'],
   ];
@@ -1623,7 +1623,7 @@ function connectInputsToSave() {
   const elements = getSheetInputElements();
   const numberInputIds = new Set([
     'armorClass', 'healthPoints', 'speed', 'initiative', 'health', 'maxHealthPoints',
-    'strengthScore', 'dexterityScore', 'constitutionScore', 'intelligenceScore', 'wisdomScore', 'charismaScore',
+    'strengthScore', 'dexterityScore', 'constitutionScore', 'proficiencyScore', 'wisdomScore', 'charismaScore',
     'maxWeight', 'currentWeight'
   ]);
 
@@ -1670,7 +1670,7 @@ function connectInputsToSave() {
   // Валідація для всіх числових полів
   const numberInputs = [
     'armorClass', 'healthPoints', 'speed', 'initiative', 'health', 'maxHealthPoints',
-    'strengthScore', 'dexterityScore', 'constitutionScore', 'intelligenceScore', 'wisdomScore', 'charismaScore'
+    'strengthScore', 'dexterityScore', 'constitutionScore', 'proficiencyScore', 'wisdomScore', 'charismaScore'
   ];
   numberInputs.forEach(inputId => {
     const input = document.getElementById(inputId);
@@ -1772,7 +1772,7 @@ function connectInputsToSave() {
 
   // Підключення модифікаторів до характеристик
   ['strengthScore', 'dexterityScore', 'constitutionScore', 
-   'intelligenceScore', 'wisdomScore', 'charismaScore'].forEach(id => {
+  'proficiencyScore', 'wisdomScore', 'charismaScore'].forEach(id => {
     const element = document.getElementById(id);
     if (element) {
       element.addEventListener('input', updateModifiers);
@@ -2374,7 +2374,7 @@ function setupCharacterButtons() {
           strengthScore: '10',
           dexterityScore: '10',
           constitutionScore: '10',
-          intelligenceScore: '10',
+          proficiencyScore: '10',
           wisdomScore: '10',
           charismaScore: '10',
           healthPoints: '',
@@ -4324,7 +4324,7 @@ function setupStatEditButtons() {
   // Основні характеристики з олівцем
   const statIdsWithEdit = [
     'strengthScore', 'dexterityScore', 'constitutionScore',
-    'intelligenceScore', 'wisdomScore', 'charismaScore'
+    'proficiencyScore', 'wisdomScore', 'charismaScore'
   ];
   statIdsWithEdit.forEach(id => {
     const input = document.getElementById(id);
@@ -4409,7 +4409,7 @@ function setupModifierButtons() {
     { modId: 'strengthModifier', scoreId: 'strengthScore' },
     { modId: 'dexterityModifier', scoreId: 'dexterityScore' },
     { modId: 'constitutionModifier', scoreId: 'constitutionScore' },
-    { modId: 'intelligenceModifier', scoreId: 'intelligenceScore' },
+    { modId: 'proficiencyModifier', scoreId: 'proficiencyScore' },
     { modId: 'wisdomModifier', scoreId: 'wisdomScore' },
     { modId: 'charismaModifier', scoreId: 'charismaScore' },
   ];
