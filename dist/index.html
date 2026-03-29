@@ -7,8 +7,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Unicase:wght@700&display=swap" rel="stylesheet" />
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet" />
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
-  <script type="module" crossorigin src="/assets/index-D8kDoOSs.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-C6yQcwR3.css">
+  <script type="module" crossorigin src="/assets/index-jDnGjoZG.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-DhP85NPc.css">
 </head>
 <body>
   <!-- Блок очікування -->
@@ -48,6 +48,9 @@
           <div class="name-input-group">
             <i class="fas fa-user" title="Ім'я гравця"></i>
             <select id="playerNameSelect"></select>
+            <button id="openGmPanelButton" title="Панель GM" style="display:none;">
+              <i class="fas fa-sliders-h"></i>
+            </button>
           </div>
         </div>
       </div>
@@ -412,6 +415,11 @@
         <input accept="image/*" id="tokenPhotoFileInput" style="display: none;" type="file" />
       </div>
     </div>
+  </div>
+
+  <!-- Панель GM (заміняє mainContent при відкритті) -->
+  <div id="gmPanelScreen" class="main-container" style="display: none;">
+    <div id="gmPanelMount" class="left-panel" style="width: 100%;"></div>
   </div>
 
   <div id="noCharacterMessage" style="display: none; text-align: center; margin-top: 20px;">

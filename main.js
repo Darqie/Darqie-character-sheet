@@ -1,5 +1,6 @@
 import OBR, { buildImage, buildLabel } from '@owlbear-rodeo/sdk';
 import { createClient } from '@supabase/supabase-js';
+import { initGmPanel } from './gm-panel.js';
 
 // === SUPABASE ===
 const SUPABASE_URL =
@@ -2338,10 +2339,11 @@ function setupCharacterButtons() {
   const addBtn = document.getElementById('addCharacterButton');
   const delBtn = document.getElementById('deleteCharacterButton');
   const createTokenBtn = document.getElementById('createTokenButton');
+  const gmPanelBtn = document.getElementById('openGmPanelButton');
 
   // Приховування кнопок для не-GM
   if (!isGM) {
-    [addBtn, delBtn].forEach(btn => {
+    [addBtn, delBtn, gmPanelBtn].forEach(btn => {
       if (btn) {
         btn.style.display = 'none';
       }
@@ -2352,7 +2354,7 @@ function setupCharacterButtons() {
     }
   } else {
     // Показуємо всі кнопки для GM
-    [addBtn, delBtn, createTokenBtn].forEach(btn => {
+    [addBtn, delBtn, createTokenBtn, gmPanelBtn].forEach(btn => {
       if (btn) {
         btn.style.display = 'flex';
       }
@@ -2973,6 +2975,8 @@ function setupInterface() {
     // setupModifierButtons(); // Видаляємо цей виклик
     
     updateCharacterDropdown();
+
+    initGmPanel({ isGM });
     
     connectInputsToSave();
 

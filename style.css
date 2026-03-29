@@ -84,6 +84,12 @@ body {
   max-width: 65%;
 }
 
+.name-input-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 #characterSelect,
 #playerNameSelect {
   flex-grow: 1;
@@ -436,7 +442,8 @@ textarea::placeholder {
 #photoControls button,
 #addCharacterButton,
 #deleteCharacterButton,
-#createTokenButton {
+#createTokenButton,
+#openGmPanelButton {
   padding: 10px 16px;
   border-radius: 8px;
   background: none;
@@ -458,6 +465,7 @@ textarea::placeholder {
 #addCharacterButton,
 #deleteCharacterButton,
 #createTokenButton,
+#openGmPanelButton,
 #photoControls button {
   background: none;
   outline: none;
@@ -468,6 +476,7 @@ textarea::placeholder {
 #addCharacterButton:hover,
 #deleteCharacterButton:hover,
 #createTokenButton:hover,
+#openGmPanelButton:hover,
 #photoControls button:hover {
   color: #fff;
   transform: translateY(-2px) scale(1.1);
@@ -477,8 +486,50 @@ textarea::placeholder {
 #addCharacterButton:active,
 #deleteCharacterButton:active,
 #createTokenButton:active,
+#openGmPanelButton:active,
 #photoControls button:active {
   transform: translateY(0) scale(1.05);
+}
+
+#gmPanelScreen {
+  align-items: flex-start;
+}
+
+.gm-panel-shell {
+  width: 100%;
+  min-height: calc(100vh - 60px);
+  border-radius: 10px;
+  padding: 20px;
+  background: rgba(33, 37, 51, 0.22);
+  backdrop-filter: blur(8px);
+}
+
+.gm-panel-header h2 {
+  margin: 0 0 16px 0;
+}
+
+.gm-panel-actions {
+  margin-top: 20px;
+}
+
+#gmPanelBackButton {
+  border: none;
+  background: transparent;
+  color: #e0e0e0;
+  font-family: 'Cormorant Unicase', serif !important;
+  font-size: 1.1em;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+#gmPanelBackButton:hover {
+  color: #fff;
+  transform: translateY(-2px) scale(1.03);
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.45));
 }
 
 /* Статистики та модифікатори */

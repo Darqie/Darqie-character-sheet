@@ -47,6 +47,9 @@
           <div class="name-input-group">
             <i class="fas fa-user" title="Ім'я гравця"></i>
             <select id="playerNameSelect"></select>
+            <button id="openGmPanelButton" title="Панель GM" style="display:none;">
+              <i class="fas fa-sliders-h"></i>
+            </button>
           </div>
         </div>
       </div>
@@ -411,6 +414,11 @@
         <input accept="image/*" id="tokenPhotoFileInput" style="display: none;" type="file" />
       </div>
     </div>
+  </div>
+
+  <!-- Панель GM (заміняє mainContent при відкритті) -->
+  <div id="gmPanelScreen" class="main-container" style="display: none;">
+    <div id="gmPanelMount" class="left-panel" style="width: 100%;"></div>
   </div>
 
   <div id="noCharacterMessage" style="display: none; text-align: center; margin-top: 20px;">
