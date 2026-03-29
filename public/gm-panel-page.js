@@ -3,7 +3,14 @@
   if (!backBtn) return;
 
   backBtn.addEventListener('click', () => {
-    sessionStorage.setItem('darqie.returnFromGmPanel', '1');
-    window.location.href = 'index.html';
+    if (window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+
+    const targetUrl = new URL('index.html', window.location.href);
+    targetUrl.search = window.location.search;
+    targetUrl.hash = window.location.hash;
+    window.location.href = targetUrl.toString();
   });
 })();

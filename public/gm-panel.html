@@ -6,24 +6,92 @@
   <title>Панель GM</title>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Unicase:wght@700&display=swap" rel="stylesheet" />
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet" />
-  <link href="./style.css" rel="stylesheet" />
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at 20% 15%, #5b1f1f 0%, #1d1f2a 38%, #12131b 100%);
+      color: #e0e0e0;
+      font-family: 'Cormorant Unicase', serif;
+    }
+
+    .main-container {
+      width: 100%;
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 24px;
+      box-sizing: border-box;
+    }
+
+    .gm-panel-shell {
+      width: min(1200px, 96vw);
+      min-height: calc(100vh - 48px);
+      border-radius: 12px;
+      padding: 24px;
+      background: rgba(33, 37, 51, 0.22);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 2px 12px 0 rgba(0,0,0,0.18), 0 1.5px 6px 0 rgba(0,0,0,0.12);
+      box-sizing: border-box;
+    }
+
+    .gm-panel-header h2 {
+      margin: 0;
+      font-size: 2rem;
+      font-weight: 700;
+    }
+
+    .gm-panel-content {
+      min-height: 60vh;
+      margin-top: 18px;
+    }
+
+    .gm-panel-actions {
+      margin-top: 24px;
+    }
+
+    #gmPanelBackButton {
+      padding: 10px 16px;
+      border-radius: 8px;
+      background: none;
+      border: none;
+      color: #e0e0e0;
+      font-family: 'Cormorant Unicase', serif;
+      font-size: 1.1em;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #gmPanelBackButton:hover {
+      color: #fff;
+      transform: translateY(-2px) scale(1.03);
+      filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.6));
+    }
+
+    #gmPanelBackButton:active {
+      transform: translateY(0) scale(1.01);
+    }
+  </style>
 </head>
 <body>
-  <div class="main-container" style="display: flex;">
-    <div class="left-panel" style="width: 100%;">
-      <div class="gm-panel-shell">
-        <div class="gm-panel-header">
-          <h2>Панель GM</h2>
-        </div>
+  <div class="main-container">
+    <div class="gm-panel-shell">
+      <div class="gm-panel-header">
+        <h2>Панель GM</h2>
+      </div>
 
-        <div class="gm-panel-content"></div>
+      <div class="gm-panel-content"></div>
 
-        <div class="gm-panel-actions">
-          <button id="gmPanelBackButton" type="button">
-            <i class="fas fa-arrow-left"></i>
-            <span>Повернутись назад</span>
-          </button>
-        </div>
+      <div class="gm-panel-actions">
+        <button id="gmPanelBackButton" type="button">
+          <i class="fas fa-arrow-left"></i>
+          <span>Повернутись назад</span>
+        </button>
       </div>
     </div>
   </div>

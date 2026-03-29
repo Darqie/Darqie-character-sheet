@@ -27,17 +27,6 @@ const TOKEN_PLACEHOLDER_URL = 'https://raw.githubusercontent.com/Darqie/Darqie-c
 const SKILL_POPOVER_VERSION = '2026-03-21-2';
 const SUPABASE_PHOTO_BUCKET = 'character-photos';
 
-// Після повернення з окремої GM-панелі не показуємо заглушку очікування.
-if (typeof window !== 'undefined' && sessionStorage.getItem('darqie.returnFromGmPanel') === '1') {
-  document.addEventListener('DOMContentLoaded', () => {
-    const waitingBlock = document.getElementById('waitingBlock');
-    const mainContent = document.getElementById('mainContent');
-    if (waitingBlock) waitingBlock.style.display = 'none';
-    if (mainContent) mainContent.style.display = 'flex';
-    sessionStorage.removeItem('darqie.returnFromGmPanel');
-  }, { once: true });
-}
-
 /**
  * Генерує простий хеш для імені персонажа (ASCII-сумісний шлях у Storage)
  */
@@ -2373,7 +2362,10 @@ function setupCharacterButtons() {
 
   if (gmPanelBtn && isGM) {
     gmPanelBtn.addEventListener('click', () => {
-      window.location.href = 'gm-panel.html';
+      const targetUrl = new URL('gm-panel.html', window.location.href);
+      targetUrl.search = window.location.search;
+      targetUrl.hash = window.location.hash;
+      window.location.href = targetUrl.toString();
     });
   }
 
