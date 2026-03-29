@@ -1,6 +1,5 @@
 import OBR, { buildImage, buildLabel } from '@owlbear-rodeo/sdk';
 import { createClient } from '@supabase/supabase-js';
-import { initGmPanel } from './gm-panel.js';
 
 // === SUPABASE ===
 const SUPABASE_URL =
@@ -2361,6 +2360,12 @@ function setupCharacterButtons() {
     });
   }
 
+  if (gmPanelBtn && isGM) {
+    gmPanelBtn.addEventListener('click', () => {
+      window.location.href = 'gm-panel.html';
+    });
+  }
+
   // Додавання персонажа
   if (addBtn && isGM) {
     addBtn.addEventListener('click', async () => {
@@ -2975,8 +2980,6 @@ function setupInterface() {
     // setupModifierButtons(); // Видаляємо цей виклик
     
     updateCharacterDropdown();
-
-    initGmPanel({ isGM });
     
     connectInputsToSave();
 
