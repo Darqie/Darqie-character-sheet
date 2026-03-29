@@ -50,7 +50,16 @@
       align-items: center;
       gap: 8px;
       flex-wrap: wrap;
-      justify-content: flex-end;
+      justify-content: space-between;
+      width: 100%;
+    }
+
+    .gm-panel-nav-left,
+    .gm-panel-nav-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
     }
 
     .gm-panel-nav-btn {
@@ -79,6 +88,29 @@
       transform: translateY(0) scale(1.01);
     }
 
+    .gm-panel-nav-btn.is-active {
+      color: #fff;
+      outline: 1.5px solid rgba(255, 255, 255, 0.75);
+      background: rgba(255, 255, 255, 0.08);
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.25);
+    }
+
+    .gm-panel-nav-btn--players {
+      color: #ffb8b8;
+    }
+
+    .gm-panel-nav-btn--players:hover {
+      color: #ffd3d3;
+      filter: drop-shadow(0 0 8px rgba(255, 110, 110, 0.6));
+    }
+
+    .gm-panel-nav-btn--players.is-active {
+      color: #ffeaea;
+      outline: 1.5px solid rgba(255, 120, 120, 0.85);
+      background: rgba(140, 24, 24, 0.22);
+      box-shadow: 0 0 12px rgba(255, 90, 90, 0.35);
+    }
+
     .gm-panel-shell {
       width: 100%;
       min-height: calc(100vh - 48px);
@@ -95,6 +127,19 @@
       max-height: calc(100vh - 180px);
       overflow-y: auto;
       padding-right: 4px;
+    }
+
+    .gm-page {
+      min-height: 56vh;
+      border-radius: 10px;
+      padding: 16px;
+      background: rgba(33, 37, 51, 0.18);
+    }
+
+    .gm-page h3 {
+      margin-top: 0;
+      margin-bottom: 10px;
+      font-size: 1.4rem;
     }
 
     /* === Кастомний вертикальний скролбар у стилі сторінки персонажа === */
@@ -130,26 +175,30 @@
       <div class="gm-panel-topbar">
         <h2 class="gm-panel-title">Панель GM</h2>
         <div class="gm-panel-nav">
-          <button id="gmPanelBackButton" class="gm-panel-nav-btn" type="button" title="Перейти до персонажів" aria-label="Перейти до персонажів">
-            <i class="fas fa-users"></i>
-            <span>Гравці</span>
-          </button>
-          <button id="gmPanelCharactersButton" class="gm-panel-nav-btn" type="button" title="Персонажі" aria-label="Персонажі">
-            <i class="fas fa-user-shield"></i>
-            <span>Персонажі</span>
-          </button>
-          <button id="gmPanelItemsButton" class="gm-panel-nav-btn" type="button" title="Предмети" aria-label="Предмети">
-            <i class="fas fa-box-open"></i>
-            <span>Предмети</span>
-          </button>
-          <button id="gmPanelSkillsButton" class="gm-panel-nav-btn" type="button" title="Навички" aria-label="Навички">
-            <i class="fas fa-scroll"></i>
-            <span>Навички</span>
-          </button>
-          <button id="gmPanelWeaponsButton" class="gm-panel-nav-btn" type="button" title="Зброя" aria-label="Зброя">
-            <i class="fas fa-crosshairs"></i>
-            <span>Зброя</span>
-          </button>
+          <div class="gm-panel-nav-left">
+            <button id="gmPanelPlayersButton" class="gm-panel-nav-btn gm-panel-nav-btn--players" type="button" title="Гравці" aria-label="Гравці">
+              <i class="fas fa-users"></i>
+              <span>Гравці</span>
+            </button>
+          </div>
+          <div class="gm-panel-nav-right">
+            <button id="gmPanelCharactersButton" class="gm-panel-nav-btn" type="button" title="Персонажі" aria-label="Персонажі">
+              <i class="fas fa-user-shield"></i>
+              <span>Персонажі</span>
+            </button>
+            <button id="gmPanelItemsButton" class="gm-panel-nav-btn" type="button" title="Предмети" aria-label="Предмети">
+              <i class="fas fa-box-open"></i>
+              <span>Предмети</span>
+            </button>
+            <button id="gmPanelSkillsButton" class="gm-panel-nav-btn" type="button" title="Навички" aria-label="Навички">
+              <i class="fas fa-scroll"></i>
+              <span>Навички</span>
+            </button>
+            <button id="gmPanelAttacksButton" class="gm-panel-nav-btn" type="button" title="Атаки" aria-label="Атаки">
+              <i class="fas fa-crosshairs"></i>
+              <span>Атаки</span>
+            </button>
+          </div>
         </div>
       </div>
 
