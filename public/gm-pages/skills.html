@@ -1,4 +1,63 @@
-<div class="gm-page">
-  <h3>Навички</h3>
-  <p>Сторінка навичок. Контент буде додано далі.</p>
-</div>
+<section class="gm-characters-page gm-items-page">
+	<div class="gm-characters-toolbar">
+		<div class="gm-characters-toolbar-title">Навички</div>
+		<div class="gm-characters-toolbar-actions">
+			<select id="gmSkillsFilterSelect" class="gm-cell-select gm-items-filter-select"></select>
+			<button id="gmAddSkillButton" class="gm-characters-create-btn" type="button">
+				<i class="fas fa-plus"></i>
+				<span>Додати навичку</span>
+			</button>
+		</div>
+	</div>
+
+	<div class="gm-characters-table-wrap">
+		<table class="gm-characters-table gm-skills-table">
+			<colgroup>
+				<col style="width: 26%" />
+				<col style="width: 40%" />
+				<col style="width: 24%" />
+				<col />
+			</colgroup>
+			<thead>
+				<tr>
+					<th>Назва</th>
+					<th>Опис</th>
+					<th>Персонаж</th>
+					<th>Дії</th>
+				</tr>
+			</thead>
+			<tbody id="gmSkillsTableBody"></tbody>
+		</table>
+	</div>
+
+	<div id="gmSkillCreateModal" class="gm-item-modal" hidden>
+		<div class="gm-item-modal-backdrop" data-action="closeModal"></div>
+		<div class="gm-item-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="gmSkillCreateModalTitle">
+			<h4 id="gmSkillCreateModalTitle" class="gm-item-modal-title">Додати навичку</h4>
+			<div class="gm-item-modal-grid">
+				<label class="gm-item-modal-label">
+					<span>Назва</span>
+					<input id="gmSkillModalNameInput" class="gm-cell-input" type="text" />
+				</label>
+				<label class="gm-item-modal-label" style="grid-column: 1 / -1;">
+					<span>Опис</span>
+					<textarea id="gmSkillModalDescInput" class="gm-cell-input gm-skill-modal-desc" rows="4"></textarea>
+				</label>
+				<label class="gm-item-modal-label">
+					<span>Персонаж</span>
+					<select id="gmSkillModalOwnerSelect" class="gm-cell-select"></select>
+				</label>
+			</div>
+			<div class="gm-item-modal-actions">
+				<button id="gmSkillModalSaveButton" type="button" class="gm-characters-create-btn">
+					<i class="fas fa-check"></i>
+					<span>Зберегти</span>
+				</button>
+				<button id="gmSkillModalCancelButton" type="button" class="gm-characters-create-btn gm-characters-create-btn--npc">
+					<i class="fas fa-times"></i>
+					<span>Скасувати</span>
+				</button>
+			</div>
+		</div>
+	</div>
+</section>

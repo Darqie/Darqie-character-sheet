@@ -1,8 +1,17 @@
 import { defineConfig } from 'vite';
 import basicSsl from '@vitejs/plugin-basic-ssl';
+import { resolve } from 'path';
 
 export default defineConfig({
   plugins: [basicSsl()],
+  build: {
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        gmPanel: resolve(__dirname, 'gm-panel.html'),
+      },
+    },
+  },
   server: {
     port: 5174,
     host: true,

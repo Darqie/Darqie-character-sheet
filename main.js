@@ -26,6 +26,8 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 const TOKEN_PLACEHOLDER_URL = 'https://raw.githubusercontent.com/Darqie/Darqie-character-sheet/main/public/character-token-placeholder.png';
 const SKILL_POPOVER_VERSION = '2026-03-21-2';
 const SUPABASE_PHOTO_BUCKET = 'character-photos';
+const CHARACTER_TYPE_PLAYER = 'player';
+const CHARACTER_TYPE_NPC = 'npc';
 
 /**
  * Генерує простий хеш для імені персонажа (ASCII-сумісний шлях у Storage)
@@ -95,7 +97,6 @@ function isUploadcareUrl(url) {
 function resolveTokenImageUrlFromSheet(sheet) {
   if (!sheet) return getTokenPlaceholderUrl();
   if (isUploadcareUrl(sheet.tokenPhoto)) return sheet.tokenPhoto.trim();
-  if (isUploadcareUrl(sheet.characterPhoto)) return sheet.characterPhoto.trim();
   return getTokenPlaceholderUrl();
 }
 
@@ -280,6 +281,15 @@ function fromSupabaseModalRow(row) {
   return modalInfo;
 }
 
+function getSheetCharacterType(sheet) {
+  const explicit = String(sheet?.characterType || '').trim().toLowerCase();
+  return explicit === CHARACTER_TYPE_NPC ? CHARACTER_TYPE_NPC : CHARACTER_TYPE_PLAYER;
+}
+
+function isPlayableSheet(sheet) {
+  return getSheetCharacterType(sheet) === CHARACTER_TYPE_PLAYER;
+}
+
 // Формує повний рядок Supabase із УСІМа полями персонажа
 function buildFullSupabaseRow(sheet, roomId) {
   const row = {
@@ -329,6 +339,9 @@ function buildFullSupabaseRow(sheet, roomId) {
   if (sheet?.alliesAndOrganizations !== undefined) extra.alliesAndOrganizations = sheet.alliesAndOrganizations;
   if (sheet?.characterHistory !== undefined) extra.characterHistory = sheet.characterHistory;
   if (sheet?.additionalFeatures !== undefined) extra.additionalFeatures = sheet.additionalFeatures;
+  if (sheet?.characterType !== undefined) {
+    extra.characterType = getSheetCharacterType(sheet);
+  }
   row.extra_data = extra;
 
   return row;
@@ -427,6 +440,7 @@ function applyFullSupabaseRowToSheet(sheet, row) {
   sheet.alliesAndOrganizations = extra.alliesAndOrganizations || '';
   sheet.characterHistory = extra.characterHistory || '';
   sheet.additionalFeatures = extra.additionalFeatures || '';
+  sheet.characterType = extra.characterType === CHARACTER_TYPE_NPC ? CHARACTER_TYPE_NPC : CHARACTER_TYPE_PLAYER;
 
   // Запам'ятовуємо оригінальне ім'я для детектування перейменувань
   sheet._originalCharacterName = sheet.characterName;
@@ -476,35 +490,38 @@ async function loadModalInfoFromSupabase(roomId, characterName) {
       .select('*')
       .eq('room_id', roomId)
       .eq('character_name', characterName)
-      .single();
+      .order('updated_at', { ascending: false, nullsFirst: false })
+      .limit(1);
 
-    if (error && error.code !== 'PGRST116') {
+    if (error) {
       console.error('[Supabase] Помилка читання інформації модалки:', error);
       return null;
     }
 
-    if (!data) return null;
+    const row = Array.isArray(data) ? data[0] : null;
+
+    if (!row) return null;
 
     // Застосовуємо всі поля до локального листа
     const sheetIdx = characterSheets.findIndex(s => s.characterName === characterName);
     if (sheetIdx !== -1) {
-      applyFullSupabaseRowToSheet(characterSheets[sheetIdx], data);
+      applyFullSupabaseRowToSheet(characterSheets[sheetIdx], row);
     }
 
-    const rowInfo = fromSupabaseModalRow(data);
+    const rowInfo = fromSupabaseModalRow(row);
     if (rowInfo && MODAL_FIELDS.some((key) => typeof rowInfo[key] === 'string' && rowInfo[key] !== '')) {
       return rowInfo;
     }
 
     // Backward compatibility: старий формат
-    if (typeof data?.appearance === 'string' && data.appearance) {
+    if (typeof row?.appearance === 'string' && row.appearance) {
       try {
-        const parsed = JSON.parse(data.appearance);
+        const parsed = JSON.parse(row.appearance);
         if (parsed && parsed.modalInfo && typeof parsed.modalInfo === 'object') {
           return parsed.modalInfo;
         }
       } catch (_) {
-        return { appearance: data.appearance };
+        return { appearance: row.appearance };
       }
     }
 
@@ -526,13 +543,19 @@ async function hydrateActiveCharacterFromSupabase() {
   if (!sheet || !sheet.characterName) return;
 
   try {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('character_sheets')
       .select('*')
       .eq('room_id', OBR.room.id)
       .eq('character_name', sheet.characterName)
-      .single();
-    if (data) applyFullSupabaseRowToSheet(sheet, data);
+      .order('updated_at', { ascending: false, nullsFirst: false })
+      .limit(1);
+    if (error) {
+      console.error('[Supabase] hydrateActiveCharacterFromSupabase помилка:', error);
+      return;
+    }
+    const row = Array.isArray(data) ? data[0] : null;
+    if (row) applyFullSupabaseRowToSheet(sheet, row);
   } catch (e) {
     console.error('[Supabase] hydrateActiveCharacterFromSupabase помилка:', e);
   }
@@ -547,6 +570,28 @@ function sheetFromSupabaseRow(row) {
   return sheet;
 }
 
+function dedupeRowsByCharacterName(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return [];
+  const byName = new Map();
+
+  for (const row of rows) {
+    if (!row?.character_name) continue;
+    const existing = byName.get(row.character_name);
+    if (!existing) {
+      byName.set(row.character_name, row);
+      continue;
+    }
+
+    const existingTs = Date.parse(existing.updated_at || '') || 0;
+    const rowTs = Date.parse(row.updated_at || '') || 0;
+    if (rowTs >= existingTs) {
+      byName.set(row.character_name, row);
+    }
+  }
+
+  return Array.from(byName.values());
+}
+
 /** Завантажує всіх персонажів кімнати з Supabase */
 async function loadAllCharactersFromSupabase(roomId) {
   if (!roomId) return null;
@@ -554,9 +599,10 @@ async function loadAllCharactersFromSupabase(roomId) {
     const { data, error } = await supabase
       .from('character_sheets')
       .select('*')
-      .eq('room_id', roomId);
+      .eq('room_id', roomId)
+      .order('updated_at', { ascending: false, nullsFirst: false });
     if (error) { console.error('[Supabase] Помилка завантаження персонажів:', error); return null; }
-    return data || [];
+    return dedupeRowsByCharacterName(data || []);
   } catch (e) {
     console.error('[Supabase] Мережева помилка:', e);
     return null;
@@ -587,11 +633,14 @@ async function saveSheetToSupabase(sheet) {
         .select('*')
         .eq('room_id', roomId)
         .eq('character_name', sheet.characterName)
-        .single();
+        .order('updated_at', { ascending: false, nullsFirst: false })
+        .limit(1);
 
-      if (!existingError && existingRow) {
+      const existing = Array.isArray(existingRow) ? existingRow[0] : null;
+
+      if (!existingError && existing) {
         const mergedSheet = {};
-        applyFullSupabaseRowToSheet(mergedSheet, existingRow);
+        applyFullSupabaseRowToSheet(mergedSheet, existing);
         Object.keys(sheet).forEach((key) => {
           if (sheet[key] !== undefined) mergedSheet[key] = sheet[key];
         });
@@ -634,7 +683,7 @@ async function refreshDropdownOnly() {
 
   const visibleSheets = characterSheets
     .map((sheet, index) => ({ ...sheet, index }))
-    .filter(sheet => isGM || sheet.playerName === currentPlayerName);
+    .filter(sheet => isPlayableSheet(sheet) && (isGM || sheet.playerName === currentPlayerName));
 
   characterSelect.innerHTML = '';
   visibleSheets.forEach(sheet => {
@@ -870,13 +919,19 @@ async function migrateOBRDataIfNeeded(roomId) {
     console.log('[Migration] Мігруємо', oldSheets.length, 'персонажів з OBR до Supabase...');
     for (const sheet of oldSheets) {
       if (!sheet?.characterName) continue;
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('character_sheets')
         .select('character_name')
         .eq('room_id', roomId)
         .eq('character_name', sheet.characterName)
-        .single();
-      if (!data) {
+        .order('updated_at', { ascending: false, nullsFirst: false })
+        .limit(1);
+      if (error) {
+        console.warn('[Migration] Не вдалося перевірити існування персонажа:', sheet.characterName, error);
+        continue;
+      }
+      const existing = Array.isArray(data) ? data[0] : null;
+      if (!existing) {
         await saveSheetToSupabase(sheet);
         console.log('[Migration] Мігровано:', sheet.characterName);
       }
@@ -1539,9 +1594,10 @@ async function updateCharacterDropdown() {
 
   const visibleSheets = characterSheets
     .map((sheet, index) => ({ ...sheet, index }))
-    .filter(sheet => isGM || sheet.playerName === currentPlayerName);
+    .filter(sheet => isPlayableSheet(sheet) && (isGM || sheet.playerName === currentPlayerName));
 
   const previousIndex = activeSheetIndex;
+  const requestedCharacterName = new URL(window.location.href).searchParams.get('characterName');
   characterSelect.innerHTML = '';
 
   visibleSheets.forEach(sheet => {
@@ -1565,13 +1621,24 @@ async function updateCharacterDropdown() {
   if (waitingBlock) waitingBlock.style.display = 'none';
   if (mainContent) mainContent.style.display = 'flex';
 
+  const requestedVisible = requestedCharacterName
+    ? visibleSheets.find((sheet) => sheet.characterName === requestedCharacterName)
+    : null;
   const isActiveVisible = visibleSheets.some(sheet => sheet.index === previousIndex);
-  activeSheetIndex = isActiveVisible ? previousIndex : visibleSheets[0].index;
+  activeSheetIndex = requestedVisible
+    ? requestedVisible.index
+    : (isActiveVisible ? previousIndex : visibleSheets[0].index);
 
   characterSelect.value = activeSheetIndex;
 
   loadSheetData();
   populatePlayerSelect();
+
+  if (requestedVisible) {
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete('characterName');
+    window.history.replaceState({}, '', cleanUrl.toString());
+  }
 }
 
 async function populatePlayerSelect() {
@@ -1755,13 +1822,17 @@ function connectInputsToSave() {
       const sheet = characterSheets[activeSheetIndex];
       if (sheet?.characterName) {
         try {
-          const { data } = await supabase
+          const { data, error } = await supabase
             .from('character_sheets')
             .select('*')
             .eq('room_id', OBR.room.id)
             .eq('character_name', sheet.characterName)
-            .single();
-          if (data) applyFullSupabaseRowToSheet(characterSheets[activeSheetIndex], data);
+            .order('updated_at', { ascending: false, nullsFirst: false })
+            .limit(1);
+          if (!error) {
+            const row = Array.isArray(data) ? data[0] : null;
+            if (row) applyFullSupabaseRowToSheet(characterSheets[activeSheetIndex], row);
+          }
         } catch (_) {}
       }
 
@@ -2939,7 +3010,7 @@ function updateDeathOverlay() {
 async function checkCharacterAndRedirect() {
   try {
     const visibleSheets = characterSheets
-      .filter(sheet => isGM || sheet.playerName === currentPlayerName);
+      .filter(sheet => isPlayableSheet(sheet) && (isGM || sheet.playerName === currentPlayerName));
 
     const waitingBlock = document.getElementById('waitingBlock');
     const mainContent = document.getElementById('mainContent');
@@ -3074,10 +3145,35 @@ document.addEventListener('DOMContentLoaded', function() {
 OBR.onReady(async () => {
     // Очищаємо старий запит
     await clearOldRollRequest();
+
+    // Зберігаємо roomId локально, щоб GM-панель могла працювати навіть без OBR SDK.
+    try {
+      if (OBR.room?.id) {
+        localStorage.setItem('darqie.lastRoomId', OBR.room.id);
+      }
+    } catch (_) {}
     
     // Отримання інформації про гравця
     currentPlayerName = await OBR.player.getName();
     isGM = (await OBR.player.getRole()) === 'GM';
+
+    // Для GM стартовим екраном має бути Панель GM.
+    // Дозволяємо залишитися на сторінці персонажів лише при явному прапорці gmView=characters.
+    const currentUrl = new URL(window.location.href);
+    const requestedCharactersView = currentUrl.searchParams.get('gmView') === 'characters';
+    if (isGM && !requestedCharactersView) {
+      const targetUrl = new URL('gm-panel.html', currentUrl.href);
+      targetUrl.search = currentUrl.search;
+      targetUrl.hash = currentUrl.hash;
+      window.location.href = targetUrl.toString();
+      return;
+    }
+
+    // Якщо GM відкрив сторінку персонажів через кнопку "Гравці", прибираємо технічний прапорець з URL.
+    if (requestedCharactersView) {
+      currentUrl.searchParams.delete('gmView');
+      window.history.replaceState({}, '', currentUrl.toString());
+    }
 
     // Виправляємо старі токени, які посилаються на localhost і ламаються у гравців.
     await normalizeLegacyTokenImageUrls();

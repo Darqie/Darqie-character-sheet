@@ -491,6 +491,36 @@ textarea::placeholder {
   transform: translateY(0) scale(1.05);
 }
 
+#openGmPanelButton {
+  color: #ff8f8f;
+  background-color: rgba(255, 82, 82, 0.14);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+#openGmPanelButton:hover {
+  color: #ffd2d2;
+  background-color: rgba(255, 82, 82, 0.24);
+  filter: drop-shadow(0 0 8px rgba(255, 100, 100, 0.75));
+}
+
+#openGmPanelButton:active {
+  color: #ffe5e5;
+  background-color: rgba(255, 82, 82, 0.34);
+}
+
+#openGmPanelButton i {
+  color: #ff8f8f !important;
+}
+
+#openGmPanelButton:hover i {
+  color: #ffd2d2 !important;
+}
+
+#openGmPanelButton:active i {
+  color: #ffe5e5 !important;
+}
+
 #gmPanelScreen {
   align-items: flex-start;
 }

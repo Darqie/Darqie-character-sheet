@@ -2,7 +2,7 @@ const SUPABASE_URL = 'https://yoaazfbttqfanxackrvv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlvYWF6ZmJ0dHFmYW54YWNrcnZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwOTYwMDIsImV4cCI6MjA4OTY3MjAwMn0.NnU7pE9CsVKduI6ZPUmoTql1Vxxw4YFcbXRvJiOUu8E';
 const CHARACTER_TYPE_NPC = 'npc';
 const DARQIE_ROOM_ID_KEY = 'darqie.lastRoomId';
-const UNASSIGNED_ITEMS_KEY = 'darqie.v2.unassignedItems';
+const UNASSIGNED_EQUIPMENT_KEY = 'darqie.v2.unassignedEquipment';
 const FILTER_ALL = '__all__';
 const FILTER_UNASSIGNED = '__unassigned__';
 
@@ -17,10 +17,10 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
-function normalizeInventoryItem(item) {
+function normalizeEquipmentItem(item) {
   return {
     name: String(item?.name || ''),
-    count: String(item?.count || ''),
+    armor: String(item?.armor || ''),
     weight: String(item?.weight || ''),
   };
 }
@@ -31,7 +31,7 @@ function normalizeCharacterRow(row) {
     character_name: String(row?.character_name || '').trim(),
     player_name: String(row?.player_name || '').trim(),
     extra_data: { ...(row?.extra_data || {}) },
-    inventory_json: Array.isArray(row?.inventory_json) ? row.inventory_json.map(normalizeInventoryItem) : [],
+    equipment_json: Array.isArray(row?.equipment_json) ? row.equipment_json.map(normalizeEquipmentItem) : [],
   };
 }
 
@@ -90,22 +90,22 @@ async function waitForObrReady(OBR, timeoutMs = 3000) {
 export function initPage({ root }) {
   if (!root) return;
 
-  const tbody = root.querySelector('#gmItemsTableBody');
-  const addButton = root.querySelector('#gmAddItemButton');
-  const filterSelect = root.querySelector('#gmItemsFilterSelect');
-  const createModal = root.querySelector('#gmItemCreateModal');
-  const modalNameInput = root.querySelector('#gmItemModalNameInput');
-  const modalCountInput = root.querySelector('#gmItemModalCountInput');
-  const modalWeightInput = root.querySelector('#gmItemModalWeightInput');
-  const modalOwnerSelect = root.querySelector('#gmItemModalOwnerSelect');
-  const modalSaveButton = root.querySelector('#gmItemModalSaveButton');
-  const modalCancelButton = root.querySelector('#gmItemModalCancelButton');
-  if (!tbody || !addButton || !filterSelect || !createModal || !modalNameInput || !modalCountInput || !modalWeightInput || !modalOwnerSelect || !modalSaveButton || !modalCancelButton) return;
+  const tbody = root.querySelector('#gmEquipmentTableBody');
+  const addButton = root.querySelector('#gmAddEquipmentButton');
+  const filterSelect = root.querySelector('#gmEquipmentFilterSelect');
+  const createModal = root.querySelector('#gmEquipmentCreateModal');
+  const modalNameInput = root.querySelector('#gmEquipmentModalNameInput');
+  const modalArmorInput = root.querySelector('#gmEquipmentModalArmorInput');
+  const modalWeightInput = root.querySelector('#gmEquipmentModalWeightInput');
+  const modalOwnerSelect = root.querySelector('#gmEquipmentModalOwnerSelect');
+  const modalSaveButton = root.querySelector('#gmEquipmentModalSaveButton');
+  const modalCancelButton = root.querySelector('#gmEquipmentModalCancelButton');
+  if (!tbody || !addButton || !filterSelect || !createModal || !modalNameInput || !modalArmorInput || !modalWeightInput || !modalOwnerSelect || !modalSaveButton || !modalCancelButton) return;
 
   let OBR = null;
   let roomId = '';
   let characterRows = [];
-  let unassignedItems = [];
+  let unassignedEquipment = [];
   let filterValue = FILTER_ALL;
   let isDestroyed = false;
   let metadataListenerBound = false;
@@ -138,32 +138,32 @@ export function initPage({ root }) {
     characterRows = dedupeCharacterRows(data).filter((row) => getCharacterType(row) !== CHARACTER_TYPE_NPC);
   }
 
-  async function loadUnassignedItems() {
+  async function loadUnassignedEquipment() {
     if (!OBR) {
-      unassignedItems = [];
+      unassignedEquipment = [];
       return;
     }
 
     try {
       const metadata = await OBR.room.getMetadata();
-      const raw = Array.isArray(metadata?.[UNASSIGNED_ITEMS_KEY]) ? metadata[UNASSIGNED_ITEMS_KEY] : [];
-      unassignedItems = raw.map(normalizeInventoryItem);
+      const raw = Array.isArray(metadata?.[UNASSIGNED_EQUIPMENT_KEY]) ? metadata[UNASSIGNED_EQUIPMENT_KEY] : [];
+      unassignedEquipment = raw.map(normalizeEquipmentItem);
     } catch (_) {
-      unassignedItems = [];
+      unassignedEquipment = [];
     }
   }
 
-  async function saveUnassignedItems() {
+  async function saveUnassignedEquipment() {
     if (!OBR) return;
 
     const metadata = await OBR.room.getMetadata();
     await OBR.room.setMetadata({
       ...metadata,
-      [UNASSIGNED_ITEMS_KEY]: unassignedItems.map(normalizeInventoryItem),
+      [UNASSIGNED_EQUIPMENT_KEY]: unassignedEquipment.map(normalizeEquipmentItem),
     });
   }
 
-  async function patchCharacterInventory(characterName, inventory) {
+  async function patchCharacterEquipment(characterName, items) {
     const response = await fetch(
       `${SUPABASE_URL}/rest/v1/character_sheets?room_id=eq.${encodeURIComponent(roomId)}&character_name=eq.${encodeURIComponent(characterName)}`,
       {
@@ -175,7 +175,7 @@ export function initPage({ root }) {
           Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
         },
         body: JSON.stringify({
-          inventory_json: inventory.map(normalizeInventoryItem),
+          equipment_json: items.map(normalizeEquipmentItem),
           updated_at: new Date().toISOString(),
         }),
       }
@@ -222,7 +222,7 @@ export function initPage({ root }) {
   function openCreateModal() {
     const defaultOwner = getDefaultModalOwner();
     modalNameInput.value = '';
-    modalCountInput.value = '1';
+    modalArmorInput.value = '';
     modalWeightInput.value = '';
     renderModalOwnerOptions(defaultOwner);
     createModal.hidden = false;
@@ -235,21 +235,21 @@ export function initPage({ root }) {
 
   function buildFlatItems() {
     const assigned = characterRows.flatMap((row) =>
-      (Array.isArray(row.inventory_json) ? row.inventory_json : []).map((item, index) => ({
+      (Array.isArray(row.equipment_json) ? row.equipment_json : []).map((item, index) => ({
         ownerType: 'character',
         ownerName: row.character_name,
         ownerLabel: row.character_name,
         itemIndex: index,
-        item: normalizeInventoryItem(item),
+        item: normalizeEquipmentItem(item),
       }))
     );
 
-    const unassigned = unassignedItems.map((item, index) => ({
+    const unassigned = unassignedEquipment.map((item, index) => ({
       ownerType: 'unassigned',
       ownerName: '',
       ownerLabel: 'Непризначені',
       itemIndex: index,
-      item: normalizeInventoryItem(item),
+      item: normalizeEquipmentItem(item),
     }));
 
     const allItems = assigned.concat(unassigned);
@@ -296,7 +296,7 @@ export function initPage({ root }) {
     if (flatItems.length === 0) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="5" class="gm-characters-empty">Немає предметів для цього фільтра</td>
+          <td colspan="5" class="gm-characters-empty">Немає спорядження для цього фільтра</td>
         </tr>
       `;
       return;
@@ -308,7 +308,7 @@ export function initPage({ root }) {
           <input class="gm-cell-input" data-field="name" type="text" value="${escapeHtml(entry.item.name)}" />
         </td>
         <td>
-          <input class="gm-cell-input" data-field="count" type="text" value="${escapeHtml(entry.item.count)}" />
+          <input class="gm-cell-input" data-field="armor" type="text" value="${escapeHtml(entry.item.armor)}" />
         </td>
         <td>
           <input class="gm-cell-input" data-field="weight" type="text" value="${escapeHtml(entry.item.weight)}" />
@@ -346,22 +346,22 @@ export function initPage({ root }) {
 
   async function updateItemField(entry, field, value) {
     if (entry.ownerType === 'unassigned') {
-      const nextItems = [...unassignedItems];
-      const nextItem = { ...normalizeInventoryItem(nextItems[entry.itemIndex]) };
+      const nextItems = [...unassignedEquipment];
+      const nextItem = { ...normalizeEquipmentItem(nextItems[entry.itemIndex]) };
       nextItem[field] = value;
       nextItems[entry.itemIndex] = nextItem;
-      unassignedItems = nextItems;
-      await saveUnassignedItems();
+      unassignedEquipment = nextItems;
+      await saveUnassignedEquipment();
       return;
     }
 
     const row = characterRows.find((candidate) => candidate.character_name === entry.ownerName);
     if (!row) return;
-    const nextInventory = [...(Array.isArray(row.inventory_json) ? row.inventory_json : [])].map(normalizeInventoryItem);
-    const nextItem = { ...normalizeInventoryItem(nextInventory[entry.itemIndex]) };
+    const nextItems = [...(Array.isArray(row.equipment_json) ? row.equipment_json : [])].map(normalizeEquipmentItem);
+    const nextItem = { ...normalizeEquipmentItem(nextItems[entry.itemIndex]) };
     nextItem[field] = value;
-    nextInventory[entry.itemIndex] = nextItem;
-    const updated = await patchCharacterInventory(row.character_name, nextInventory);
+    nextItems[entry.itemIndex] = nextItem;
+    const updated = await patchCharacterEquipment(row.character_name, nextItems);
     if (updated) replaceCharacterRow(updated);
   }
 
@@ -372,81 +372,81 @@ export function initPage({ root }) {
     let movedItem = null;
 
     if (entry.ownerType === 'unassigned') {
-      const nextItems = [...unassignedItems];
-      movedItem = normalizeInventoryItem(nextItems.splice(entry.itemIndex, 1)[0]);
-      unassignedItems = nextItems;
-      await saveUnassignedItems();
+      const nextItems = [...unassignedEquipment];
+      movedItem = normalizeEquipmentItem(nextItems.splice(entry.itemIndex, 1)[0]);
+      unassignedEquipment = nextItems;
+      await saveUnassignedEquipment();
     } else {
       const sourceRow = characterRows.find((candidate) => candidate.character_name === entry.ownerName);
       if (!sourceRow) return;
-      const sourceInventory = [...(Array.isArray(sourceRow.inventory_json) ? sourceRow.inventory_json : [])].map(normalizeInventoryItem);
-      movedItem = normalizeInventoryItem(sourceInventory.splice(entry.itemIndex, 1)[0]);
-      const updatedSource = await patchCharacterInventory(sourceRow.character_name, sourceInventory);
+      const sourceItems = [...(Array.isArray(sourceRow.equipment_json) ? sourceRow.equipment_json : [])].map(normalizeEquipmentItem);
+      movedItem = normalizeEquipmentItem(sourceItems.splice(entry.itemIndex, 1)[0]);
+      const updatedSource = await patchCharacterEquipment(sourceRow.character_name, sourceItems);
       if (updatedSource) replaceCharacterRow(updatedSource);
     }
 
     if (!movedItem) return;
 
     if (targetOwner === FILTER_UNASSIGNED) {
-      unassignedItems = [...unassignedItems, movedItem];
-      await saveUnassignedItems();
+      unassignedEquipment = [...unassignedEquipment, movedItem];
+      await saveUnassignedEquipment();
       return;
     }
 
     const targetRow = characterRows.find((candidate) => candidate.character_name === targetOwner);
     if (!targetRow) {
-      unassignedItems = [...unassignedItems, movedItem];
-      await saveUnassignedItems();
+      unassignedEquipment = [...unassignedEquipment, movedItem];
+      await saveUnassignedEquipment();
       return;
     }
 
-    const targetInventory = [...(Array.isArray(targetRow.inventory_json) ? targetRow.inventory_json : [])].map(normalizeInventoryItem);
-    targetInventory.push(movedItem);
-    const updatedTarget = await patchCharacterInventory(targetRow.character_name, targetInventory);
+    const targetItems = [...(Array.isArray(targetRow.equipment_json) ? targetRow.equipment_json : [])].map(normalizeEquipmentItem);
+    targetItems.push(movedItem);
+    const updatedTarget = await patchCharacterEquipment(targetRow.character_name, targetItems);
     if (updatedTarget) replaceCharacterRow(updatedTarget);
   }
 
   async function deleteItem(entry) {
     if (entry.ownerType === 'unassigned') {
-      const nextItems = [...unassignedItems];
+      const nextItems = [...unassignedEquipment];
       nextItems.splice(entry.itemIndex, 1);
-      unassignedItems = nextItems;
-      await saveUnassignedItems();
+      unassignedEquipment = nextItems;
+      await saveUnassignedEquipment();
       return;
     }
 
     const row = characterRows.find((candidate) => candidate.character_name === entry.ownerName);
     if (!row) return;
-    const nextInventory = [...(Array.isArray(row.inventory_json) ? row.inventory_json : [])].map(normalizeInventoryItem);
-    nextInventory.splice(entry.itemIndex, 1);
-    const updated = await patchCharacterInventory(row.character_name, nextInventory);
+    const nextItems = [...(Array.isArray(row.equipment_json) ? row.equipment_json : [])].map(normalizeEquipmentItem);
+    nextItems.splice(entry.itemIndex, 1);
+    const updated = await patchCharacterEquipment(row.character_name, nextItems);
     if (updated) replaceCharacterRow(updated);
   }
 
   async function addItem(newItem, ownerValue) {
     if (ownerValue === FILTER_UNASSIGNED) {
-      unassignedItems = [...unassignedItems, normalizeInventoryItem(newItem)];
-      await saveUnassignedItems();
+      unassignedEquipment = [...unassignedEquipment, normalizeEquipmentItem(newItem)];
+      await saveUnassignedEquipment();
       return;
     }
 
     const row = characterRows.find((candidate) => candidate.character_name === ownerValue);
     if (!row) {
-      unassignedItems = [...unassignedItems, normalizeInventoryItem(newItem)];
-      await saveUnassignedItems();
+      unassignedEquipment = [...unassignedEquipment, normalizeEquipmentItem(newItem)];
+      await saveUnassignedEquipment();
       return;
     }
 
-    const nextInventory = [...(Array.isArray(row.inventory_json) ? row.inventory_json : [])].map(normalizeInventoryItem);
-    nextInventory.push(normalizeInventoryItem(newItem));
-    const updated = await patchCharacterInventory(row.character_name, nextInventory);
+    const nextItems = [...(Array.isArray(row.equipment_json) ? row.equipment_json : [])].map(normalizeEquipmentItem);
+    nextItems.push(normalizeEquipmentItem(newItem));
+    const updated = await patchCharacterEquipment(row.character_name, nextItems);
     if (updated) replaceCharacterRow(updated);
   }
 
   async function submitCreateModal() {
-    const nextItem = normalizeInventoryItem({
+    const nextItem = normalizeEquipmentItem({
       name: modalNameInput.value || '',
-      count: modalCountInput.value || '1',
+      armor: modalArmorInput.value || '',
       weight: modalWeightInput.value || '',
     });
 
@@ -459,7 +459,7 @@ export function initPage({ root }) {
   async function refreshAll() {
     if (!ensureActive()) return;
     await loadCharacterRows();
-    await loadUnassignedItems();
+    await loadUnassignedEquipment();
     renderFilterOptions();
     renderTable();
   }
@@ -470,8 +470,8 @@ export function initPage({ root }) {
 
     OBR.room.onMetadataChange(async (metadata) => {
       if (!ensureActive()) return;
-      if (Array.isArray(metadata?.[UNASSIGNED_ITEMS_KEY])) {
-        unassignedItems = metadata[UNASSIGNED_ITEMS_KEY].map(normalizeInventoryItem);
+      if (Array.isArray(metadata?.[UNASSIGNED_EQUIPMENT_KEY])) {
+        unassignedEquipment = metadata[UNASSIGNED_EQUIPMENT_KEY].map(normalizeEquipmentItem);
         renderTable();
       }
     });
@@ -491,7 +491,7 @@ export function initPage({ root }) {
       await submitCreateModal();
     } catch (error) {
       console.error(error);
-      window.alert('Не вдалося додати предмет');
+      window.alert('Не вдалося додати спорядження');
     }
   });
 
@@ -523,13 +523,13 @@ export function initPage({ root }) {
       await refreshAll();
     } catch (error) {
       console.error(error);
-      window.alert('Не вдалося перепризначити предмет');
+      window.alert('Не вдалося перепризначити спорядження');
     }
   });
 
   tbody.addEventListener('blur', async (event) => {
     const target = event.target;
-    if (!target.matches('[data-field="name"], [data-field="count"], [data-field="weight"]')) return;
+    if (!target.matches('[data-field="name"], [data-field="armor"], [data-field="weight"]')) return;
 
     const entry = getEntryFromElement(target);
     if (!entry) return;
@@ -549,14 +549,14 @@ export function initPage({ root }) {
 
     try {
       if (button.getAttribute('data-action') === 'delete') {
-        const ok = window.confirm('Видалити цей предмет?');
+        const ok = window.confirm('Видалити це спорядження?');
         if (!ok) return;
         await deleteItem(entry);
         await refreshAll();
       }
     } catch (error) {
       console.error(error);
-      window.alert('Не вдалося видалити предмет');
+      window.alert('Не вдалося видалити спорядження');
     }
   });
 
@@ -573,7 +573,7 @@ export function initPage({ root }) {
     console.error(error);
     tbody.innerHTML = `
       <tr>
-        <td colspan="5" class="gm-characters-empty">Не вдалося завантажити список предметів</td>
+        <td colspan="5" class="gm-characters-empty">Не вдалося завантажити список спорядження</td>
       </tr>
     `;
   });
