@@ -64,7 +64,6 @@
     OBR.room.onMetadataChange(async (metadata) => {
       const openSignal = metadata?.darqie?.openCharacterSheet;
       if (!openSignal) return;
-      console.log('[GM Panel] Отримано сигнал openCharacterSheet');
 
       try {
         await OBR.action.open();
@@ -90,15 +89,11 @@
     if (typeof OBR.onReady === 'function') {
       OBR.onReady(() => {
         bindOpenCharacterSheetSignal();
-        console.log('[GM Panel] Підписка на openCharacterSheet активна (onReady)');
       });
       return true;
     }
 
     bindOpenCharacterSheetSignal();
-    if (openSheetSignalBound) {
-      console.log('[GM Panel] Підписка на openCharacterSheet активна');
-    }
     return openSheetSignalBound;
   }
 
