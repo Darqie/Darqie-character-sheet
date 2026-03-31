@@ -3785,7 +3785,9 @@ function renderWeaponTable(editing = false) {
     inputBonus.type = 'text';
     inputBonus.className = 'weapon-bonus';
     inputBonus.placeholder = '1d6+2';
-    inputBonus.value = row.bonus;
+    inputBonus.value = editing
+      ? row.bonus
+      : resolveSkillModifierTokensForDisplay(row.bonus || '');
     if (editing) {
       inputBonus.disabled = false;
       inputBonus.readOnly = false;
@@ -3829,7 +3831,9 @@ function renderWeaponTable(editing = false) {
     inputDamage.type = 'text';
     inputDamage.className = 'weapon-damage';
     inputDamage.placeholder = '+0';
-    inputDamage.value = row.damage;
+    inputDamage.value = editing
+      ? row.damage
+      : resolveSkillModifierTokensForDisplay(row.damage || '');
     if (editing) {
       inputDamage.disabled = false;
       inputDamage.readOnly = false;
@@ -3856,13 +3860,7 @@ function renderWeaponTable(editing = false) {
         }
         
         // Парсимо бонус з поля damage
-        let bonus = 0;
-        const bonusValue = row.damage.trim();
-        if (bonusValue) {
-          // Видаляємо + з початку, якщо є
-          const cleanBonus = bonusValue.startsWith('+') ? bonusValue.slice(1) : bonusValue;
-          bonus = parseInt(cleanBonus) || 0;
-        }
+        const bonus = parseHitBonusValue(row.damage);
         
         // Для попадання використовуємо стиль NEBULA
         sendDiceRollRequest('D20', 'NEBULA', bonus);
@@ -4882,9 +4880,23 @@ function parseWeaponDamage(damageString) {
   };
 }
 
+function parseHitBonusValue(rawValue) {
+  const resolved = resolveSkillDiceExpression(rawValue || '0');
+  const cleaned = String(resolved)
+    .trim()
+    .replace(/^\(([-+]?\d+)\)$/i, '$1');
+
+  const match = cleaned.match(/^[-+]?\d+$/);
+  if (!match) return 0;
+
+  const value = parseInt(cleaned, 10);
+  return Number.isNaN(value) ? 0 : value;
+}
+
 // Функція для кидка шкоди зброї
 async function rollWeaponDamage(damageString) {
-  const parsed = parseWeaponDamage(damageString);
+  const resolvedExpression = resolveSkillDiceExpression(damageString);
+  const parsed = parseWeaponDamage(resolvedExpression);
   if (!parsed) {
     return;
   }
