@@ -435,9 +435,11 @@ export function initPage({ root }) {
     }
 
     tbody.innerHTML = flatItems.map((entry) => {
-      const rawBonus = String(entry.item.bonus || '');
-      const rawDamage = String(entry.item.damage || '');
-      const displayBonus = resolveModifierTokensForDisplay(rawBonus, entry);
+      // Important: in this project data model `bonus` stores damage expression,
+      // while `damage` stores hit bonus value.
+      const rawHitBonus = String(entry.item.damage || '');
+      const rawDamage = String(entry.item.bonus || '');
+      const displayHitBonus = resolveModifierTokensForDisplay(rawHitBonus, entry);
       const displayDamage = resolveModifierTokensForDisplay(rawDamage, entry);
 
       return `
@@ -447,7 +449,7 @@ export function initPage({ root }) {
         </td>
         <td>
           <div class="gm-cell-inline">
-            <input class="gm-cell-input" data-field="bonus" data-raw-value="${escapeHtml(rawBonus)}" type="text" value="${escapeHtml(displayBonus)}" />
+            <input class="gm-cell-input" data-field="bonus" data-save-field="damage" data-raw-value="${escapeHtml(rawHitBonus)}" type="text" value="${escapeHtml(displayHitBonus)}" />
             <button type="button" class="gm-inline-roll-btn" data-action="rollHit" title="Кинути на попадання">
               <i class="fas fa-dice-d20"></i>
             </button>
@@ -455,7 +457,7 @@ export function initPage({ root }) {
         </td>
         <td>
           <div class="gm-cell-inline">
-            <input class="gm-cell-input" data-field="damage" data-raw-value="${escapeHtml(rawDamage)}" type="text" value="${escapeHtml(displayDamage)}" />
+            <input class="gm-cell-input" data-field="damage" data-save-field="bonus" data-raw-value="${escapeHtml(rawDamage)}" type="text" value="${escapeHtml(displayDamage)}" />
             <button type="button" class="gm-inline-roll-btn" data-action="rollDamage" title="Кинути шкоду">
               <i class="fas fa-dice"></i>
             </button>
@@ -606,8 +608,10 @@ export function initPage({ root }) {
   async function submitCreateModal() {
     const nextItem = normalizeAttackItem({
       name: modalNameInput.value || '',
-      bonus: modalBonusInput.value || '+0',
-      damage: modalDamageInput.value || '1d6',
+      // Keep compatibility with existing sheet model:
+      // damage expression -> bonus, hit bonus -> damage.
+      bonus: modalDamageInput.value || '1d6',
+      damage: modalBonusInput.value || '+0',
     });
 
     const ownerValue = modalOwnerSelect.value || FILTER_UNASSIGNED;
@@ -707,6 +711,7 @@ export function initPage({ root }) {
 
     try {
       const field = target.getAttribute('data-field');
+      const saveField = target.getAttribute('data-save-field') || field;
       let valueToSave = target.value || '';
 
       if (field === 'bonus' || field === 'damage') {
@@ -721,7 +726,7 @@ export function initPage({ root }) {
         }
       }
 
-      await updateItemField(entry, field, valueToSave);
+      await updateItemField(entry, saveField, valueToSave);
 
       if (field === 'bonus' || field === 'damage') {
         renderTable();
@@ -742,7 +747,7 @@ export function initPage({ root }) {
       if (action === 'rollDamage') {
         const item = getItemByEntry(entry);
         if (!item) return;
-        const parsed = parseDiceExpression(resolveModifierTokensForRoll(item.damage || '', entry));
+        const parsed = parseDiceExpression(resolveModifierTokensForRoll(item.bonus || '', entry));
         if (!parsed) return;
         await sendDiceRollRequest(parsed.dice, 'GALAXY', parsed.bonus, parsed.count);
         return;
@@ -751,7 +756,7 @@ export function initPage({ root }) {
       if (action === 'rollHit') {
         const item = getItemByEntry(entry);
         if (!item) return;
-        const bonus = parseHitBonusValue(resolveModifierTokensForRoll(item.bonus || '', entry));
+        const bonus = parseHitBonusValue(resolveModifierTokensForRoll(item.damage || '', entry));
         await sendDiceRollRequest('D20', 'NEBULA', bonus, 1);
         return;
       }
