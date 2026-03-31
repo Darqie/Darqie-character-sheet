@@ -5,6 +5,7 @@ const DARQIE_ROOM_ID_KEY = 'darqie.lastRoomId';
 const UNASSIGNED_SKILLS_KEY = 'darqie.v2.unassignedSkills';
 const FILTER_ALL = '__all__';
 const FILTER_UNASSIGNED = '__unassigned__';
+const DICE_ROLL_THROTTLE_MS = 500;
 
 let cachedObrClient = null;
 
@@ -18,10 +19,20 @@ function escapeHtml(value) {
 }
 
 function normalizeSkillItem(item) {
+  const fazeStates = {};
+  if (item?.fazeStates && typeof item.fazeStates === 'object') {
+    Object.entries(item.fazeStates).forEach(([key, value]) => {
+      if (!Array.isArray(value)) return;
+      fazeStates[key] = value.map((flag) => !!flag);
+    });
+  }
+
   return {
+    ...(item && typeof item === 'object' ? item : {}),
     name: String(item?.name || ''),
     bonus: String(item?.bonus || ''),
     desc: String(item?.desc || ''),
+    fazeStates,
   };
 }
 
@@ -108,6 +119,7 @@ export function initPage({ root }) {
   let filterValue = FILTER_ALL;
   let isDestroyed = false;
   let metadataListenerBound = false;
+  let lastRollRequestTime = 0;
 
   function ensureActive() {
     const stillActive = root.isConnected && document.body.contains(root);
@@ -133,6 +145,139 @@ export function initPage({ root }) {
     } catch (_) {
       // Ignore broadcast failures to keep table interactions responsive.
     }
+  }
+
+  function parseDiceExpression(damageString) {
+    if (!damageString || typeof damageString !== 'string') return null;
+    const cleanString = damageString.trim();
+    const regex = /^(\d+)d(\d+)([+-]\d+)?$/i;
+    const match = cleanString.match(regex);
+    if (!match) return null;
+
+    const count = parseInt(match[1], 10);
+    const sides = parseInt(match[2], 10);
+    const bonus = match[3] ? parseInt(match[3], 10) : 0;
+    const diceType = `D${sides}`;
+    const validDice = ['D4', 'D6', 'D8', 'D10', 'D12', 'D20', 'D100'];
+    if (!validDice.includes(diceType)) return null;
+
+    return { dice: diceType, count, bonus };
+  }
+
+  async function sendDiceRollRequest(type, style, bonus, count = 1) {
+    if (!OBR) return;
+
+    const now = Date.now();
+    if (now - lastRollRequestTime < DICE_ROLL_THROTTLE_MS) return;
+    lastRollRequestTime = now;
+
+    try {
+      const connectionId = await OBR.player.getConnectionId();
+      const playerName = await OBR.player.getName();
+      const rollRequest = {
+        type,
+        style,
+        bonus,
+        count,
+        advantage: null,
+        connectionId,
+        playerName: playerName || '',
+        ts: Date.now(),
+      };
+
+      const currentMetadata = await OBR.room.getMetadata();
+      await OBR.room.setMetadata({
+        ...currentMetadata,
+        darqie: {
+          ...(currentMetadata.darqie || {}),
+          activeRoll: rollRequest,
+        },
+      });
+    } catch (_) {
+      // Ignore roll send failures in GM page.
+    }
+  }
+
+  function normalizeFazeStatesMap(rawStates) {
+    const map = {};
+    if (!rawStates || typeof rawStates !== 'object') return map;
+
+    Object.entries(rawStates).forEach(([key, value]) => {
+      if (!Array.isArray(value)) return;
+      map[key] = value.map((flag) => !!flag);
+    });
+
+    return map;
+  }
+
+  function getModifierValueByEntry(entry, tokenName) {
+    if (!entry || entry.ownerType !== 'character') return 0;
+
+    const row = characterRows.find((candidate) => candidate.character_name === entry.ownerName);
+    if (!row) return 0;
+
+    const token = String(tokenName || '').toLowerCase();
+    const fieldMap = {
+      strengthmodifier: 'strength_score',
+      dexteritymodifier: 'dexterity_score',
+      constitutionmodifier: 'constitution_score',
+      proficiencymodifier: 'intelligence_score',
+      wisdommodifier: 'wisdom_score',
+      charismamodifier: 'charisma_score',
+    };
+
+    const scoreField = fieldMap[token];
+    if (!scoreField) return 0;
+
+    const raw = parseInt(row?.[scoreField], 10);
+    const value = Number.isNaN(raw) ? 0 : raw;
+    return Math.floor((value - 10) / 2);
+  }
+
+  function resolveModifierTokensForDisplay(text, entry) {
+    let resolved = String(text || '');
+    const tokens = [
+      'strengthModifier',
+      'dexterityModifier',
+      'constitutionModifier',
+      'proficiencyModifier',
+      'wisdomModifier',
+      'charismaModifier',
+    ];
+
+    tokens.forEach((token) => {
+      const value = getModifierValueByEntry(entry, token);
+      const display = value >= 0 ? `(+${value})` : `(${value})`;
+      const tokenRegex = new RegExp(`\\b${token}\\b`, 'gi');
+      resolved = resolved.replace(tokenRegex, display);
+    });
+
+    return resolved;
+  }
+
+  function resolveModifierTokensForRoll(text, entry) {
+    let resolved = String(text || '');
+    const tokens = [
+      'strengthModifier',
+      'dexterityModifier',
+      'constitutionModifier',
+      'proficiencyModifier',
+      'wisdomModifier',
+      'charismaModifier',
+    ];
+
+    tokens.forEach((token) => {
+      const value = getModifierValueByEntry(entry, token);
+      const tokenRegex = new RegExp(`\\b${token}\\b`, 'gi');
+      resolved = resolved.replace(tokenRegex, String(value));
+    });
+
+    return resolved
+      .replace(/\+\+/g, '+')
+      .replace(/\+\-/g, '-')
+      .replace(/\-\+/g, '-')
+      .replace(/\-\-/g, '+')
+      .trim();
   }
 
   async function loadCharacterRows() {
@@ -326,6 +471,7 @@ export function initPage({ root }) {
         </td>
         <td>
           <textarea class="gm-cell-input gm-skill-desc-input" data-field="desc" rows="1">${escapeHtml(entry.item.desc)}</textarea>
+          <div class="gm-skill-desc-preview" data-field="desc-preview"></div>
         </td>
         <td>${buildOwnerSelect(entry)}</td>
         <td>
@@ -341,10 +487,139 @@ export function initPage({ root }) {
       </tr>
     `).join('');
 
+    const rows = tbody.querySelectorAll('tr[data-owner-type][data-item-index]');
+    rows.forEach((tr) => {
+      const entry = getEntryFromElement(tr);
+      if (!entry) return;
+      const item = getItemByEntry(entry);
+      if (!item) return;
+      renderDescPreview(tr, entry, item, item.desc || '');
+      setDescEditMode(tr, false);
+
+      const preview = tr.querySelector('[data-field="desc-preview"]');
+      if (preview) {
+        preview.addEventListener('click', () => {
+          setDescEditMode(tr, true);
+        });
+      }
+    });
+
     resizeDescriptionCells();
     requestAnimationFrame(() => {
       resizeDescriptionCells();
     });
+  }
+
+  async function rollSkillInlineDice(diceExpression, entry) {
+    const resolvedExpression = resolveModifierTokensForRoll(diceExpression, entry);
+    const parsed = parseDiceExpression(resolvedExpression);
+    if (!parsed) return;
+    await sendDiceRollRequest(parsed.dice, 'GALAXY', parsed.bonus, parsed.count);
+  }
+
+  function setDescEditMode(tr, on) {
+    const textarea = tr.querySelector('textarea[data-field="desc"]');
+    const preview = tr.querySelector('[data-field="desc-preview"]');
+    if (!textarea || !preview) return;
+
+    tr.classList.toggle('is-desc-editing', !!on);
+    textarea.hidden = !on;
+    preview.hidden = !!on;
+
+    if (on) {
+      textarea.focus();
+      const end = textarea.value.length;
+      textarea.setSelectionRange(end, end);
+    }
+
+    resizeDescriptionCells();
+  }
+
+  function renderDescPreview(tr, entry, item, sourceText) {
+    const preview = tr.querySelector('[data-field="desc-preview"]');
+    if (!preview) return;
+
+    const source = String(sourceText || '');
+    const tokenRegex = /(dice|faze)\(([^)]+)\)/gi;
+    let lastIndex = 0;
+    let match = null;
+    let fazeTokenIndex = 0;
+
+    item.fazeStates = normalizeFazeStatesMap(item.fazeStates);
+    preview.innerHTML = '';
+
+    while ((match = tokenRegex.exec(source)) !== null) {
+      const [fullMatch, tokenTypeRaw, tokenArgRaw] = match;
+      const tokenType = String(tokenTypeRaw || '').toLowerCase();
+      const tokenArg = String(tokenArgRaw || '').trim();
+
+      if (match.index > lastIndex) {
+        const plainChunk = source.slice(lastIndex, match.index);
+        preview.appendChild(document.createTextNode(resolveModifierTokensForDisplay(plainChunk, entry)));
+      }
+
+      if (tokenType === 'dice') {
+        const diceBtn = document.createElement('button');
+        diceBtn.type = 'button';
+        diceBtn.className = 'gm-skill-inline-dice';
+        diceBtn.textContent = resolveModifierTokensForDisplay(tokenArg, entry);
+        diceBtn.title = 'Кинути кубики';
+        diceBtn.addEventListener('click', async (event) => {
+          event.stopPropagation();
+          if (!event.isTrusted) return;
+          await rollSkillInlineDice(tokenArg, entry);
+        });
+        preview.appendChild(diceBtn);
+      } else if (tokenType === 'faze') {
+        const count = parseInt(tokenArg, 10);
+        if (!Number.isFinite(count) || count <= 0 || count > 20) {
+          preview.appendChild(document.createTextNode(fullMatch));
+        } else {
+          const stateKey = `${match.index}:${fazeTokenIndex}`;
+          fazeTokenIndex += 1;
+          const currentStates = Array.isArray(item.fazeStates[stateKey]) ? [...item.fazeStates[stateKey]] : [];
+          const normalizedStates = Array.from({ length: count }, (_, i) => !!currentStates[i]);
+          item.fazeStates[stateKey] = normalizedStates;
+
+          const flagsWrap = document.createElement('span');
+          flagsWrap.className = 'gm-skill-inline-faze';
+
+          normalizedStates.forEach((isUsed, flagIndex) => {
+            const flagBtn = document.createElement('button');
+            flagBtn.type = 'button';
+            flagBtn.className = `gm-skill-faze-flag${isUsed ? ' is-used' : ''}`;
+            flagBtn.title = isUsed ? 'Позначено як використане' : 'Позначити як використане';
+            flagBtn.innerHTML = '<i class="fas fa-flag"></i>';
+            flagBtn.addEventListener('click', async (event) => {
+              event.stopPropagation();
+              if (!event.isTrusted) return;
+              normalizedStates[flagIndex] = !normalizedStates[flagIndex];
+              item.fazeStates[stateKey] = [...normalizedStates];
+
+              try {
+                await updateItemField(entry, 'fazeStates', item.fazeStates);
+                renderDescPreview(tr, entry, item, sourceText);
+                resizeDescriptionCells();
+              } catch (error) {
+                console.error(error);
+              }
+            });
+            flagsWrap.appendChild(flagBtn);
+          });
+
+          preview.appendChild(flagsWrap);
+        }
+      } else {
+        preview.appendChild(document.createTextNode(fullMatch));
+      }
+
+      lastIndex = match.index + fullMatch.length;
+    }
+
+    if (lastIndex < source.length) {
+      const trailingChunk = source.slice(lastIndex);
+      preview.appendChild(document.createTextNode(resolveModifierTokensForDisplay(trailingChunk, entry)));
+    }
   }
 
   function resizeDescriptionCells() {
@@ -352,11 +627,17 @@ export function initPage({ root }) {
     rows.forEach((tr) => {
       const textarea = tr.querySelector('textarea[data-field="desc"]');
       if (!textarea) return;
+      const preview = tr.querySelector('[data-field="desc-preview"]');
+      const isEditingDesc = tr.classList.contains('is-desc-editing');
 
-      textarea.style.height = 'auto';
-      const descHeight = Math.max(textarea.scrollHeight, 24);
-      const rowHeight = descHeight + 8;
-      textarea.style.setProperty('height', `${descHeight}px`, 'important');
+      let descHeight = 24;
+      if (isEditingDesc) {
+        textarea.style.height = 'auto';
+        descHeight = Math.max(textarea.scrollHeight, 24);
+        textarea.style.setProperty('height', `${descHeight}px`, 'important');
+      }
+      const previewHeight = preview ? Math.max(preview.scrollHeight, 0) : 0;
+      const rowHeight = Math.max((isEditingDesc ? descHeight : previewHeight) + 10, 32);
 
       tr.style.setProperty('height', `${rowHeight}px`, 'important');
 
@@ -607,6 +888,13 @@ export function initPage({ root }) {
 
     try {
       await updateItemField(entry, target.getAttribute('data-field'), target.value || '');
+      if (target.matches('[data-field="desc"]')) {
+        const item = getItemByEntry(entry);
+        if (item) {
+          renderDescPreview(entry.tr, entry, item, target.value || '');
+        }
+        setDescEditMode(entry.tr, false);
+      }
     } catch (error) {
       console.error(error);
     }
@@ -615,7 +903,31 @@ export function initPage({ root }) {
   tbody.addEventListener('input', (event) => {
     const target = event.target;
     if (!target.matches('textarea[data-field="desc"]')) return;
+    const entry = getEntryFromElement(target);
+    if (entry) {
+      const item = getItemByEntry(entry);
+      if (item) {
+        renderDescPreview(entry.tr, entry, item, target.value || '');
+      }
+    }
     resizeDescriptionCells();
+  });
+
+  tbody.addEventListener('keydown', (event) => {
+    const target = event.target;
+    if (!target.matches('textarea[data-field="desc"]')) return;
+
+    if (event.key === 'Escape') {
+      const entry = getEntryFromElement(target);
+      if (!entry) return;
+      event.preventDefault();
+      const item = getItemByEntry(entry);
+      target.value = item?.desc || '';
+      if (item) {
+        renderDescPreview(entry.tr, entry, item, item.desc || '');
+      }
+      setDescEditMode(entry.tr, false);
+    }
   });
 
   tbody.addEventListener('click', async (event) => {

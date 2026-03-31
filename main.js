@@ -3573,7 +3573,6 @@ document.addEventListener('DOMContentLoaded', () => {
     editingSkill = on;
     skillEditing = on;
     window.skillEditing = on; // Додаємо глобальну змінну
-    renderSkillTable(editingSkill);
     // Додаю керування contenteditable для заголовка навичок
     const skillLabel = document.querySelector('.skill-block .skill-label');
     if (skillLabel) skillLabel.contentEditable = !!on;
@@ -3582,20 +3581,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (cancelBtnSkill) cancelBtnSkill.style.display = on ? '' : 'none';
     if (addRowBtnSkill) addRowBtnSkill.style.display = on ? '' : 'none';
     if (!on) {
-      // Перед збереженням повністю перебудовуємо масив skillRows з DOM
-      const tbody = document.getElementById('skillTableBody');
-      if (tbody) {
-        skillRows = Array.from(tbody.children).map(tr => {
-          const nameWrap = tr.querySelector('.skill-name-wrap');
-          const chatIcon = nameWrap.querySelector('.skill-chat-icon');
-          const nameLabel = nameWrap.querySelector('.skill-name-label');
-          const inputDesc = tr.querySelector('.skill-desc-textarea');
-          return {
-            name: nameLabel ? nameLabel.textContent : '',
-            desc: inputDesc ? inputDesc.value : ''
-          };
-        });
-      }
       if (characterSheets[activeSheetIndex]) {
         characterSheets[activeSheetIndex].skills = JSON.parse(JSON.stringify(skillRows));
         const sheetIdx = activeSheetIndex;
@@ -3603,6 +3588,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateCurrentWeight();
       }
     }
+    renderSkillTable(editingSkill);
   }
 
   if (editBtnSkill && acceptBtnSkill && cancelBtnSkill && addRowBtnSkill) {
@@ -3919,6 +3905,169 @@ function renderWeaponTable(editing = false) {
 }
 
 // === ДИНАМІЧНА ТАБЛИЦЯ НАВИЧОК ===
+function normalizeFazeStatesMap(rawStates) {
+  const map = {};
+  if (!rawStates || typeof rawStates !== 'object') return map;
+
+  Object.entries(rawStates).forEach(([key, value]) => {
+    if (!Array.isArray(value)) return;
+    map[key] = value.map((flag) => !!flag);
+  });
+
+  return map;
+}
+
+function getSkillModifierDisplayMap() {
+  const modifierIds = [
+    'strengthModifier',
+    'dexterityModifier',
+    'constitutionModifier',
+    'proficiencyModifier',
+    'wisdomModifier',
+    'charismaModifier',
+  ];
+
+  const map = {};
+  modifierIds.forEach((modifierId) => {
+    const modifierEl = document.getElementById(modifierId);
+    const rawText = String(modifierEl?.textContent || '').trim();
+    const parsed = parseInt(rawText, 10);
+    const value = Number.isNaN(parsed) ? 0 : parsed;
+    map[modifierId.toLowerCase()] = value >= 0 ? `(+${value})` : `(${value})`;
+  });
+
+  return map;
+}
+
+function resolveSkillModifierTokensForDisplay(text) {
+  let resolved = String(text || '');
+  const modifierDisplayMap = getSkillModifierDisplayMap();
+
+  Object.entries(modifierDisplayMap).forEach(([token, value]) => {
+    const tokenRegex = new RegExp(`\\b${token}\\b`, 'gi');
+    resolved = resolved.replace(tokenRegex, value);
+  });
+
+  return resolved;
+}
+
+function resolveSkillDiceExpression(expression) {
+  const source = String(expression || '').trim();
+  if (!source) return '';
+
+  const modifierIds = [
+    'strengthModifier',
+    'dexterityModifier',
+    'constitutionModifier',
+    'proficiencyModifier',
+    'wisdomModifier',
+    'charismaModifier',
+  ];
+
+  let resolved = source;
+  modifierIds.forEach((modifierId) => {
+    const modifierEl = document.getElementById(modifierId);
+    const rawText = String(modifierEl?.textContent || '0').trim();
+    const numeric = parseInt(rawText, 10);
+    const value = Number.isNaN(numeric) ? 0 : numeric;
+    const tokenRegex = new RegExp(`\\b${modifierId}\\b`, 'gi');
+    resolved = resolved.replace(tokenRegex, String(value));
+  });
+
+  // Normalization after variable substitution (e.g. 1d4+-1 -> 1d4-1)
+  resolved = resolved.replace(/\+\+/g, '+').replace(/\+\-/g, '-').replace(/\-\+/g, '-').replace(/\-\-/g, '+');
+  return resolved;
+}
+
+function rollSkillInlineDice(diceExpression) {
+  const resolvedExpression = resolveSkillDiceExpression(diceExpression);
+  const parsed = parseWeaponDamage(resolvedExpression);
+  if (!parsed) return;
+  sendDiceRollRequest(parsed.dice, 'GALAXY', parsed.bonus, parsed.count);
+}
+
+function createSkillDescriptionView(row, idx) {
+  const container = document.createElement('div');
+  container.className = 'skill-desc-view';
+
+  const source = String(row?.desc || '');
+  const tokenRegex = /(dice|faze)\(([^)]+)\)/gi;
+  let lastIndex = 0;
+  let match = null;
+  let fazeTokenIndex = 0;
+
+  row.fazeStates = normalizeFazeStatesMap(row.fazeStates);
+
+  while ((match = tokenRegex.exec(source)) !== null) {
+    const [fullMatch, tokenTypeRaw, tokenArgRaw] = match;
+    const tokenType = String(tokenTypeRaw || '').toLowerCase();
+    const tokenArg = String(tokenArgRaw || '').trim();
+
+    if (match.index > lastIndex) {
+      const plainChunk = source.slice(lastIndex, match.index);
+      container.appendChild(document.createTextNode(resolveSkillModifierTokensForDisplay(plainChunk)));
+    }
+
+    if (tokenType === 'dice') {
+      const diceBtn = document.createElement('button');
+      diceBtn.type = 'button';
+      diceBtn.className = 'skill-inline-dice';
+      diceBtn.textContent = resolveSkillModifierTokensForDisplay(tokenArg);
+      diceBtn.title = 'Кинути кубики';
+      diceBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (!event.isTrusted) return;
+        rollSkillInlineDice(tokenArg);
+      });
+      container.appendChild(diceBtn);
+    } else if (tokenType === 'faze') {
+      const count = parseInt(tokenArg, 10);
+      if (!Number.isFinite(count) || count <= 0 || count > 20) {
+        container.appendChild(document.createTextNode(fullMatch));
+      } else {
+        const stateKey = `${match.index}:${fazeTokenIndex}`;
+        fazeTokenIndex += 1;
+        const currentStates = Array.isArray(row.fazeStates[stateKey]) ? [...row.fazeStates[stateKey]] : [];
+        const normalizedStates = Array.from({ length: count }, (_, i) => !!currentStates[i]);
+        row.fazeStates[stateKey] = normalizedStates;
+
+        const fazeWrap = document.createElement('span');
+        fazeWrap.className = 'skill-inline-faze';
+
+        normalizedStates.forEach((used, flagIndex) => {
+          const flagBtn = document.createElement('button');
+          flagBtn.type = 'button';
+          flagBtn.className = `skill-faze-flag${used ? ' is-used' : ''}`;
+          flagBtn.title = used ? 'Позначено як використане' : 'Позначити як використане';
+          flagBtn.innerHTML = '<i class="fas fa-flag"></i>';
+          flagBtn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            if (!event.isTrusted) return;
+            normalizedStates[flagIndex] = !normalizedStates[flagIndex];
+            row.fazeStates[stateKey] = [...normalizedStates];
+            syncSkillsToSheet();
+            renderSkillTable(false);
+          });
+          fazeWrap.appendChild(flagBtn);
+        });
+
+        container.appendChild(fazeWrap);
+      }
+    } else {
+      container.appendChild(document.createTextNode(fullMatch));
+    }
+
+    lastIndex = match.index + fullMatch.length;
+  }
+
+  if (lastIndex < source.length) {
+    const trailingChunk = source.slice(lastIndex);
+    container.appendChild(document.createTextNode(resolveSkillModifierTokensForDisplay(trailingChunk)));
+  }
+
+  return container;
+}
+
 function renderSkillTable(editing = false) {
   const tbody = document.getElementById('skillTableBody');
   if (!tbody) return;
@@ -3984,28 +4133,26 @@ function renderSkillTable(editing = false) {
     }
     nameWrap.appendChild(nameLabel);
     tr.appendChild(nameWrap);
-    // Опис (textarea)
-    const inputDesc = document.createElement('textarea');
-    inputDesc.className = 'skill-desc-textarea';
-    inputDesc.value = row.desc;
-    inputDesc.placeholder = 'Опис навички';
     if (editing) {
+      // Опис у режимі редагування
+      const inputDesc = document.createElement('textarea');
+      inputDesc.className = 'skill-desc-textarea';
+      inputDesc.value = row.desc;
+      inputDesc.placeholder = 'Опис навички';
       inputDesc.disabled = false;
       inputDesc.readOnly = false;
+      inputDesc.addEventListener('input', e => {
+        skillRows[idx].desc = e.target.value;
+      });
+      setTimeout(() => {
+        inputDesc.style.height = 'auto';
+        inputDesc.style.height = (inputDesc.scrollHeight) + 'px';
+      }, 0);
+      tr.appendChild(inputDesc);
     } else {
-      inputDesc.disabled = false;
-      inputDesc.readOnly = true;
+      // Опис у режимі перегляду з підтримкою dice(...) і faze(...)
+      tr.appendChild(createSkillDescriptionView(row, idx));
     }
-    inputDesc.addEventListener('input', e => {
-      skillRows[idx].desc = e.target.value;
-    });
-    // --- Додаю автозміну висоти textarea навіть у режимі readonly ---
-    setTimeout(() => {
-      inputDesc.style.height = 'auto';
-      inputDesc.style.height = (inputDesc.scrollHeight) + 'px';
-    }, 0);
-    // ---
-    tr.appendChild(inputDesc);
     // Кнопка видалення
     if (editing) {
       const delBtn = document.createElement('button');

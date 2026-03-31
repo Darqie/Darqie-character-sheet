@@ -2005,6 +2005,76 @@ textarea:focus {
   box-shadow: none !important;
 }
 
+.skill-desc-view {
+  width: 100%;
+  min-height: 30px;
+  background: rgba(33,37,51,0.25);
+  font-family: 'Cormorant Unicase', serif !important;
+  font-size: 0.9em !important;
+  line-height: 1.35;
+  padding: 0.35em 10px;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.skill-inline-dice {
+  background: transparent;
+  border: none;
+  color: #8fd2ff;
+  font-family: inherit;
+  font-size: 1em;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+
+.skill-inline-dice:hover {
+  color: #d8eeff;
+}
+
+.skill-inline-faze {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  margin: 0 2px;
+}
+
+.skill-faze-flag {
+  width: 20px;
+  height: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #d3d7e0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.12s, box-shadow 0.15s;
+}
+
+.skill-faze-flag:hover {
+  background: rgba(255, 255, 255, 0.24);
+  border-color: rgba(255, 255, 255, 0.38);
+}
+
+.skill-faze-flag.is-used {
+  background: rgba(255, 78, 78, 0.52);
+  color: #fff0f0;
+  border-color: rgba(255, 160, 160, 0.95);
+  box-shadow: 0 0 0 1px rgba(255, 120, 120, 0.35), 0 0 10px rgba(255, 95, 95, 0.45);
+  transform: scale(1.06);
+}
+
+.skill-faze-flag.is-used i {
+  color: #ffffff;
+}
+
 .skill-delete-row-btn {
   position: absolute;
   top: 2px;

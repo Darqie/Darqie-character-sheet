@@ -356,6 +356,85 @@
       word-break: break-word;
     }
 
+    .gm-skills-table .gm-skill-desc-preview {
+      box-sizing: border-box;
+      margin-top: 0;
+      min-height: 24px;
+      line-height: 1.25;
+      color: #e0e0e0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      cursor: text;
+      padding: 4px 6px;
+      border-radius: 3px;
+      background: rgba(46, 52, 72, 0.32);
+      outline: none;
+    }
+
+    .gm-skills-table .gm-skill-desc-preview:hover {
+      background: rgba(46, 52, 72, 0.32);
+    }
+
+    .gm-skills-table .gm-skill-desc-input[hidden],
+    .gm-skills-table .gm-skill-desc-preview[hidden] {
+      display: none !important;
+    }
+
+    .gm-skills-table .gm-skill-inline-dice {
+      background: transparent;
+      border: none;
+      color: #8fd2ff;
+      cursor: pointer;
+      font: inherit;
+      padding: 0;
+      text-decoration: underline;
+      text-decoration-style: dotted;
+      text-underline-offset: 2px;
+    }
+
+    .gm-skills-table .gm-skill-inline-dice:hover {
+      color: #d8eeff;
+    }
+
+    .gm-skills-table .gm-skill-inline-faze {
+      display: inline-flex;
+      gap: 4px;
+      align-items: center;
+      margin: 0 2px;
+    }
+
+    .gm-skills-table .gm-skill-faze-flag {
+      width: 20px;
+      height: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 5px;
+      background: rgba(255, 255, 255, 0.12);
+      color: #d3d7e0;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.12s, box-shadow 0.15s;
+    }
+
+    .gm-skills-table .gm-skill-faze-flag:hover {
+      background: rgba(255, 255, 255, 0.24);
+      border-color: rgba(255, 255, 255, 0.38);
+    }
+
+    .gm-skills-table .gm-skill-faze-flag.is-used {
+      background: rgba(255, 78, 78, 0.52);
+      color: #fff0f0;
+      border-color: rgba(255, 160, 160, 0.95);
+      box-shadow: 0 0 0 1px rgba(255, 120, 120, 0.35), 0 0 10px rgba(255, 95, 95, 0.45);
+      transform: scale(1.06);
+    }
+
+    .gm-skills-table .gm-skill-faze-flag.is-used i {
+      color: #ffffff;
+    }
+
     .gm-skills-table .gm-row-actions {
       height: 100%;
       align-items: center;
