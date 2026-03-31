@@ -1135,6 +1135,14 @@ function updateModifiers() {
   // Автоматичний розрахунок броні на основі спорядження
   updateArmorClass();
   updateCurrentWeight();
+
+  // Переобчислюємо відображення токенів типу dexterityModifier/wisdomModifier у перегляді.
+  if (!weaponEditing) {
+    renderWeaponTable(false);
+  }
+  if (!skillEditing) {
+    renderSkillTable(false);
+  }
 }
 
 function updateMaxWeight() {
@@ -3469,7 +3477,6 @@ document.addEventListener('DOMContentLoaded', () => {
     editing = on;
     weaponEditing = on;
     window.weaponEditing = on; // Додаємо глобальну змінну
-    renderWeaponTable(editing);
     // Додаю керування contenteditable для заголовка
     const weaponLabel = document.querySelector('.weapon-block .weapon-label');
     if (weaponLabel) weaponLabel.contentEditable = !!on;
@@ -3478,20 +3485,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (cancelBtn) cancelBtn.style.display = on ? '' : 'none';
     if (addRowBtn) addRowBtn.style.display = on ? '' : 'none';
     if (!on) {
-      // Перед збереженням повністю перебудовуємо масив weaponRows з DOM (як у навичках)
-      const tbody = document.getElementById('weaponTableBody');
-      if (tbody) {
-        weaponRows = Array.from(tbody.children).map(tr => {
-          const inputName = tr.querySelector('.weapon-name');
-          const inputBonus = tr.querySelector('.weapon-bonus');
-          const inputDamage = tr.querySelector('.weapon-damage');
-          return {
-            name: inputName ? inputName.value : '',
-            bonus: inputBonus ? inputBonus.value : '',
-            damage: inputDamage ? inputDamage.value : ''
-          };
-        });
-      }
       // Зберігаємо заголовок
       const weaponLabel = document.querySelector('.weapon-block .weapon-label');
       if (weaponLabel) {
@@ -3504,6 +3497,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateCurrentWeight();
       }
     }
+    renderWeaponTable(editing);
   }
 
   if (editBtn && acceptBtn && cancelBtn && addRowBtn) {

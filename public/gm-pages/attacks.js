@@ -5,6 +5,7 @@ const DARQIE_ROOM_ID_KEY = 'darqie.lastRoomId';
 const UNASSIGNED_ATTACKS_KEY = 'darqie.v2.unassignedAttacks';
 const FILTER_ALL = '__all__';
 const FILTER_UNASSIGNED = '__unassigned__';
+const DICE_ROLL_THROTTLE_MS = 500;
 
 let cachedObrClient = null;
 
@@ -109,12 +110,143 @@ export function initPage({ root }) {
   let filterValue = FILTER_ALL;
   let isDestroyed = false;
   let metadataListenerBound = false;
+  let lastRollRequestTime = 0;
 
   function ensureActive() {
     const stillActive = root.isConnected && document.body.contains(root);
     if (stillActive) return true;
     isDestroyed = true;
     return false;
+  }
+
+  function getModifierValueByEntry(entry, tokenName) {
+    if (!entry || entry.ownerType !== 'character') return 0;
+
+    const row = characterRows.find((candidate) => candidate.character_name === entry.ownerName);
+    if (!row) return 0;
+
+    const token = String(tokenName || '').toLowerCase();
+    const fieldMap = {
+      strengthmodifier: 'strength_score',
+      dexteritymodifier: 'dexterity_score',
+      constitutionmodifier: 'constitution_score',
+      proficiencymodifier: 'intelligence_score',
+      wisdommodifier: 'wisdom_score',
+      charismamodifier: 'charisma_score',
+    };
+
+    const scoreField = fieldMap[token];
+    if (!scoreField) return 0;
+
+    const raw = parseInt(row?.[scoreField], 10);
+    const value = Number.isNaN(raw) ? 0 : raw;
+    return Math.floor((value - 10) / 2);
+  }
+
+  function resolveModifierTokensForDisplay(text, entry) {
+    let resolved = String(text || '');
+    const tokens = [
+      'strengthModifier',
+      'dexterityModifier',
+      'constitutionModifier',
+      'proficiencyModifier',
+      'wisdomModifier',
+      'charismaModifier',
+    ];
+
+    tokens.forEach((token) => {
+      const value = getModifierValueByEntry(entry, token);
+      const display = value >= 0 ? `(+${value})` : `(${value})`;
+      const tokenRegex = new RegExp(`\\b${token}\\b`, 'gi');
+      resolved = resolved.replace(tokenRegex, display);
+    });
+
+    return resolved;
+  }
+
+  function resolveModifierTokensForRoll(text, entry) {
+    let resolved = String(text || '');
+    const tokens = [
+      'strengthModifier',
+      'dexterityModifier',
+      'constitutionModifier',
+      'proficiencyModifier',
+      'wisdomModifier',
+      'charismaModifier',
+    ];
+
+    tokens.forEach((token) => {
+      const value = getModifierValueByEntry(entry, token);
+      const tokenRegex = new RegExp(`\\b${token}\\b`, 'gi');
+      resolved = resolved.replace(tokenRegex, String(value));
+    });
+
+    return resolved
+      .replace(/\(([+-]?\d+)\)/g, '$1')
+      .replace(/\+\+/g, '+')
+      .replace(/\+\-/g, '-')
+      .replace(/\-\+/g, '-')
+      .replace(/\-\-/g, '+')
+      .trim();
+  }
+
+  function parseDiceExpression(rawExpression) {
+    const clean = String(rawExpression || '').trim();
+    const regex = /^(\d+)d(\d+)([+-]\d+)?$/i;
+    const match = clean.match(regex);
+    if (!match) return null;
+
+    const count = parseInt(match[1], 10);
+    const sides = parseInt(match[2], 10);
+    const bonus = match[3] ? parseInt(match[3], 10) : 0;
+    const diceType = `D${sides}`;
+    const validDice = ['D4', 'D6', 'D8', 'D10', 'D12', 'D20', 'D100'];
+    if (!validDice.includes(diceType)) return null;
+    return { dice: diceType, count, bonus };
+  }
+
+  function parseHitBonusValue(rawExpression) {
+    const cleaned = String(rawExpression || '')
+      .trim()
+      .replace(/^\(([+-]?\d+)\)$/, '$1');
+
+    if (!/^[-+]?\d+$/.test(cleaned)) return 0;
+    const value = parseInt(cleaned, 10);
+    return Number.isNaN(value) ? 0 : value;
+  }
+
+  async function sendDiceRollRequest(type, style, bonus, count = 1) {
+    if (!OBR) return;
+
+    const now = Date.now();
+    if (now - lastRollRequestTime < DICE_ROLL_THROTTLE_MS) return;
+    lastRollRequestTime = now;
+
+    try {
+      const connectionId = await OBR.player.getConnectionId();
+      const playerName = await OBR.player.getName();
+      const rollRequest = {
+        type,
+        style,
+        bonus,
+        count,
+        advantage: null,
+        connectionId,
+        playerName: playerName || '',
+        ts: Date.now(),
+      };
+
+      const currentMetadata = await OBR.room.getMetadata();
+      await OBR.room.setMetadata({
+        ...currentMetadata,
+        darqie: {
+          ...(currentMetadata.darqie || {}),
+          activeRoll: rollRequest,
+        },
+      });
+    } catch (_) {
+      // Ignore roll send failures in GM panel.
+    }
   }
 
   async function loadCharacterRows() {
@@ -302,16 +434,32 @@ export function initPage({ root }) {
       return;
     }
 
-    tbody.innerHTML = flatItems.map((entry) => `
+    tbody.innerHTML = flatItems.map((entry) => {
+      const rawBonus = String(entry.item.bonus || '');
+      const rawDamage = String(entry.item.damage || '');
+      const displayBonus = resolveModifierTokensForDisplay(rawBonus, entry);
+      const displayDamage = resolveModifierTokensForDisplay(rawDamage, entry);
+
+      return `
       <tr data-owner-type="${escapeHtml(entry.ownerType)}" data-owner-name="${escapeHtml(entry.ownerName)}" data-item-index="${entry.itemIndex}">
         <td>
           <input class="gm-cell-input" data-field="name" type="text" value="${escapeHtml(entry.item.name)}" />
         </td>
         <td>
-          <input class="gm-cell-input" data-field="bonus" type="text" value="${escapeHtml(entry.item.bonus)}" />
+          <div class="gm-cell-inline">
+            <input class="gm-cell-input" data-field="bonus" data-raw-value="${escapeHtml(rawBonus)}" type="text" value="${escapeHtml(displayBonus)}" />
+            <button type="button" class="gm-inline-roll-btn" data-action="rollHit" title="Кинути на попадання">
+              <i class="fas fa-dice-d20"></i>
+            </button>
+          </div>
         </td>
         <td>
-          <input class="gm-cell-input" data-field="damage" type="text" value="${escapeHtml(entry.item.damage)}" />
+          <div class="gm-cell-inline">
+            <input class="gm-cell-input" data-field="damage" data-raw-value="${escapeHtml(rawDamage)}" type="text" value="${escapeHtml(displayDamage)}" />
+            <button type="button" class="gm-inline-roll-btn" data-action="rollDamage" title="Кинути шкоду">
+              <i class="fas fa-dice"></i>
+            </button>
+          </div>
         </td>
         <td>${buildOwnerSelect(entry)}</td>
         <td>
@@ -322,7 +470,8 @@ export function initPage({ root }) {
           </div>
         </td>
       </tr>
-    `).join('');
+    `;
+    }).join('');
   }
 
   function getEntryFromElement(target) {
@@ -342,6 +491,17 @@ export function initPage({ root }) {
     if (idx !== -1) {
       characterRows[idx] = updatedRow;
     }
+  }
+
+  function getItemByEntry(entry) {
+    if (entry.ownerType === 'unassigned') {
+      return normalizeAttackItem(unassignedAttacks[entry.itemIndex]);
+    }
+
+    const row = characterRows.find((candidate) => candidate.character_name === entry.ownerName);
+    if (!row) return null;
+    const items = Array.isArray(row.weapons_json) ? row.weapons_json : [];
+    return normalizeAttackItem(items[entry.itemIndex]);
   }
 
   async function updateItemField(entry, field, value) {
@@ -527,6 +687,17 @@ export function initPage({ root }) {
     }
   });
 
+  tbody.addEventListener('focusin', (event) => {
+    const target = event.target;
+    if (!target.matches('[data-field="bonus"], [data-field="damage"]')) return;
+
+    const rawValue = target.getAttribute('data-raw-value');
+    if (rawValue === null) return;
+
+    target.value = rawValue;
+    target.setAttribute('data-editing-raw', '1');
+  });
+
   tbody.addEventListener('blur', async (event) => {
     const target = event.target;
     if (!target.matches('[data-field="name"], [data-field="bonus"], [data-field="damage"]')) return;
@@ -535,7 +706,26 @@ export function initPage({ root }) {
     if (!entry) return;
 
     try {
-      await updateItemField(entry, target.getAttribute('data-field'), target.value || '');
+      const field = target.getAttribute('data-field');
+      let valueToSave = target.value || '';
+
+      if (field === 'bonus' || field === 'damage') {
+        const rawValue = target.getAttribute('data-raw-value') || '';
+        const isEditingRaw = target.getAttribute('data-editing-raw') === '1';
+        const prevDisplay = resolveModifierTokensForDisplay(rawValue, entry);
+
+        if (isEditingRaw) {
+          target.removeAttribute('data-editing-raw');
+        } else if (valueToSave.trim() === prevDisplay.trim()) {
+          valueToSave = rawValue;
+        }
+      }
+
+      await updateItemField(entry, field, valueToSave);
+
+      if (field === 'bonus' || field === 'damage') {
+        renderTable();
+      }
     } catch (error) {
       console.error(error);
     }
@@ -548,7 +738,25 @@ export function initPage({ root }) {
     if (!entry) return;
 
     try {
-      if (button.getAttribute('data-action') === 'delete') {
+      const action = button.getAttribute('data-action');
+      if (action === 'rollDamage') {
+        const item = getItemByEntry(entry);
+        if (!item) return;
+        const parsed = parseDiceExpression(resolveModifierTokensForRoll(item.damage || '', entry));
+        if (!parsed) return;
+        await sendDiceRollRequest(parsed.dice, 'GALAXY', parsed.bonus, parsed.count);
+        return;
+      }
+
+      if (action === 'rollHit') {
+        const item = getItemByEntry(entry);
+        if (!item) return;
+        const bonus = parseHitBonusValue(resolveModifierTokensForRoll(item.bonus || '', entry));
+        await sendDiceRollRequest('D20', 'NEBULA', bonus, 1);
+        return;
+      }
+
+      if (action === 'delete') {
         const ok = window.confirm('Видалити цю атаку?');
         if (!ok) return;
         await deleteItem(entry);
