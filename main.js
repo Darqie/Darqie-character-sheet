@@ -2385,7 +2385,16 @@ async function recreateCharacterTokenWithOwner(characterToken, sheet, ownerUserI
   const attachments = await OBR.scene.items.getItemAttachments([characterToken.id]);
   const badgeItems = attachments.filter((item) => item.metadata?.healthBadge === true || item.metadata?.acBadge === true);
 
-  let tokenBuilder = buildImage(characterToken.image, characterToken.grid)
+  // Отримуємо актуальне зображення токена з таблиці персонажа замість зі сцени
+  const actualTokenImageUrl = resolveTokenImageUrlFromSheet(sheet);
+  const newImageData = {
+    height: characterToken.image?.height || 128,
+    width: characterToken.image?.width || 128,
+    url: actualTokenImageUrl,
+    mime: characterToken.image?.mime || 'image/png'
+  };
+
+  let tokenBuilder = buildImage(newImageData, characterToken.grid)
     .position(characterToken.position)
     .rotation(characterToken.rotation)
     .scale(characterToken.scale)
