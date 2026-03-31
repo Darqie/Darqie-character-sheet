@@ -96,8 +96,13 @@ function isUploadcareUrl(url) {
 
 function resolveTokenImageUrlFromSheet(sheet) {
   if (!sheet) return getTokenPlaceholderUrl();
-  if (isUploadcareUrl(sheet.tokenPhoto)) return sheet.tokenPhoto.trim();
-  return getTokenPlaceholderUrl();
+  const tokenUrl = (sheet.tokenPhoto || '').trim();
+  if (!tokenUrl) return getTokenPlaceholderUrl();
+  // Приймаємо будь-який HTTPS URL, крім localhost (який завжди заглушка)
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(tokenUrl)) {
+    return getTokenPlaceholderUrl();
+  }
+  return tokenUrl;
 }
 
 async function normalizeLegacyTokenImageUrls() {
