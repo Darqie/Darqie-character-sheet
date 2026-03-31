@@ -2337,7 +2337,7 @@ async function syncCharacterTokenOwner(sheet, previousPlayerName = null) {
 
     if (!characterToken) return;
 
-    const normalizedImageUrl = getSafeTokenImageUrl(characterToken.image?.url);
+    const normalizedImageUrl = resolveTokenImageUrlFromSheet(sheet);
 
     await OBR.scene.items.updateItems([characterToken.id], (items) => {
       items.forEach((item) => {
