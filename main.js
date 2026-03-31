@@ -592,6 +592,48 @@ function dedupeRowsByCharacterName(rows) {
   return Array.from(byName.values());
 }
 
+function dedupeSheetsByCharacterName(sheets) {
+  if (!Array.isArray(sheets) || sheets.length === 0) return [];
+
+  const byName = new Map();
+
+  for (const sheet of sheets) {
+    if (!sheet) continue;
+
+    const name = (sheet.characterName || '').trim();
+    if (!name) continue;
+
+    const existing = byName.get(name);
+    if (!existing) {
+      byName.set(name, sheet);
+      continue;
+    }
+
+    const existingTs = Date.parse(existing._updatedAt || existing.updated_at || '') || 0;
+    const sheetTs = Date.parse(sheet._updatedAt || sheet.updated_at || '') || 0;
+    if (sheetTs >= existingTs) {
+      byName.set(name, sheet);
+    }
+  }
+
+  return Array.from(byName.values());
+}
+
+function getNextCharacterName(sheets) {
+  const usedNames = new Set(
+    (Array.isArray(sheets) ? sheets : [])
+      .map((sheet) => (sheet?.characterName || '').trim())
+      .filter(Boolean)
+  );
+
+  let index = 1;
+  while (usedNames.has(`Персонаж ${index}`)) {
+    index += 1;
+  }
+
+  return `Персонаж ${index}`;
+}
+
 /** Завантажує всіх персонажів кімнати з Supabase */
 async function loadAllCharactersFromSupabase(roomId) {
   if (!roomId) return null;
@@ -663,6 +705,8 @@ async function saveSheetToSupabase(sheet) {
 /** Записує мінімальний реєстр персонажів у OBR room metadata */
 async function updateOBRRegistry() {
   try {
+    characterSheets = dedupeSheetsByCharacterName(characterSheets);
+
     const registry = characterSheets.map((sheet) => ({
       characterName: sheet.characterName || '',
       playerName: sheet.playerName || '',
@@ -680,6 +724,8 @@ async function refreshDropdownOnly() {
   const waitingBlock = document.getElementById('waitingBlock');
   const mainContent = document.getElementById('mainContent');
   if (!characterSelect) return;
+
+  characterSheets = dedupeSheetsByCharacterName(characterSheets);
 
   const visibleSheets = characterSheets
     .map((sheet, index) => ({ ...sheet, index }))
@@ -804,7 +850,7 @@ async function handleRealtimeInsert(newRow) {
   if (characterSheets.some(s => s.characterName === newRow.character_name)) return;
 
   const newSheet = sheetFromSupabaseRow(newRow);
-  characterSheets = [...characterSheets, newSheet];
+  characterSheets = dedupeSheetsByCharacterName([...characterSheets, newSheet]);
   await refreshDropdownOnly();
 
   if (!isGM && newSheet.playerName === currentPlayerName) {
@@ -1593,12 +1639,14 @@ async function updateCharacterDropdown() {
         }
       });
 
-      characterSheets = rebuilt;
+      characterSheets = dedupeSheetsByCharacterName(rebuilt);
     } else {
-      characterSheets = rows.map(row => sheetFromSupabaseRow(row));
+      characterSheets = dedupeSheetsByCharacterName(rows.map(row => sheetFromSupabaseRow(row)));
     }
   }
   // Якщо Supabase недоступний — використовуємо наявний локальний кеш
+
+  characterSheets = dedupeSheetsByCharacterName(characterSheets);
 
   const visibleSheets = characterSheets
     .map((sheet, index) => ({ ...sheet, index }))
@@ -2452,9 +2500,9 @@ function setupCharacterButtons() {
   if (addBtn && isGM) {
     addBtn.addEventListener('click', async () => {
       try {
-        const idx = characterSheets.length;
+        const characterName = getNextCharacterName(characterSheets);
         const newSheet = {
-          characterName: `Персонаж ${idx + 1}`,
+          characterName,
           playerName: '',
           characterClassLevel: '',
           background: '',
@@ -2491,8 +2539,8 @@ function setupCharacterButtons() {
         await saveSheetToSupabase(newSheet);
 
         // Додаємо до локального списку
-        characterSheets = [...characterSheets, newSheet];
-        activeSheetIndex = characterSheets.length - 1;
+        characterSheets = dedupeSheetsByCharacterName([...characterSheets, newSheet]);
+        activeSheetIndex = Math.max(0, characterSheets.findIndex((sheet) => sheet.characterName === characterName));
 
         // Оновлюємо OBR реєстр
         await updateOBRRegistry();
