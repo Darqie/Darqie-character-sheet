@@ -2608,10 +2608,24 @@ function setupCharacterButtons() {
   if (createTokenBtn) {
     createTokenBtn.addEventListener('click', async () => {
       try {
-        const currentSheet = characterSheets[activeSheetIndex];
+        let currentSheet = characterSheets[activeSheetIndex];
         if (!currentSheet) {
           alert('Немає активного персонажа для створення токена');
           return;
+        }
+
+        // Перезавантажуємо актуальні дані персонажа з бази даних перед створенням токена
+        // Це забезпечує що токен матиме свіжу URL зображення при перекидді на нову сцену
+        try {
+          const roomId = OBR.room.id;
+          const refreshedRows = await loadAllCharactersFromSupabase(roomId);
+          const refreshedRow = refreshedRows?.find(row => row.character_name === currentSheet.characterName);
+          if (refreshedRow) {
+            currentSheet = sheetFromSupabaseRow(refreshedRow);
+          }
+        } catch (e) {
+          console.warn('[Token Create] Не вдалося перезавантажити персонажа з Supabase:', e);
+          // Продовжуємо з локальним листом якщо Supabase недоступна
         }
 
         // Перевіряємо чи вже існує токен для цього персонажа
