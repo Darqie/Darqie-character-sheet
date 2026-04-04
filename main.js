@@ -161,14 +161,10 @@ function getLegacyHideTokenStatsFromMode(mode) {
   return !isTokenStatsVisibleForPlayers(mode);
 }
 
-function getNextTokenStatsVisibilityMode(currentMode, isGmUser) {
-  if (!isGmUser) {
-    return currentMode === TOKEN_STATS_VISIBLE_ALL ? TOKEN_STATS_HIDDEN_PLAYERS : TOKEN_STATS_VISIBLE_ALL;
-  }
-
-  if (currentMode === TOKEN_STATS_VISIBLE_ALL) return TOKEN_STATS_HIDDEN_PLAYERS;
-  if (currentMode === TOKEN_STATS_HIDDEN_PLAYERS) return TOKEN_STATS_HIDDEN_ALL;
-  return TOKEN_STATS_VISIBLE_ALL;
+function getNextTokenStatsVisibilityMode(currentMode) {
+  // На листі персонажа лишаємо тільки 2 режими: видимо всім <-> приховано для гравців.
+  // Якщо поточний стан hidden_all (встановлений у GM-панелі), клік повертає у visible_all.
+  return currentMode === TOKEN_STATS_VISIBLE_ALL ? TOKEN_STATS_HIDDEN_PLAYERS : TOKEN_STATS_VISIBLE_ALL;
 }
 
 function areTokenStatsHiddenForSheet(sheet) {
@@ -183,22 +179,18 @@ function updateTokenStatsToggleButtonState(sheet) {
   const mode = getTokenStatsVisibilityModeForSheet(sheet);
 
   if (mode === TOKEN_STATS_VISIBLE_ALL) {
-    button.title = isGM
-      ? 'Стати: видимі всім. Натисніть: сховати для гравців'
-      : 'Стати: видимі. Натисніть, щоб сховати';
+    button.title = 'Стати: видимі. Натисніть, щоб сховати для гравців';
     button.innerHTML = '<i class="fas fa-eye"></i>';
     return;
   }
 
   if (mode === TOKEN_STATS_HIDDEN_PLAYERS) {
-    button.title = isGM
-      ? 'Стати: приховані для гравців. Натисніть: повністю сховати для GM'
-      : 'Стати: приховані';
+    button.title = 'Стати: приховані для гравців. Натисніть, щоб показати';
     button.innerHTML = '<i class="fas fa-eye-slash"></i>';
     return;
   }
 
-  button.title = 'Стати: повністю приховані для GM. Натисніть: показати всім';
+  button.title = 'Стати: повністю приховані для GM. Натисніть, щоб показати всім';
   button.innerHTML = '<i class="fas fa-ban"></i>';
 }
 
@@ -2865,7 +2857,7 @@ function setupCharacterButtons() {
         if (!currentSheet) return;
 
         const currentMode = getTokenStatsVisibilityModeForSheet(currentSheet);
-        const nextMode = getNextTokenStatsVisibilityMode(currentMode, isGM);
+        const nextMode = getNextTokenStatsVisibilityMode(currentMode);
         currentSheet.tokenStatsVisibilityMode = nextMode;
         currentSheet.hideTokenStats = getLegacyHideTokenStatsFromMode(nextMode);
 

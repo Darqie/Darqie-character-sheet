@@ -1029,6 +1029,11 @@ export function initPage({ root }) {
     const sceneReady = await OBR.scene.isReady();
     if (!sceneReady) return;
 
+    const buildLabel = OBR.buildLabel || window.OBR?.buildLabel;
+    if (typeof buildLabel !== 'function') {
+      throw new Error('OBR buildLabel is unavailable in this context.');
+    }
+
     const tokenStatsVisibilityMode = normalizeTokenStatsVisibilityMode(
       modeOrLegacyHidden,
       modeOrLegacyHidden === true
