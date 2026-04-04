@@ -865,13 +865,13 @@ export function initPage({ root }) {
 
     let tokenBuilder = buildImage(
       {
-        height: TOKEN_ITEM_RESOLUTION,
-        width: TOKEN_ITEM_RESOLUTION,
+        height: TOKEN_UPLOAD_RESOLUTION,
+        width: TOKEN_UPLOAD_RESOLUTION,
         url: imageUrl,
         mime: 'image/png',
       },
       {
-        dpi: TOKEN_ITEM_RESOLUTION,
+        dpi: TOKEN_UPLOAD_RESOLUTION,
         offset: { x: 0, y: 0 },
       }
     )

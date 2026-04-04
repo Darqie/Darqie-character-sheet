@@ -2412,16 +2412,22 @@ async function recreateCharacterTokenWithOwner(characterToken, sheet, ownerUserI
   // Отримуємо актуальне зображення токена з таблиці персонажа замість зі сцени
   const actualTokenImageUrl = resolveTokenImageUrlFromSheet(sheet);
   const newImageData = {
-    height: characterToken.image?.height || 128,
-    width: characterToken.image?.width || 128,
+    height: TOKEN_UPLOAD_RESOLUTION,
+    width: TOKEN_UPLOAD_RESOLUTION,
     url: actualTokenImageUrl,
     mime: characterToken.image?.mime || 'image/png'
   };
 
-  let tokenBuilder = buildImage(newImageData, characterToken.grid)
+  const tokenGrid = {
+    ...(characterToken.grid || {}),
+    dpi: TOKEN_UPLOAD_RESOLUTION,
+    offset: characterToken.grid?.offset || { x: 0, y: 0 },
+  };
+
+  let tokenBuilder = buildImage(newImageData, tokenGrid)
     .position(characterToken.position)
     .rotation(characterToken.rotation)
-    .scale(characterToken.scale)
+    .scale({ x: 1, y: 1 })
     .visible(characterToken.visible)
     .locked(characterToken.locked)
     .zIndex(characterToken.zIndex)
@@ -2686,13 +2692,13 @@ function setupCharacterButtons() {
         // Створюємо токен персонажа (займає 1 клітинку на карті)
         let tokenBuilder = buildImage(
           {
-            height: TOKEN_ITEM_RESOLUTION,
-            width: TOKEN_ITEM_RESOLUTION,
+            height: TOKEN_UPLOAD_RESOLUTION,
+            width: TOKEN_UPLOAD_RESOLUTION,
             url: imageUrl,
             mime: 'image/png'
           },
           {
-            dpi: TOKEN_ITEM_RESOLUTION,
+            dpi: TOKEN_UPLOAD_RESOLUTION,
             offset: { x: 0, y: 0 }
           }
         )
