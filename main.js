@@ -124,6 +124,21 @@ function resolveTokenImageUrlFromSheet(sheet) {
   return tokenUrl;
 }
 
+function areTokenStatsHiddenForSheet(sheet) {
+  return Boolean(sheet?.hideTokenStats);
+}
+
+function updateTokenStatsToggleButtonState(sheet) {
+  const button = document.getElementById('toggleTokenStatsButton');
+  if (!button) return;
+
+  const hidden = areTokenStatsHiddenForSheet(sheet);
+  button.title = hidden ? 'Показати стати' : 'Приховати стати';
+  button.innerHTML = hidden
+    ? '<i class="fas fa-eye-slash"></i>'
+    : '<i class="fas fa-eye"></i>';
+}
+
 async function normalizeLegacyTokenImageUrls() {
   try {
     const role = await OBR.player.getRole();
@@ -357,6 +372,7 @@ function buildFullSupabaseRow(sheet, roomId) {
   if (typeof sheet?.inspiration === 'boolean') extra.inspiration = sheet.inspiration;
   if (typeof sheet?.advantage === 'boolean') extra.advantage = sheet.advantage;
   if (typeof sheet?.disadvantage === 'boolean') extra.disadvantage = sheet.disadvantage;
+  if (typeof sheet?.hideTokenStats === 'boolean') extra.hideTokenStats = sheet.hideTokenStats;
   if (Array.isArray(sheet?.deathSavesSuccess)) extra.deathSavesSuccess = sheet.deathSavesSuccess;
   if (Array.isArray(sheet?.deathSavesFailure)) extra.deathSavesFailure = sheet.deathSavesFailure;
   if (sheet?.proficienciesAndLanguages !== undefined) extra.proficienciesAndLanguages = sheet.proficienciesAndLanguages;
@@ -458,6 +474,7 @@ function applyFullSupabaseRowToSheet(sheet, row) {
   sheet.inspiration = extra.inspiration || false;
   sheet.advantage = extra.advantage || false;
   sheet.disadvantage = extra.disadvantage || false;
+  sheet.hideTokenStats = Boolean(extra.hideTokenStats);
   sheet.deathSavesSuccess = Array.isArray(extra.deathSavesSuccess) ? extra.deathSavesSuccess : [false, false, false];
   sheet.deathSavesFailure = Array.isArray(extra.deathSavesFailure) ? extra.deathSavesFailure : [false, false, false];
   sheet.proficienciesAndLanguages = extra.proficienciesAndLanguages || '';
@@ -1498,6 +1515,8 @@ async function saveSheetData(targetSheetIndex = null) {
 function loadSheetData() {
   const sheet = characterSheets[activeSheetIndex];
   if (!sheet) return;
+
+  updateTokenStatsToggleButtonState(sheet);
   
   const elements = getSheetInputElements();
 
@@ -2372,6 +2391,7 @@ async function syncCharacterTokenOwner(sheet, previousPlayerName = null) {
         if (item.metadata?.characterSheet) {
           item.metadata.characterSheet.playerName = sheet.playerName || '';
           item.metadata.characterSheet.ownerUserId = ownerUserId;
+          item.metadata.characterSheet.hideTokenStats = areTokenStatsHiddenForSheet(sheet);
         }
       });
     });
@@ -2408,6 +2428,7 @@ async function syncCharacterTokenOwner(sheet, previousPlayerName = null) {
 async function recreateCharacterTokenWithOwner(characterToken, sheet, ownerUserId) {
   const attachments = await OBR.scene.items.getItemAttachments([characterToken.id]);
   const badgeItems = attachments.filter((item) => item.metadata?.healthBadge === true || item.metadata?.acBadge === true);
+  const hideTokenStats = areTokenStatsHiddenForSheet(sheet);
 
   // Отримуємо актуальне зображення токена з таблиці персонажа замість зі сцени
   const actualTokenImageUrl = resolveTokenImageUrlFromSheet(sheet);
@@ -2440,6 +2461,7 @@ async function recreateCharacterTokenWithOwner(characterToken, sheet, ownerUserI
       characterSheet: {
         ...(characterToken.metadata?.characterSheet || {}),
         playerName: sheet.playerName || '',
+        hideTokenStats,
         ownerUserId: ownerUserId,
       },
     })
@@ -2456,7 +2478,7 @@ async function recreateCharacterTokenWithOwner(characterToken, sheet, ownerUserI
       .position(badge.position)
       .rotation(badge.rotation)
       .scale(badge.scale)
-      .visible(badge.visible)
+      .visible(!hideTokenStats)
       .locked(badge.locked)
       .zIndex(badge.zIndex)
       .layer('ATTACHMENT')
@@ -2479,6 +2501,44 @@ async function recreateCharacterTokenWithOwner(characterToken, sheet, ownerUserI
   }
 
   await OBR.scene.items.deleteItems([characterToken.id, ...badgeItems.map((i) => i.id)]);
+}
+
+async function applyTokenStatsVisibilityForCharacter(characterName, hideTokenStats) {
+  if (!characterName) return;
+
+  const allItems = await OBR.scene.items.getItems();
+  const tokenIds = allItems
+    .filter((item) =>
+      item.layer === 'CHARACTER' &&
+      item.metadata?.characterSheet?.characterName === characterName
+    )
+    .map((item) => item.id);
+
+  if (tokenIds.length > 0) {
+    await OBR.scene.items.updateItems(tokenIds, (items) => {
+      items.forEach((item) => {
+        if (item.metadata?.characterSheet) {
+          item.metadata.characterSheet.hideTokenStats = hideTokenStats;
+        }
+      });
+    });
+  }
+
+  const badgeIds = allItems
+    .filter((item) =>
+      item.layer === 'ATTACHMENT' &&
+      tokenIds.includes(item.attachedTo) &&
+      (item.metadata?.healthBadge === true || item.metadata?.acBadge === true)
+    )
+    .map((item) => item.id);
+
+  if (badgeIds.length > 0) {
+    await OBR.scene.items.updateItems(badgeIds, (items) => {
+      items.forEach((item) => {
+        item.visible = !hideTokenStats;
+      });
+    });
+  }
 }
 
 
@@ -2504,6 +2564,7 @@ function setupCharacterButtons() {
   const addBtn = document.getElementById('addCharacterButton');
   const delBtn = document.getElementById('deleteCharacterButton');
   const createTokenBtn = document.getElementById('createTokenButton');
+  const toggleTokenStatsBtn = document.getElementById('toggleTokenStatsButton');
   const gmPanelBtn = document.getElementById('openGmPanelButton');
 
   // Приховування кнопок для не-GM
@@ -2517,11 +2578,33 @@ function setupCharacterButtons() {
     if (createTokenBtn) {
       createTokenBtn.style.display = 'flex';
     }
+    if (toggleTokenStatsBtn) {
+      toggleTokenStatsBtn.style.display = 'flex';
+    }
   } else {
     // Показуємо всі кнопки для GM
-    [addBtn, delBtn, createTokenBtn, gmPanelBtn].forEach(btn => {
+    [addBtn, delBtn, createTokenBtn, toggleTokenStatsBtn, gmPanelBtn].forEach(btn => {
       if (btn) {
         btn.style.display = 'flex';
+      }
+    });
+  }
+
+  if (toggleTokenStatsBtn) {
+    updateTokenStatsToggleButtonState(characterSheets[activeSheetIndex]);
+    toggleTokenStatsBtn.addEventListener('click', async () => {
+      try {
+        const currentSheet = characterSheets[activeSheetIndex];
+        if (!currentSheet) return;
+
+        const nextHiddenState = !areTokenStatsHiddenForSheet(currentSheet);
+        currentSheet.hideTokenStats = nextHiddenState;
+
+        await applyTokenStatsVisibilityForCharacter(currentSheet.characterName, nextHiddenState);
+        await saveSheetData(activeSheetIndex);
+        updateTokenStatsToggleButtonState(currentSheet);
+      } catch (error) {
+        console.error('Помилка при перемиканні видимості статів токена:', error);
       }
     });
   }
@@ -2572,6 +2655,7 @@ function setupCharacterButtons() {
           inspiration: false,
           advantage: false,
           disadvantage: false,
+          hideTokenStats: false,
         };
 
         // Зберігаємо в Supabase
@@ -2688,6 +2772,7 @@ function setupCharacterButtons() {
 
         // Використовуємо фото токена/персонажа з Uploadcare, якщо воно є.
         const imageUrl = resolveTokenImageUrlFromSheet(currentSheet);
+        const hideTokenStats = areTokenStatsHiddenForSheet(currentSheet);
 
         // Створюємо токен персонажа (займає 1 клітинку на карті)
         let tokenBuilder = buildImage(
@@ -2720,6 +2805,7 @@ function setupCharacterButtons() {
               maxHealthPoints: currentSheet.maxHealthPoints,
               healing: currentSheet.healing,
               armorClass: currentSheet.armorClass,
+              hideTokenStats,
               ownerUserId: ownerUserId
             }
           });
@@ -2752,6 +2838,7 @@ function setupCharacterButtons() {
           })
           .layer('ATTACHMENT')
           .attachedTo(tokenItem.id)
+          .visible(!hideTokenStats)
           .plainText(healthText)
           .locked(true)  // Блокуємо переміщення та редагування
           .metadata({
@@ -2768,6 +2855,7 @@ function setupCharacterButtons() {
           })
           .layer('ATTACHMENT')
           .attachedTo(tokenItem.id)
+          .visible(!hideTokenStats)
           .plainText(`🛡${currentSheet.armorClass || 5}`)
           .locked(true)  // Блокуємо переміщення та редагування
           .metadata({

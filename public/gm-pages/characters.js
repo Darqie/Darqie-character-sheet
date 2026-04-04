@@ -117,6 +117,10 @@ function appendCacheVersion(url, version) {
   return `${clean}?v=${encodeURIComponent(String(version || Date.now()))}`;
 }
 
+function areTokenStatsHiddenInRow(row) {
+  return Boolean(row?.extra_data?.hideTokenStats);
+}
+
 function escapeHtml(value) {
   return String(value || '')
     .replace(/&/g, '&amp;')
@@ -126,14 +130,19 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
-function getActionButtonsHtml(type) {
+function getActionButtonsHtml(type, hideTokenStats = false) {
   const openBtn = type === CHARACTER_TYPE_PLAYER
     ? '<button type="button" class="gm-row-btn" data-action="open" title="До листа"><i class="fas fa-arrow-right"></i></button>'
     : '';
 
+  const toggleStatsBtn = hideTokenStats
+    ? '<button type="button" class="gm-row-btn is-active" data-action="toggleStats" title="Показати стати"><i class="fas fa-eye-slash"></i></button>'
+    : '<button type="button" class="gm-row-btn" data-action="toggleStats" title="Приховати стати"><i class="fas fa-eye"></i></button>';
+
   return `
     <div class="gm-row-actions">
       <button type="button" class="gm-row-btn" data-action="token" title="Токен"><i class="fas fa-map-marker-alt"></i></button>
+      ${toggleStatsBtn}
       <button type="button" class="gm-row-btn" data-action="tokenPhoto" title="Фото токена"><i class="fas fa-image"></i></button>
       ${openBtn}
       <button type="button" class="gm-row-btn gm-row-btn--danger" data-action="delete" title="Видалити"><i class="fas fa-trash-alt"></i></button>
@@ -321,7 +330,7 @@ function buildCharacterRowHtml(row, players) {
           </button>
         </div>
       </td>
-      <td>${getActionButtonsHtml(type)}</td>
+      <td>${getActionButtonsHtml(type, areTokenStatsHiddenInRow(row))}</td>
     </tr>
   `;
 }
@@ -863,6 +872,8 @@ export function initPage({ root }) {
     const imageUrl = resolveTokenImageUrlFromRow(row);
     const ownerUserId = await getOwnerUserIdByPlayerName(row.player_name || '');
 
+    const hideTokenStats = areTokenStatsHiddenInRow(row);
+
     let tokenBuilder = buildImage(
       {
         height: TOKEN_UPLOAD_RESOLUTION,
@@ -893,6 +904,7 @@ export function initPage({ root }) {
           maxHealthPoints: row.max_health_points || '0',
           healing: row.healing || '0',
           armorClass: row.armor_class || '5',
+          hideTokenStats,
           ownerUserId: ownerUserId,
         },
       });
@@ -910,6 +922,7 @@ export function initPage({ root }) {
       .position({ x: tokenBounds.max.x - 10, y: tokenBounds.min.y + 10 })
       .layer('ATTACHMENT')
       .attachedTo(token.id)
+      .visible(!hideTokenStats)
       .plainText(`♥${row.health_points || 0}`)
       .locked(true)
       .metadata({ healthBadge: true, characterName: row.character_name, playerName: row.player_name || '' });
@@ -918,6 +931,7 @@ export function initPage({ root }) {
       .position({ x: tokenBounds.min.x + 10, y: tokenBounds.min.y + 10 })
       .layer('ATTACHMENT')
       .attachedTo(token.id)
+      .visible(!hideTokenStats)
       .plainText(`🛡${row.armor_class || 5}`)
       .locked(true)
       .metadata({ acBadge: true, characterName: row.character_name, playerName: row.player_name || '' });
@@ -932,6 +946,48 @@ export function initPage({ root }) {
     await OBR.scene.items.addItems([healthBadge, acBadge]);
 
     await focusToken(token.id);
+  }
+
+  async function applyTokenStatsVisibility(characterName, hideTokenStats) {
+    if (!OBR && window.OBR) { OBR = window.OBR; cachedObrClient = OBR; }
+    if (!OBR || typeof OBR.scene?.isReady !== 'function') return;
+
+    const sceneReady = await OBR.scene.isReady();
+    if (!sceneReady) return;
+
+    const allItems = await OBR.scene.items.getItems();
+    const tokenIds = allItems
+      .filter((item) =>
+        item.layer === 'CHARACTER' &&
+        item.metadata?.characterSheet?.characterName === characterName
+      )
+      .map((item) => item.id);
+
+    if (tokenIds.length > 0) {
+      await OBR.scene.items.updateItems(tokenIds, (items) => {
+        items.forEach((item) => {
+          if (item.metadata?.characterSheet) {
+            item.metadata.characterSheet.hideTokenStats = hideTokenStats;
+          }
+        });
+      });
+    }
+
+    const badgeIds = allItems
+      .filter((item) =>
+        item.layer === 'ATTACHMENT' &&
+        tokenIds.includes(item.attachedTo) &&
+        (item.metadata?.healthBadge === true || item.metadata?.acBadge === true)
+      )
+      .map((item) => item.id);
+
+    if (badgeIds.length > 0) {
+      await OBR.scene.items.updateItems(badgeIds, (items) => {
+        items.forEach((item) => {
+          item.visible = !hideTokenStats;
+        });
+      });
+    }
   }
 
   function openCharacterSheet(row) {
@@ -1242,6 +1298,25 @@ export function initPage({ root }) {
 
       if (action === 'token') {
         await createOrFocusToken(row);
+        return;
+      }
+
+      if (action === 'toggleStats') {
+        const nextHideTokenStats = !areTokenStatsHiddenInRow(row);
+        await applyTokenStatsVisibility(row.character_name, nextHideTokenStats);
+
+        const nextExtra = {
+          ...(row.extra_data || {}),
+          hideTokenStats: nextHideTokenStats,
+        };
+
+        const updated = await patchByName(row.character_name, { extra_data: nextExtra });
+        if (updated) {
+          const idx = rows.findIndex((entry) => entry.character_name === row.character_name);
+          if (idx !== -1) rows[idx] = updated;
+          rowsSignature = buildRowsSignature(rows);
+          renderTable();
+        }
         return;
       }
 
