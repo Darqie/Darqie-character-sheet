@@ -4,7 +4,8 @@ const SUPABASE_PHOTO_BUCKET = 'character-photos';
 const TOKEN_PLACEHOLDER_URL = 'https://raw.githubusercontent.com/Darqie/Darqie-character-sheet/main/public/character-token-placeholder.png';
 const CHARACTER_TYPE_PLAYER = 'player';
 const CHARACTER_TYPE_NPC = 'npc';
-const TOKEN_IMAGE_RESOLUTION = 512;
+const TOKEN_UPLOAD_RESOLUTION = 512;
+const TOKEN_ITEM_RESOLUTION = 128;
 const DARQIE_SHEETS_KEY = 'darqie.characterSheets';
 const DARQIE_REGISTRY_KEY = 'darqie.v2.registry';
 const DARQIE_ROOM_ID_KEY = 'darqie.lastRoomId';
@@ -864,13 +865,13 @@ export function initPage({ root }) {
 
     let tokenBuilder = buildImage(
       {
-        height: TOKEN_IMAGE_RESOLUTION,
-        width: TOKEN_IMAGE_RESOLUTION,
+        height: TOKEN_ITEM_RESOLUTION,
+        width: TOKEN_ITEM_RESOLUTION,
         url: imageUrl,
         mime: 'image/png',
       },
       {
-        dpi: TOKEN_IMAGE_RESOLUTION,
+        dpi: TOKEN_ITEM_RESOLUTION,
         offset: { x: 0, y: 0 },
       }
     )
@@ -1034,7 +1035,7 @@ export function initPage({ root }) {
     pendingTokenPhotoRowName = '';
     if (!row) return;
 
-    const blob = await cropImageToCircle(file, TOKEN_IMAGE_RESOLUTION, TOKEN_IMAGE_RESOLUTION);
+    const blob = await cropImageToCircle(file, TOKEN_UPLOAD_RESOLUTION, TOKEN_UPLOAD_RESOLUTION);
     const tokenUrl = await uploadTokenPhoto(row.character_name, blob);
     if (!tokenUrl) throw new Error('Token image URL is empty');
 
