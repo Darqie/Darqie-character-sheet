@@ -35,7 +35,7 @@
       justify-content: space-between;
       gap: 12px;
       margin-bottom: 14px;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
     }
 
     .gm-panel-title {
@@ -49,9 +49,10 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       justify-content: space-between;
-      width: 100%;
+      width: auto;
+      margin-left: auto;
     }
 
     .gm-panel-nav-left,
@@ -59,7 +60,7 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
     }
 
     .gm-panel-nav-btn {
@@ -113,7 +114,6 @@
 
     .gm-panel-shell {
       width: 100%;
-      min-height: calc(100vh - 48px);
       border-radius: 12px;
       padding: 24px;
       background: rgba(33, 37, 51, 0.22);
@@ -123,14 +123,19 @@
     }
 
     .gm-panel-content {
-      min-height: 60vh;
-      max-height: calc(100vh - 180px);
+      min-height: 80vh;
+      max-height: calc(100vh - 220px);
       overflow-y: auto;
       padding-right: 4px;
+      position: relative;
+    }
+
+    .gm-panel-content.is-loading {
+      overflow: hidden;
     }
 
     .gm-page {
-      min-height: 56vh;
+      min-height: 28vh;
       border-radius: 10px;
       padding: 16px;
       background: rgba(33, 37, 51, 0.18);
@@ -140,6 +145,575 @@
       margin-top: 0;
       margin-bottom: 10px;
       font-size: 1.4rem;
+    }
+
+    .gm-characters-page {
+      height: 100%;
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: transparent;
+      border: none;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px 0 rgba(0,0,0,0.18), 0 1.5px 6px 0 rgba(0,0,0,0.12);
+      padding: 4px 18px 12px 18px;
+    }
+
+    .gm-characters-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      border-bottom: 1.5px solid rgba(255,255,255,0.35);
+      padding-bottom: 4px;
+    }
+
+    .gm-characters-toolbar-title {
+      font-size: 1.1rem;
+      color: #f0f0f0;
+      font-weight: 700;
+    }
+
+    .gm-characters-toolbar-actions {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .gm-characters-create-btn {
+      background: transparent;
+      border: none;
+      color: #f0f0f0;
+      font-family: 'Cormorant Unicase', serif;
+      font-size: 1em;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      padding: 2px 4px;
+      border-radius: 5px;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+
+    .gm-characters-create-btn:hover {
+      background: rgba(255,255,255,0.08);
+    }
+
+    .gm-characters-create-btn--npc:hover {
+      background: rgba(255,127,127,0.12);
+      color: #ffb8b8;
+    }
+
+    .gm-items-filter-select {
+      min-width: 220px;
+    }
+
+    .gm-characters-table-wrap {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      border-radius: 10px;
+      border: none;
+      background: transparent;
+      padding: 0;
+    }
+
+    .gm-characters-table {
+      width: 100%;
+      border-collapse: separate;
+      margin-top: 0;
+      table-layout: fixed;
+    }
+
+    .gm-characters-table tr {
+      height: 26px !important;
+      min-height: 0 !important;
+      padding: 0 !important;
+    }
+
+    .gm-characters-table td,
+    .gm-characters-table th {
+      padding: 0 !important;
+      line-height: 1 !important;
+      vertical-align: middle !important;
+    }
+
+    .gm-characters-table td:nth-child(n+4),
+    .gm-characters-table th:nth-child(n+4) {
+      text-align: center;
+    }
+
+    .gm-characters-table td:nth-child(n+4) .gm-cell-input,
+    .gm-characters-table td:nth-child(n+4) .gm-cell-select {
+      text-align: center;
+    }
+
+    .gm-characters-table td:nth-child(n+4) .gm-row-actions {
+      justify-content: center;
+    }
+
+    .gm-characters-table th {
+      font-family: 'Cormorant Unicase', serif !important;
+      font-size: 1em;
+      color: #f0f0f0;
+      font-weight: 700;
+      text-align: center;
+      padding-bottom: 0;
+      opacity: 0.85;
+      padding-left: 2px !important;
+      padding-right: 2px !important;
+    }
+
+    .gm-cell-input,
+    .gm-cell-select {
+      box-sizing: border-box !important;
+      margin: 0 !important;
+      min-height: 0 !important;
+      outline: none !important;
+      border-width: 1px !important;
+      border-radius: 3px !important;
+      padding: 0 4px !important;
+      height: 24px !important;
+      line-height: 1 !important;
+      width: 100%;
+      background: rgba(46, 52, 72, 0.32);
+      border: none;
+      outline: 1px solid rgba(255,255,255,0.25);
+      color: #e0e0e0;
+      font-family: 'Cormorant Unicase', serif !important;
+      font-size: 1em;
+      transition: outline 0.15s;
+    }
+
+    .gm-cell-input:focus,
+    .gm-cell-select:focus {
+      outline: none !important;
+      border: none !important;
+      box-shadow: none !important;
+      background: rgba(60, 66, 90, 0.42);
+    }
+
+    .gm-cell-input:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      background: rgba(46, 52, 72, 0.26);
+    }
+
+    .gm-skills-table tr {
+      height: auto !important;
+      min-height: 26px !important;
+    }
+
+    .gm-skills-table tbody tr,
+    .gm-skills-table td,
+    .gm-skills-table th {
+      height: auto !important;
+    }
+
+    .gm-skills-table td {
+      vertical-align: top !important;
+      padding-top: 2px !important;
+      padding-bottom: 2px !important;
+    }
+
+    .gm-skills-table td > .gm-cell-input:not(.gm-skill-desc-input),
+    .gm-skills-table td > .gm-cell-select {
+      height: 100% !important;
+      min-height: 24px !important;
+    }
+
+    .gm-skills-table td:nth-child(2) {
+      text-align: left;
+    }
+
+    .gm-skills-table th:nth-child(2) {
+      text-align: center;
+    }
+
+    .gm-skills-table td:nth-child(3),
+    .gm-skills-table th:nth-child(3) {
+      text-align: center;
+    }
+
+    .gm-skills-table td:nth-child(3) .gm-cell-select {
+      text-align: center;
+    }
+
+    .gm-skills-table .gm-skill-desc-input {
+      display: block;
+      height: auto !important;
+      min-height: 24px !important;
+      max-height: none !important;
+      line-height: 1.25 !important;
+      padding: 4px 6px !important;
+      resize: none;
+      overflow: hidden;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .gm-skills-table .gm-skill-desc-preview {
+      box-sizing: border-box;
+      margin-top: 0;
+      min-height: 24px;
+      line-height: 1.25;
+      color: #e0e0e0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      cursor: text;
+      padding: 4px 6px;
+      border-radius: 3px;
+      background: rgba(46, 52, 72, 0.32);
+      outline: none;
+    }
+
+    .gm-skills-table .gm-skill-desc-preview:hover {
+      background: rgba(46, 52, 72, 0.32);
+    }
+
+    .gm-skills-table .gm-skill-desc-input[hidden],
+    .gm-skills-table .gm-skill-desc-preview[hidden] {
+      display: none !important;
+    }
+
+    .gm-skills-table .gm-skill-inline-dice {
+      background: transparent;
+      border: none;
+      color: #8fd2ff;
+      cursor: pointer;
+      font: inherit;
+      padding: 0;
+      text-decoration: underline;
+      text-decoration-style: dotted;
+      text-underline-offset: 2px;
+    }
+
+    .gm-skills-table .gm-skill-inline-dice:hover {
+      color: #d8eeff;
+    }
+
+    .gm-skills-table .gm-skill-inline-faze {
+      display: inline-flex;
+      gap: 4px;
+      align-items: center;
+      margin: 0 2px;
+    }
+
+    .gm-skills-table .gm-skill-faze-flag {
+      width: 20px;
+      height: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 5px;
+      background: rgba(255, 255, 255, 0.12);
+      color: #d3d7e0;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.12s, box-shadow 0.15s;
+    }
+
+    .gm-skills-table .gm-skill-faze-flag:hover {
+      background: rgba(255, 255, 255, 0.24);
+      border-color: rgba(255, 255, 255, 0.38);
+    }
+
+    .gm-skills-table .gm-skill-faze-flag.is-used {
+      background: rgba(255, 78, 78, 0.52);
+      color: #fff0f0;
+      border-color: rgba(255, 160, 160, 0.95);
+      box-shadow: 0 0 0 1px rgba(255, 120, 120, 0.35), 0 0 10px rgba(255, 95, 95, 0.45);
+      transform: scale(1.06);
+    }
+
+    .gm-skills-table .gm-skill-faze-flag.is-used i {
+      color: #ffffff;
+    }
+
+    .gm-skills-table .gm-row-actions {
+      height: 100%;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .gm-skill-modal-desc {
+      min-height: 110px !important;
+      height: auto !important;
+      line-height: 1.3 !important;
+      padding: 8px 10px !important;
+      resize: vertical;
+    }
+
+    .gm-cell-inline {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .gm-cell-inline .gm-cell-input {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .gm-inline-roll-btn {
+      width: 22px;
+      height: 22px;
+      border: none;
+      border-radius: 4px;
+      background: rgba(255,255,255,0.06);
+      color: #f0f0f0;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      transition: background 0.15s;
+    }
+
+    .gm-inline-roll-btn:hover {
+      background: rgba(255,255,255,0.14);
+    }
+
+    .gm-inline-roll-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .gm-row-actions {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 2px;
+      align-items: center;
+    }
+
+    .gm-row-btn {
+      background: transparent;
+      border: none;
+      color: #f0f0f0;
+      font-family: 'Cormorant Unicase', serif;
+      font-size: 0.86rem;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      padding: 2px 5px;
+      border-radius: 5px;
+      transition: background 0.15s;
+    }
+
+    .gm-row-btn:hover {
+      background: rgba(255,255,255,0.08);
+    }
+
+    .gm-row-btn.is-active {
+      color: #ffd9d9;
+      background: rgba(255, 82, 82, 0.22);
+    }
+
+    .gm-row-btn--danger {
+      color: #ffb8b8;
+    }
+
+    .gm-row-btn--danger:hover {
+      background: rgba(255,0,0,0.10);
+      color: #ff7f7f;
+    }
+
+    .gm-items-table td:nth-child(2),
+    .gm-items-table th:nth-child(2),
+    .gm-items-table td:nth-child(3),
+    .gm-items-table th:nth-child(3),
+    .gm-items-table td:nth-child(4),
+    .gm-items-table th:nth-child(4),
+    .gm-items-table td:nth-child(5),
+    .gm-items-table th:nth-child(5) {
+      text-align: center;
+    }
+
+    .gm-items-table td:nth-child(2) .gm-cell-input,
+    .gm-items-table td:nth-child(3) .gm-cell-input,
+    .gm-items-table td:nth-child(4) .gm-cell-select {
+      text-align: center;
+    }
+
+    .gm-items-table td:nth-child(5) .gm-row-actions {
+      justify-content: center;
+    }
+
+    .gm-item-modal[hidden] {
+      display: none !important;
+    }
+
+    .gm-item-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 12000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+
+    .gm-item-modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+    }
+
+    .gm-item-modal-dialog {
+      position: relative;
+      width: min(540px, 94vw);
+      border-radius: 12px;
+      padding: 14px;
+      background: rgba(33, 37, 51, 0.95);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      z-index: 1;
+    }
+
+    .gm-item-modal-title {
+      margin: 0 0 10px;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #f0f0f0;
+    }
+
+    .gm-item-modal-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .gm-item-modal-label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 0.95rem;
+      color: #d9d9d9;
+    }
+
+    .gm-item-modal-label .gm-cell-input,
+    .gm-item-modal-label .gm-cell-select {
+      background: rgba(255, 255, 255, 0.1);
+      outline: 1px solid rgba(255, 255, 255, 0.45);
+    }
+
+    .gm-item-modal-label .gm-cell-input:focus,
+    .gm-item-modal-label .gm-cell-select:focus {
+      background: rgba(255, 255, 255, 0.16);
+      outline: 1px solid rgba(255, 255, 255, 0.7) !important;
+    }
+
+    .gm-item-modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .gm-row-status {
+      margin-top: 2px;
+      font-size: 0.75rem;
+      color: #c9ffe2;
+    }
+
+    .gm-row-status.is-error {
+      color: #ffd0d0;
+    }
+
+    .gm-characters-empty {
+      text-align: center;
+      color: #d7d7d7;
+      padding: 12px 8px;
+      font-size: 1.05rem;
+    }
+
+    .gm-waiting-block {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      pointer-events: none;
+    }
+
+    .gm-waiting-container {
+      text-align: center;
+      animation: gmFadeInUp 0.6s ease-out;
+      z-index: 1;
+    }
+
+    .gm-dice-spinner {
+      width: 100px;
+      height: 100px;
+      margin: 0 auto 10px;
+      position: relative;
+      animation: gmBreathe 3s ease-in-out infinite;
+    }
+
+    .gm-dice-spinner i {
+      font-size: 100px;
+      color: #4ecdc4;
+      display: block;
+      animation: gmFloatSlow 4s ease-in-out infinite, gmColorPulse 3s ease-in-out infinite;
+      filter: drop-shadow(0 10px 40px rgba(78, 205, 196, 0.6));
+    }
+
+    .gm-waiting-title {
+      font-size: 1.1em;
+      font-weight: 700;
+      color: #fff;
+      margin: 0 0 10px 0;
+      text-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      letter-spacing: 1px;
+      animation: gmFadeIn 1s ease-in;
+      text-transform: uppercase;
+    }
+
+    @keyframes gmColorPulse {
+      0%, 100% { color: #4ecdc4; }
+      50% { color: #ff6b6b; }
+    }
+
+    @keyframes gmFadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes gmFadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes gmFloatSlow {
+      0%, 100% {
+        transform: translateY(0px) rotate(0deg);
+      }
+      50% {
+        transform: translateY(-15px) rotate(-5deg);
+      }
+    }
+
+    @keyframes gmBreathe {
+      0%, 100% { opacity: 0.9; }
+      50% { opacity: 1; }
     }
 
     /* === Кастомний вертикальний скролбар у стилі сторінки персонажа === */
@@ -168,6 +742,8 @@
       scrollbar-color: rgba(40,40,40,0.22) rgba(0,0,0,0.10);
     }
   </style>
+  <script type="module" crossorigin src="/assets/gmPanel-BMhDStJx.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/index-Cfa9MU8H.js">
 </head>
 <body>
   <div class="main-container">
@@ -175,12 +751,6 @@
       <div class="gm-panel-topbar">
         <h2 class="gm-panel-title">Панель GM</h2>
         <div class="gm-panel-nav">
-          <div class="gm-panel-nav-left">
-            <button id="gmPanelPlayersButton" class="gm-panel-nav-btn gm-panel-nav-btn--players" type="button" title="Гравці" aria-label="Гравці">
-              <i class="fas fa-users"></i>
-              <span>Гравці</span>
-            </button>
-          </div>
           <div class="gm-panel-nav-right">
             <button id="gmPanelCharactersButton" class="gm-panel-nav-btn" type="button" title="Персонажі" aria-label="Персонажі">
               <i class="fas fa-user-shield"></i>
@@ -198,6 +768,14 @@
               <i class="fas fa-crosshairs"></i>
               <span>Атаки</span>
             </button>
+            <button id="gmPanelEquipmentButton" class="gm-panel-nav-btn" type="button" title="Спорядження" aria-label="Спорядження">
+              <i class="fas fa-shield-alt"></i>
+              <span>Спорядження</span>
+            </button>
+            <button id="gmPanelPlayersButton" class="gm-panel-nav-btn gm-panel-nav-btn--players" type="button" title="Гравці" aria-label="Гравці">
+              <i class="fas fa-users"></i>
+              <span>Гравці</span>
+            </button>
           </div>
         </div>
       </div>
@@ -208,7 +786,7 @@
       </div>
     </div>
   </div>
-
+
   <script src="./gm-panel-page.js"></script>
 </body>
 </html>

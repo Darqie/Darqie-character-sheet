@@ -548,6 +548,7 @@ function applyFullSupabaseRowToSheet(sheet, row) {
   // Запам'ятовуємо оригінальне ім'я для детектування перейменувань
   sheet._originalCharacterName = sheet.characterName;
   sheet._updatedAt = row.updated_at || sheet._updatedAt || null;
+  sheet._dirtyFields = {};
 }
 
 // Backward-compat alias
@@ -760,6 +761,9 @@ async function saveSheetToSupabase(sheet) {
   const roomId = OBR.room.id;
   try {
     const oldName = sheet._originalCharacterName;
+    const dirtyFieldsMap = ensureSheetDirtyFields(sheet);
+    const dirtyFields = Object.keys(dirtyFieldsMap).filter((key) => !!dirtyFieldsMap[key]);
+
     // При перейменуванні — видаляємо старий рядок
     if (oldName && oldName !== sheet.characterName) {
       await supabase.from('character_sheets')
@@ -769,8 +773,8 @@ async function saveSheetToSupabase(sheet) {
       sheet._originalCharacterName = sheet.characterName;
     }
 
-    // Захист від "затирання": перед збереженням зливаємо локальний лист
-    // з актуальним рядком у Supabase, якщо він існує.
+    // Захист від "затирання": зливаємо з актуальним рядком у Supabase
+    // та застосовуємо лише локально змінені поля (dirty-fields).
     let sheetToSave = sheet;
     try {
       const { data: existingRow, error: existingError } = await supabase
@@ -786,9 +790,17 @@ async function saveSheetToSupabase(sheet) {
       if (!existingError && existing) {
         const mergedSheet = {};
         applyFullSupabaseRowToSheet(mergedSheet, existing);
-        Object.keys(sheet).forEach((key) => {
-          if (sheet[key] !== undefined) mergedSheet[key] = sheet[key];
+
+        const keysToApply = new Set(dirtyFields);
+        keysToApply.add('characterName');
+        keysToApply.add('playerName');
+        keysToApply.add('tokenStatsVisibilityMode');
+        keysToApply.add('hideTokenStats');
+
+        keysToApply.forEach((key) => {
+          if (sheet[key] !== undefined) mergedSheet[key] = cloneSheetFieldValue(sheet[key]);
         });
+
         sheetToSave = mergedSheet;
       }
     } catch (_) {
@@ -799,7 +811,13 @@ async function saveSheetToSupabase(sheet) {
     const { error } = await supabase
       .from('character_sheets')
       .upsert(row, { onConflict: 'room_id,character_name' });
-    if (error) console.error('[Supabase] Помилка збереження:', error);
+    if (error) {
+      console.error('[Supabase] Помилка збереження:', error);
+    } else {
+      sheet._originalCharacterName = sheet.characterName;
+      sheet._updatedAt = row.updated_at || new Date().toISOString();
+      sheet._dirtyFields = {};
+    }
   } catch (e) {
     console.error('[Supabase] Мережева помилка при збереженні:', e);
   }
@@ -891,6 +909,23 @@ async function setupSupabaseRealtime(roomId) {
 async function syncAllCharactersFromSupabase(roomId) {
   const rows = await loadAllCharactersFromSupabase(roomId);
   if (!Array.isArray(rows)) return;
+
+  const remoteNames = new Set(
+    rows
+      .map((row) => String(row?.character_name || '').trim())
+      .filter(Boolean)
+  );
+
+  const filteredSheets = characterSheets.filter((sheet) => {
+    const name = String(sheet?.characterName || '').trim();
+    if (!name) return false;
+    return remoteNames.has(name);
+  });
+
+  if (filteredSheets.length !== characterSheets.length) {
+    characterSheets = dedupeSheetsByCharacterName(filteredSheets);
+    await refreshDropdownOnly();
+  }
 
   for (const row of rows) {
     if (!row?.character_name) continue;
@@ -1061,9 +1096,19 @@ async function migrateOBRDataIfNeeded(roomId) {
     const metadata = await OBR.room.getMetadata();
     const oldSheets = metadata[DARQIE_SHEETS_KEY];
     const newRegistry = metadata[DARQIE_REGISTRY_KEY];
+    const migrationDone = metadata[DARQIE_LEGACY_MIGRATION_DONE_KEY] === true;
 
+    if (migrationDone) return;
     if (!Array.isArray(oldSheets) || oldSheets.length === 0) return;
-    if (Array.isArray(newRegistry) && newRegistry.length > 0) return; // вже мігровано
+
+    if (Array.isArray(newRegistry) && newRegistry.length > 0) {
+      await OBR.room.setMetadata({
+        ...metadata,
+        [DARQIE_LEGACY_MIGRATION_DONE_KEY]: true,
+        [DARQIE_SHEETS_KEY]: [],
+      });
+      return;
+    }
 
     console.log('[Migration] Мігруємо', oldSheets.length, 'персонажів з OBR до Supabase...');
     for (const sheet of oldSheets) {
@@ -1085,6 +1130,13 @@ async function migrateOBRDataIfNeeded(roomId) {
         console.log('[Migration] Мігровано:', sheet.characterName);
       }
     }
+
+    await OBR.room.setMetadata({
+      ...metadata,
+      [DARQIE_LEGACY_MIGRATION_DONE_KEY]: true,
+      [DARQIE_SHEETS_KEY]: [],
+    });
+
     console.log('[Migration] Міграцію завершено.');
   } catch (e) {
     console.error('[Migration] Помилка міграції:', e);
@@ -1094,6 +1146,7 @@ async function migrateOBRDataIfNeeded(roomId) {
 // === КОНСТАНТИ ===
 const DARQIE_SHEETS_KEY = 'darqie.characterSheets'; // legacy — тепер лише для міграції
 const DARQIE_REGISTRY_KEY = 'darqie.v2.registry';   // мінімальний реєстр персонажів в OBR
+const DARQIE_LEGACY_MIGRATION_DONE_KEY = 'darqie.v2.legacyMigrationDone';
 const DEBOUNCE_DELAY = 40;
 const UPLOADCARE_PUBLIC_KEY = '7d0fa9d84ac0680d6d83';
 const DICE_ROLL_KEY = "darqie.rollRequest";
@@ -1138,6 +1191,34 @@ function isTokenForSheet(item, sheet) {
   }
 
   return false;
+}
+
+function cloneSheetFieldValue(value) {
+  if (Array.isArray(value)) return JSON.parse(JSON.stringify(value));
+  if (value && typeof value === 'object') return JSON.parse(JSON.stringify(value));
+  return value;
+}
+
+function ensureSheetDirtyFields(sheet) {
+  if (!sheet || typeof sheet !== 'object') return {};
+  if (!sheet._dirtyFields || typeof sheet._dirtyFields !== 'object') {
+    sheet._dirtyFields = {};
+  }
+  return sheet._dirtyFields;
+}
+
+function markSheetFieldDirty(sheet, fieldName) {
+  if (!sheet || !fieldName) return;
+  const dirty = ensureSheetDirtyFields(sheet);
+  dirty[fieldName] = true;
+}
+
+function consumeSheetDirtyFields(sheet) {
+  if (!sheet || typeof sheet !== 'object') return [];
+  const dirty = ensureSheetDirtyFields(sheet);
+  const keys = Object.keys(dirty).filter((key) => !!dirty[key]);
+  sheet._dirtyFields = {};
+  return keys;
 }
 
 function getActiveSheetCombatValues() {
@@ -1436,100 +1517,115 @@ async function saveSheetData(targetSheetIndex = null) {
   isSaving = true;
 
   const sheet = characterSheets[sheetIndexToSave];
+  const isSavingActiveSheet = sheetIndexToSave === activeSheetIndex;
   const elements = getSheetInputElements();
   const previousCharacterName = sheet.characterName;
   const previousPlayerName = sheet.playerName;
   const modal = document.getElementById('characterInfoModal');
   const isModalOpen = modal && modal.style.display === 'block';
 
-  // Збереження основних полів
-  for (const key in elements) {
-    if (['characterClassLevel','characterRace','background','alignment'].includes(key)) {
-      // Беремо з модалки лише коли вона відкрита; інакше не перезаписуємо прихованими/застарілими значеннями.
-      const modalMap = {
-        characterClassLevel: 'modalCharacterClass',
-        characterRace: 'modalCharacterRace',
-        background: 'modalBackground',
-        alignment: 'modalAlignment',
-      };
-      const modalEl = document.getElementById(modalMap[key]);
-      if (isModalOpen && modalEl) {
-        sheet[key] = modalEl.value;
-        continue;
-      }
-    }
-    if (elements[key]) {
-      if (key === 'playerName') {
-        if (!elements[key].disabled) {
-          sheet[key] = elements[key].value;
+  if (isSavingActiveSheet) {
+    // Зчитуємо дані з DOM лише для активного листа.
+    // Інакше при перемиканні між персонажами новий DOM може перезаписати попередній лист.
+    for (const key in elements) {
+      if (['characterClassLevel','characterRace','background','alignment'].includes(key)) {
+        // Беремо з модалки лише коли вона відкрита; інакше не перезаписуємо прихованими/застарілими значеннями.
+        const modalMap = {
+          characterClassLevel: 'modalCharacterClass',
+          characterRace: 'modalCharacterRace',
+          background: 'modalBackground',
+          alignment: 'modalAlignment',
+        };
+        const modalEl = document.getElementById(modalMap[key]);
+        if (isModalOpen && modalEl) {
+          sheet[key] = modalEl.value;
+          markSheetFieldDirty(sheet, key);
+          continue;
         }
-      } else if (key === 'characterPhoto') {
-        sheet[key] = elements[key].src;
-      } else {
-        sheet[key] = elements[key].value;
+      }
+      if (elements[key]) {
+        if (key === 'playerName') {
+          if (!elements[key].disabled) {
+            sheet[key] = elements[key].value;
+            markSheetFieldDirty(sheet, key);
+          }
+        } else if (key === 'characterPhoto') {
+          sheet[key] = elements[key].src;
+          markSheetFieldDirty(sheet, key);
+        } else {
+          sheet[key] = elements[key].value;
+          markSheetFieldDirty(sheet, key);
+        }
       }
     }
-  }
 
-  // Збереження рятувальних кидків
-  sheet.deathSavesSuccess = [
-    document.getElementById('deathSavesSuccess1')?.checked || false,
-    document.getElementById('deathSavesSuccess2')?.checked || false,
-    document.getElementById('deathSavesSuccess3')?.checked || false
-  ];
-  
-  sheet.deathSavesFailure = [
-    document.getElementById('deathSavesFailure1')?.checked || false,
-    document.getElementById('deathSavesFailure2')?.checked || false,
-    document.getElementById('deathSavesFailure3')?.checked || false
-  ];
+    // Збереження рятувальних кидків
+    sheet.deathSavesSuccess = [
+      document.getElementById('deathSavesSuccess1')?.checked || false,
+      document.getElementById('deathSavesSuccess2')?.checked || false,
+      document.getElementById('deathSavesSuccess3')?.checked || false
+    ];
+    markSheetFieldDirty(sheet, 'deathSavesSuccess');
+    
+    sheet.deathSavesFailure = [
+      document.getElementById('deathSavesFailure1')?.checked || false,
+      document.getElementById('deathSavesFailure2')?.checked || false,
+      document.getElementById('deathSavesFailure3')?.checked || false
+    ];
+    markSheetFieldDirty(sheet, 'deathSavesFailure');
 
-  // Збереження натхнення, переваги, похибки
-  sheet.inspiration = document.getElementById('inspirationCheckbox')?.checked || false;
-  sheet.advantage = document.getElementById('advantageCheckbox')?.checked || false;
-  sheet.disadvantage = document.getElementById('disadvantageCheckbox')?.checked || false;
+    // Збереження натхнення, переваги, похибки
+    sheet.inspiration = document.getElementById('inspirationCheckbox')?.checked || false;
+    sheet.advantage = document.getElementById('advantageCheckbox')?.checked || false;
+    sheet.disadvantage = document.getElementById('disadvantageCheckbox')?.checked || false;
+    markSheetFieldDirty(sheet, 'inspiration');
+    markSheetFieldDirty(sheet, 'advantage');
+    markSheetFieldDirty(sheet, 'disadvantage');
 
-  // Збереження інвентаря
-  if (!editingInv) {
-    const tbody = document.getElementById('inventoryTableBody');
-    if (tbody) {
-      inventoryRows = Array.from(tbody.children).map(tr => {
-        const inputName = tr.querySelector('.inventory-name');
-        const inputCount = tr.querySelector('.inventory-count');
-        const inputWeight = tr.querySelector('.inventory-weight');
-        return {
-          name: inputName ? inputName.value : '',
-          count: inputCount ? inputCount.value : '',
-          weight: inputWeight ? inputWeight.value : ''
-        };
-      });
+    // Збереження інвентаря
+    if (!editingInv) {
+      const tbody = document.getElementById('inventoryTableBody');
+      if (tbody) {
+        inventoryRows = Array.from(tbody.children).map(tr => {
+          const inputName = tr.querySelector('.inventory-name');
+          const inputCount = tr.querySelector('.inventory-count');
+          const inputWeight = tr.querySelector('.inventory-weight');
+          return {
+            name: inputName ? inputName.value : '',
+            count: inputCount ? inputCount.value : '',
+            weight: inputWeight ? inputWeight.value : ''
+          };
+        });
+      }
+      sheet.inventory = JSON.parse(JSON.stringify(inventoryRows));
+      markSheetFieldDirty(sheet, 'inventory');
     }
-    sheet.inventory = JSON.parse(JSON.stringify(inventoryRows));
-  }
 
-  // Збереження спорядження
-  if (!editingEquip) {
-    const equipmentTbody = document.getElementById('equipmentTableBody');
-    if (equipmentTbody) {
-      equipmentRows = Array.from(equipmentTbody.children).map(tr => {
-        const inputName = tr.querySelector('.equipment-name');
-        const inputArmor = tr.querySelector('.equipment-armor');
-        const inputWeight = tr.querySelector('.equipment-weight');
-        return {
-          name: inputName ? inputName.value : '',
-          armor: inputArmor ? inputArmor.value : '',
-          weight: inputWeight ? inputWeight.value : ''
-        };
-      });
+    // Збереження спорядження
+    if (!editingEquip) {
+      const equipmentTbody = document.getElementById('equipmentTableBody');
+      if (equipmentTbody) {
+        equipmentRows = Array.from(equipmentTbody.children).map(tr => {
+          const inputName = tr.querySelector('.equipment-name');
+          const inputArmor = tr.querySelector('.equipment-armor');
+          const inputWeight = tr.querySelector('.equipment-weight');
+          return {
+            name: inputName ? inputName.value : '',
+            armor: inputArmor ? inputArmor.value : '',
+            weight: inputWeight ? inputWeight.value : ''
+          };
+        });
+      }
+      sheet.equipment = JSON.parse(JSON.stringify(equipmentRows));
+      markSheetFieldDirty(sheet, 'equipment');
     }
-    sheet.equipment = JSON.parse(JSON.stringify(equipmentRows));
-  }
 
-  // Збереження заголовків блоків
-  const inventoryLabel = document.querySelector('.inventory-block .weapon-label');
-  const equipmentLabel = document.querySelector('.equipment-block .weapon-label');
-  if (inventoryLabel && sheet.inventoryTitle) inventoryLabel.textContent = sheet.inventoryTitle;
-  if (equipmentLabel && sheet.equipmentTitle) equipmentLabel.textContent = sheet.equipmentTitle;
+    // Збереження заголовків блоків
+    const inventoryLabel = document.querySelector('.inventory-block .weapon-label');
+    const equipmentLabel = document.querySelector('.equipment-block .weapon-label');
+    if (inventoryLabel && sheet.inventoryTitle) inventoryLabel.textContent = sheet.inventoryTitle;
+    if (equipmentLabel && sheet.equipmentTitle) equipmentLabel.textContent = sheet.equipmentTitle;
+  }
 
   try {
     // Зберігаємо ВСЕ в Supabase (єдине джерело правди)
@@ -1556,8 +1652,10 @@ async function saveSheetData(targetSheetIndex = null) {
       });
     }
 
-    updateDeathOverlay();
-    updateCurrentWeight();
+    if (isSavingActiveSheet) {
+      updateDeathOverlay();
+      updateCurrentWeight();
+    }
   } catch (error) {
     console.error('Помилка при збереженні даних:', error);
   } finally {
@@ -1706,7 +1804,6 @@ async function updateCharacterDropdown() {
 
   if (!characterSelect) return;
 
-  const previousSheets = Array.isArray(characterSheets) ? characterSheets : [];
   const roomId = OBR.room.id;
   const rows = await loadAllCharactersFromSupabase(roomId);
 
@@ -1718,22 +1815,11 @@ async function updateCharacterDropdown() {
     if (registry.length > 0) {
       const rowsByName = {};
       rows.forEach(r => { rowsByName[r.character_name] = r; });
-      const localByName = {};
-      previousSheets.forEach(s => {
-        if (s?.characterName) localByName[s.characterName] = s;
-      });
 
       const rebuilt = registry
         .map(entry => {
           const row = rowsByName[entry.characterName];
-          if (row) return sheetFromSupabaseRow(row);
-          // Якщо рядок тимчасово не повернувся з Supabase, зберігаємо повний локальний кеш,
-          // щоб не втратити поля при наступному autosave.
-          if (localByName[entry.characterName]) {
-            return JSON.parse(JSON.stringify(localByName[entry.characterName]));
-          }
-          // Фолбек лише для справді нового персонажа, який ще не записався у БД.
-          return { characterName: entry.characterName, playerName: entry.playerName };
+          return row ? sheetFromSupabaseRow(row) : null;
         })
         .filter(Boolean);
 
@@ -1860,7 +1946,7 @@ function connectInputsToSave() {
     if (el) {
       // Для текстових/селект полів зберігаємо також під час введення (через debounce)
       // щоб інші гравці бачили оновлення без довгої затримки до blur.
-      if (key !== 'characterPhoto' && !numberInputIds.has(el.id)) {
+      if (key !== 'characterPhoto' && !numberInputIds.has(el.id) && key !== 'characterName') {
         el.addEventListener('input', () => {
           const sheetIdx = activeSheetIndex;
           debouncedSaveSheetData(sheetIdx);
@@ -2136,12 +2222,10 @@ async function updateTokenLabel(newName) {
     const currentSheet = characterSheets[activeSheetIndex];
     if (!currentSheet) return;
     
-    // Шукаємо токен поточного персонажа за старим ім'ям або по playerName
+    // Шукаємо токен лише поточного листа, щоб не зачепити інших персонажів того самого гравця.
     const allItems = await OBR.scene.items.getItems();
     const characterToken = allItems.find(item => 
-      item.metadata?.characterSheet?.playerName === currentSheet.playerName &&
-      item.layer === 'CHARACTER' &&
-      item.metadata?.characterSheet
+      isTokenForSheet(item, currentSheet)
     );
     
     if (characterToken) {
@@ -3545,15 +3629,21 @@ function setupInterface() {
         return;
       }
 
-      // Перевіряємо чи змінились призначення гравців
-      const assignmentChanged = registry.some((entry, i) => {
-        const local = characterSheets[i];
+      // Перевіряємо чи змінились призначення гравців (зв'язка тільки за characterName, не за індексом)
+      const normalizeName = (value) => String(value || '').trim().toLowerCase();
+      const localByName = new Map(
+        characterSheets.map((sheet) => [normalizeName(sheet.characterName), sheet])
+      );
+
+      const assignmentChanged = registry.some((entry) => {
+        const local = localByName.get(normalizeName(entry.characterName));
         return local && local.playerName !== entry.playerName;
       });
 
       if (assignmentChanged) {
-        registry.forEach((entry, i) => {
-          if (characterSheets[i]) characterSheets[i].playerName = entry.playerName;
+        registry.forEach((entry) => {
+          const local = localByName.get(normalizeName(entry.characterName));
+          if (local) local.playerName = entry.playerName || '';
         });
         await refreshDropdownOnly();
       }
@@ -3563,9 +3653,24 @@ function setupInterface() {
 
     // Додаємо підписку на повідомлення про призначення персонажа
     OBR.broadcast.onMessage("character-assignment", async (data) => {
-        if (data.playerName === currentPlayerName) {
-            await checkCharacterAndRedirect();
+        if (data.playerName !== currentPlayerName) return;
+
+        await updateCharacterDropdown();
+
+        const assignedName = String(data.characterName || '').trim();
+        if (assignedName) {
+          const targetIndex = characterSheets.findIndex(
+            (sheet) => String(sheet.characterName || '').trim() === assignedName
+          );
+          if (targetIndex >= 0) {
+            activeSheetIndex = targetIndex;
+            const characterSelect = document.getElementById('characterSelect');
+            if (characterSelect) characterSelect.value = String(targetIndex);
+            loadSheetData();
+          }
         }
+
+        await checkCharacterAndRedirect();
     });
 
     // Додаємо підписку на повідомлення про навички
@@ -3787,6 +3892,18 @@ function closeCharacterInfoModal() {
     characterSheets[activeSheetIndex].personalityTraits = document.getElementById('modalPersonalityTraits')?.value || '';
     characterSheets[activeSheetIndex].features = document.getElementById('modalFeatures')?.value || '';
     characterSheets[activeSheetIndex].notes = document.getElementById('modalNotes')?.value || '';
+    [
+      'characterClassLevel',
+      'characterRace',
+      'background',
+      'alignment',
+      'appearance',
+      'languages',
+      'bonds',
+      'personalityTraits',
+      'features',
+      'notes',
+    ].forEach((field) => markSheetFieldDirty(characterSheets[activeSheetIndex], field));
     saveActiveCharacterModalInfoToSupabase();
   }
   if (typeof debouncedSaveSheetData === 'function') {
@@ -3857,6 +3974,7 @@ document.addEventListener('DOMContentLoaded', () => {
       ta.addEventListener('input', () => {
         if (!ta.readOnly && characterSheets[activeSheetIndex]) {
           characterSheets[activeSheetIndex][mainField] = ta.value;
+          markSheetFieldDirty(characterSheets[activeSheetIndex], mainField);
           const sheetIdx = activeSheetIndex;
           debouncedSaveSheetData(sheetIdx);
         }
@@ -3888,6 +4006,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ta.style.height = (ta.scrollHeight) + 'px';
         if (characterSheets[activeSheetIndex]) {
           characterSheets[activeSheetIndex][mainField] = ta.value;
+          markSheetFieldDirty(characterSheets[activeSheetIndex], mainField);
           // Зберігаємо тільки при натисканні кнопки підтвердження
           const sheetIdx = activeSheetIndex;
           saveSheetData(sheetIdx);
@@ -3949,9 +4068,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const weaponLabel = document.querySelector('.weapon-block .weapon-label');
       if (weaponLabel) {
         characterSheets[activeSheetIndex].weaponTitle = weaponLabel.textContent;
+        markSheetFieldDirty(characterSheets[activeSheetIndex], 'weaponTitle');
       }
       if (characterSheets[activeSheetIndex]) {
         characterSheets[activeSheetIndex].weapons = JSON.parse(JSON.stringify(weaponRows));
+        markSheetFieldDirty(characterSheets[activeSheetIndex], 'weapons');
         const sheetIdx = activeSheetIndex;
         debouncedSaveSheetData(sheetIdx);
         updateCurrentWeight();
@@ -4037,6 +4158,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!on) {
       if (characterSheets[activeSheetIndex]) {
         characterSheets[activeSheetIndex].skills = JSON.parse(JSON.stringify(skillRows));
+        markSheetFieldDirty(characterSheets[activeSheetIndex], 'skills');
         const sheetIdx = activeSheetIndex;
         debouncedSaveSheetData(sheetIdx);
         updateCurrentWeight();
@@ -4643,6 +4765,7 @@ function renderSkillTable(editing = false) {
 function syncSkillsToSheet() {
   if (characterSheets[activeSheetIndex]) {
     characterSheets[activeSheetIndex].skills = JSON.parse(JSON.stringify(skillRows));
+    markSheetFieldDirty(characterSheets[activeSheetIndex], 'skills');
     const sheetIdx = activeSheetIndex;
     debouncedSaveSheetData(sheetIdx);
   }

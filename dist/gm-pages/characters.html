@@ -1,0 +1,88 @@
+<section class="gm-characters-page">
+	<div class="gm-characters-toolbar">
+		<div class="gm-characters-toolbar-title">Список персонажів</div>
+		<div class="gm-characters-toolbar-actions">
+			<button id="gmCreatePcButton" class="gm-characters-create-btn" type="button">
+				<i class="fas fa-user-plus"></i>
+				<span>Додати ігрового</span>
+			</button>
+			<button id="gmCreateNpcButton" class="gm-characters-create-btn gm-characters-create-btn--npc" type="button">
+				<i class="fas fa-user-ninja"></i>
+				<span>Додати неігрового</span>
+			</button>
+		</div>
+	</div>
+
+	<div class="gm-characters-table-wrap">
+		<table class="gm-characters-table">
+			<colgroup>
+				<col style="width: 22%" /> <!-- Назва -->
+				<col style="width: 11%" />  <!-- Тип -->
+				<col style="width: 14%" /> <!-- Гравець -->
+				<col style="width: 7%" />  <!-- Здоров'я -->
+				<col style="width: 7%" />  <!-- Броня -->
+				<col style="width: 7%" />  <!-- Бонус -->
+				<col style="width: 9%" />  <!-- Шкода -->
+				<col />                    <!-- Дії -->
+			</colgroup>
+			<thead>
+				<tr>
+					<th>Назва</th>
+					<th>Тип</th>
+					  <th>Гравець</th>
+					<th>Здоров'я</th>
+					<th>Броня</th>
+					<th>Бонус</th>
+					<th>Шкода</th>
+					<th>Дії</th>
+				</tr>
+			</thead>
+			<tbody id="gmCharactersTableBody"></tbody>
+		</table>
+	</div>
+
+	<div id="gmNpcCreateModal" class="gm-item-modal" hidden>
+		<div class="gm-item-modal-backdrop" data-action="closeNpcModal"></div>
+		<div class="gm-item-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="gmNpcCreateModalTitle">
+			<h4 id="gmNpcCreateModalTitle" class="gm-item-modal-title">Додати неігрового персонажа</h4>
+			<div class="gm-item-modal-grid">
+				<label class="gm-item-modal-label">
+					<span>Назва</span>
+					<input id="gmNpcModalNameInput" class="gm-cell-input" type="text" />
+				</label>
+				<label class="gm-item-modal-label">
+					<span>Гравець</span>
+					<select id="gmNpcModalPlayerSelect" class="gm-cell-select"></select>
+				</label>
+				<label class="gm-item-modal-label">
+					<span>Здоров'я</span>
+					<input id="gmNpcModalHealthInput" class="gm-cell-input" type="number" value="10" />
+				</label>
+				<label class="gm-item-modal-label">
+					<span>Броня</span>
+					<input id="gmNpcModalArmorInput" class="gm-cell-input" type="number" value="10" />
+				</label>
+				<label class="gm-item-modal-label">
+					<span>Бонус</span>
+					<input id="gmNpcModalBonusInput" class="gm-cell-input" type="text" value="+0" />
+				</label>
+				<label class="gm-item-modal-label">
+					<span>Шкода</span>
+					<input id="gmNpcModalDamageInput" class="gm-cell-input" type="text" value="1d6" />
+				</label>
+			</div>
+			<div class="gm-item-modal-actions">
+				<button id="gmNpcModalSaveButton" type="button" class="gm-characters-create-btn">
+					<i class="fas fa-check"></i>
+					<span>Зберегти</span>
+				</button>
+				<button id="gmNpcModalCancelButton" type="button" class="gm-characters-create-btn gm-characters-create-btn--npc">
+					<i class="fas fa-times"></i>
+					<span>Скасувати</span>
+				</button>
+			</div>
+		</div>
+	</div>
+
+	<input id="gmTokenPhotoFileInput" type="file" accept="image/*" hidden />
+</section>

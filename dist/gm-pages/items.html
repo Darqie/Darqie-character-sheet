@@ -1,0 +1,69 @@
+<section class="gm-characters-page gm-items-page">
+	<div class="gm-characters-toolbar">
+		<div class="gm-characters-toolbar-title">Предмети</div>
+		<div class="gm-characters-toolbar-actions">
+			<select id="gmItemsFilterSelect" class="gm-cell-select gm-items-filter-select"></select>
+			<button id="gmAddItemButton" class="gm-characters-create-btn" type="button">
+				<i class="fas fa-plus"></i>
+				<span>Додати предмет</span>
+			</button>
+		</div>
+	</div>
+
+	<div class="gm-characters-table-wrap">
+		<table class="gm-characters-table gm-items-table">
+			<colgroup>
+				<col style="width: 40%" />
+				<col style="width: 10%" />
+				<col style="width: 12%" />
+				<col style="width: 24%" />
+				<col />
+			</colgroup>
+			<thead>
+				<tr>
+					<th>Назва</th>
+					<th>К-сть</th>
+					<th>Вага</th>
+					<th>Персонаж</th>
+					<th>Дії</th>
+				</tr>
+			</thead>
+			<tbody id="gmItemsTableBody"></tbody>
+		</table>
+	</div>
+
+	<div id="gmItemCreateModal" class="gm-item-modal" hidden>
+		<div class="gm-item-modal-backdrop" data-action="closeModal"></div>
+		<div class="gm-item-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="gmItemCreateModalTitle">
+			<h4 id="gmItemCreateModalTitle" class="gm-item-modal-title">Додати предмет</h4>
+			<div class="gm-item-modal-grid">
+				<label class="gm-item-modal-label">
+					<span>Назва</span>
+					<input id="gmItemModalNameInput" class="gm-cell-input" type="text" />
+				</label>
+				<label class="gm-item-modal-label">
+					<span>К-сть</span>
+					<input id="gmItemModalCountInput" class="gm-cell-input" type="text" value="1" />
+				</label>
+				<label class="gm-item-modal-label">
+					<span>Вага</span>
+					<input id="gmItemModalWeightInput" class="gm-cell-input" type="text" />
+				</label>
+				<label class="gm-item-modal-label">
+					<span>Персонаж</span>
+					<select id="gmItemModalOwnerSelect" class="gm-cell-select"></select>
+				</label>
+			</div>
+			<div class="gm-item-modal-actions">
+				<button id="gmItemModalSaveButton" type="button" class="gm-characters-create-btn">
+					<i class="fas fa-check"></i>
+					<span>Зберегти</span>
+				</button>
+				<button id="gmItemModalCancelButton" type="button" class="gm-characters-create-btn gm-characters-create-btn--npc">
+					<i class="fas fa-times"></i>
+					<span>Скасувати</span>
+				</button>
+			</div>
+		</div>
+	</div>
+</section>
