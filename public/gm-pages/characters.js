@@ -4,6 +4,7 @@ const SUPABASE_PHOTO_BUCKET = 'character-photos';
 const TOKEN_PLACEHOLDER_URL = 'https://raw.githubusercontent.com/Darqie/Darqie-character-sheet/main/public/character-token-placeholder.png';
 const CHARACTER_TYPE_PLAYER = 'player';
 const CHARACTER_TYPE_NPC = 'npc';
+const TOKEN_IMAGE_RESOLUTION = 512;
 const DARQIE_SHEETS_KEY = 'darqie.characterSheets';
 const DARQIE_REGISTRY_KEY = 'darqie.v2.registry';
 const DARQIE_ROOM_ID_KEY = 'darqie.lastRoomId';
@@ -106,6 +107,13 @@ function hashCharacterName(name) {
     hash &= hash;
   }
   return Math.abs(hash).toString(36);
+}
+
+function appendCacheVersion(url, version) {
+  const clean = String(url || '').trim();
+  if (!clean) return '';
+  if (clean.includes('?')) return clean;
+  return `${clean}?v=${encodeURIComponent(String(version || Date.now()))}`;
 }
 
 function escapeHtml(value) {
@@ -709,7 +717,16 @@ export function initPage({ root }) {
 
   function resolveTokenImageUrlFromRow(row) {
     const extra = row?.extra_data || {};
-    return extra.tokenPhoto || TOKEN_PLACEHOLDER_URL;
+    const tokenUrl = String(extra.tokenPhoto || '').trim();
+    if (!tokenUrl) return TOKEN_PLACEHOLDER_URL;
+
+    const isSupabasePublicObject =
+      tokenUrl.includes('/storage/v1/object/public/') && tokenUrl.includes(`/${SUPABASE_PHOTO_BUCKET}/`);
+    if (isSupabasePublicObject) {
+      return appendCacheVersion(tokenUrl, row?.updated_at || Date.now());
+    }
+
+    return tokenUrl;
   }
 
   async function findCharacterToken(characterName) {
@@ -847,13 +864,13 @@ export function initPage({ root }) {
 
     let tokenBuilder = buildImage(
       {
-        height: 128,
-        width: 128,
+        height: TOKEN_IMAGE_RESOLUTION,
+        width: TOKEN_IMAGE_RESOLUTION,
         url: imageUrl,
         mime: 'image/png',
       },
       {
-        dpi: 128,
+        dpi: TOKEN_IMAGE_RESOLUTION,
         offset: { x: 0, y: 0 },
       }
     )
@@ -1007,7 +1024,8 @@ export function initPage({ root }) {
       throw new Error(errText || `Storage upload failed: ${uploadResponse.status}`);
     }
 
-    return `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_PHOTO_BUCKET}/${encodedPath}`;
+    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_PHOTO_BUCKET}/${encodedPath}`;
+    return appendCacheVersion(publicUrl, Date.now());
   }
 
   async function onTokenPhotoSelected(file) {
@@ -1016,7 +1034,7 @@ export function initPage({ root }) {
     pendingTokenPhotoRowName = '';
     if (!row) return;
 
-    const blob = await cropImageToCircle(file, 128, 128);
+    const blob = await cropImageToCircle(file, TOKEN_IMAGE_RESOLUTION, TOKEN_IMAGE_RESOLUTION);
     const tokenUrl = await uploadTokenPhoto(row.character_name, blob);
     if (!tokenUrl) throw new Error('Token image URL is empty');
 

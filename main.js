@@ -24,6 +24,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 
 const TOKEN_PLACEHOLDER_URL = 'https://raw.githubusercontent.com/Darqie/Darqie-character-sheet/main/public/character-token-placeholder.png';
+const TOKEN_IMAGE_RESOLUTION = 512;
 const SKILL_POPOVER_VERSION = '2026-03-21-2';
 const SUPABASE_PHOTO_BUCKET = 'character-photos';
 const CHARACTER_TYPE_PLAYER = 'player';
@@ -2684,13 +2685,13 @@ function setupCharacterButtons() {
         // Створюємо токен персонажа (займає 1 клітинку на карті)
         let tokenBuilder = buildImage(
           {
-            height: 128,
-            width: 128,
+            height: TOKEN_IMAGE_RESOLUTION,
+            width: TOKEN_IMAGE_RESOLUTION,
             url: imageUrl,
             mime: 'image/png'
           },
           {
-            dpi: 128,
+            dpi: TOKEN_IMAGE_RESOLUTION,
             offset: { x: 0, y: 0 }
           }
         )
@@ -2927,7 +2928,7 @@ function setupPhotoButtons() {
         }
 
         // Обрізаємо фото до кругу 128x128
-        const croppedBlob = await cropImageToCircle(file, 128, 128);
+        const croppedBlob = await cropImageToCircle(file, TOKEN_IMAGE_RESOLUTION, TOKEN_IMAGE_RESOLUTION);
         if (!croppedBlob) {
           alert('Помилка при обробці зображення');
           return;
