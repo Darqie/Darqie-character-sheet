@@ -70,7 +70,13 @@ async function uploadPhotoToSupabase(file, storagePath) {
       .from(SUPABASE_PHOTO_BUCKET)
       .getPublicUrl(storagePath);
 
-    return data?.publicUrl || null;
+    const publicUrl = data?.publicUrl || null;
+    if (!publicUrl) return null;
+
+    // Supabase public URL for the same storage path may be aggressively cached by clients/CDN.
+    // Add a version query parameter to force fresh image fetch right after upload.
+    const separator = publicUrl.includes('?') ? '&' : '?';
+    return `${publicUrl}${separator}v=${Date.now()}`;
   } catch (e) {
     console.error('[Supabase Storage] Мережева помилка:', e);
     return null;
@@ -102,6 +108,17 @@ function resolveTokenImageUrlFromSheet(sheet) {
   if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(tokenUrl)) {
     return getTokenPlaceholderUrl();
   }
+
+  // Backward-compat for old rows that stored plain Supabase public URL without version query.
+  // If URL points to our photo bucket and has no query, append deterministic version from row update time.
+  const isSupabaseBucketUrl =
+    tokenUrl.includes('/storage/v1/object/public/') && tokenUrl.includes(`/${SUPABASE_PHOTO_BUCKET}/`);
+  const hasQuery = tokenUrl.includes('?');
+  if (isSupabaseBucketUrl && !hasQuery) {
+    const version = encodeURIComponent(sheet?._updatedAt || Date.now());
+    return `${tokenUrl}?v=${version}`;
+  }
+
   return tokenUrl;
 }
 
