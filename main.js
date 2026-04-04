@@ -30,6 +30,9 @@ const SKILL_POPOVER_VERSION = '2026-03-21-2';
 const SUPABASE_PHOTO_BUCKET = 'character-photos';
 const CHARACTER_TYPE_PLAYER = 'player';
 const CHARACTER_TYPE_NPC = 'npc';
+const TOKEN_STATS_VISIBLE_ALL = 'visible_all';
+const TOKEN_STATS_HIDDEN_PLAYERS = 'hidden_players';
+const TOKEN_STATS_HIDDEN_ALL = 'hidden_all';
 
 /**
  * Генерує простий хеш для імені персонажа (ASCII-сумісний шлях у Storage)
@@ -124,19 +127,79 @@ function resolveTokenImageUrlFromSheet(sheet) {
   return tokenUrl;
 }
 
+function normalizeTokenStatsVisibilityMode(rawMode, legacyHideTokenStats = false) {
+  if (rawMode === TOKEN_STATS_VISIBLE_ALL || rawMode === TOKEN_STATS_HIDDEN_PLAYERS || rawMode === TOKEN_STATS_HIDDEN_ALL) {
+    return rawMode;
+  }
+  return legacyHideTokenStats ? TOKEN_STATS_HIDDEN_PLAYERS : TOKEN_STATS_VISIBLE_ALL;
+}
+
+function getTokenStatsVisibilityModeForSheet(sheet) {
+  return normalizeTokenStatsVisibilityMode(sheet?.tokenStatsVisibilityMode, Boolean(sheet?.hideTokenStats));
+}
+
+function getTokenStatsVisibilityModeForToken(token, fallbackSheet = null) {
+  const tokenSheet = token?.metadata?.characterSheet;
+  if (tokenSheet) {
+    return normalizeTokenStatsVisibilityMode(
+      tokenSheet.tokenStatsVisibilityMode,
+      Boolean(tokenSheet.hideTokenStats)
+    );
+  }
+  return getTokenStatsVisibilityModeForSheet(fallbackSheet);
+}
+
+function isTokenStatsVisibleForGM(mode) {
+  return mode !== TOKEN_STATS_HIDDEN_ALL;
+}
+
+function isTokenStatsVisibleForPlayers(mode) {
+  return mode === TOKEN_STATS_VISIBLE_ALL;
+}
+
+function getLegacyHideTokenStatsFromMode(mode) {
+  return !isTokenStatsVisibleForPlayers(mode);
+}
+
+function getNextTokenStatsVisibilityMode(currentMode, isGmUser) {
+  if (!isGmUser) {
+    return currentMode === TOKEN_STATS_VISIBLE_ALL ? TOKEN_STATS_HIDDEN_PLAYERS : TOKEN_STATS_VISIBLE_ALL;
+  }
+
+  if (currentMode === TOKEN_STATS_VISIBLE_ALL) return TOKEN_STATS_HIDDEN_PLAYERS;
+  if (currentMode === TOKEN_STATS_HIDDEN_PLAYERS) return TOKEN_STATS_HIDDEN_ALL;
+  return TOKEN_STATS_VISIBLE_ALL;
+}
+
 function areTokenStatsHiddenForSheet(sheet) {
-  return Boolean(sheet?.hideTokenStats);
+  const mode = getTokenStatsVisibilityModeForSheet(sheet);
+  return !isTokenStatsVisibleForPlayers(mode);
 }
 
 function updateTokenStatsToggleButtonState(sheet) {
   const button = document.getElementById('toggleTokenStatsButton');
   if (!button) return;
 
-  const hidden = areTokenStatsHiddenForSheet(sheet);
-  button.title = hidden ? 'Показати стати' : 'Приховати стати';
-  button.innerHTML = hidden
-    ? '<i class="fas fa-eye-slash"></i>'
-    : '<i class="fas fa-eye"></i>';
+  const mode = getTokenStatsVisibilityModeForSheet(sheet);
+
+  if (mode === TOKEN_STATS_VISIBLE_ALL) {
+    button.title = isGM
+      ? 'Стати: видимі всім. Натисніть: сховати для гравців'
+      : 'Стати: видимі. Натисніть, щоб сховати';
+    button.innerHTML = '<i class="fas fa-eye"></i>';
+    return;
+  }
+
+  if (mode === TOKEN_STATS_HIDDEN_PLAYERS) {
+    button.title = isGM
+      ? 'Стати: приховані для гравців. Натисніть: повністю сховати для GM'
+      : 'Стати: приховані';
+    button.innerHTML = '<i class="fas fa-eye-slash"></i>';
+    return;
+  }
+
+  button.title = 'Стати: повністю приховані для GM. Натисніть: показати всім';
+  button.innerHTML = '<i class="fas fa-ban"></i>';
 }
 
 async function normalizeLegacyTokenImageUrls() {
@@ -372,7 +435,9 @@ function buildFullSupabaseRow(sheet, roomId) {
   if (typeof sheet?.inspiration === 'boolean') extra.inspiration = sheet.inspiration;
   if (typeof sheet?.advantage === 'boolean') extra.advantage = sheet.advantage;
   if (typeof sheet?.disadvantage === 'boolean') extra.disadvantage = sheet.disadvantage;
-  if (typeof sheet?.hideTokenStats === 'boolean') extra.hideTokenStats = sheet.hideTokenStats;
+  const tokenStatsVisibilityMode = getTokenStatsVisibilityModeForSheet(sheet);
+  extra.tokenStatsVisibilityMode = tokenStatsVisibilityMode;
+  extra.hideTokenStats = getLegacyHideTokenStatsFromMode(tokenStatsVisibilityMode);
   if (Array.isArray(sheet?.deathSavesSuccess)) extra.deathSavesSuccess = sheet.deathSavesSuccess;
   if (Array.isArray(sheet?.deathSavesFailure)) extra.deathSavesFailure = sheet.deathSavesFailure;
   if (sheet?.proficienciesAndLanguages !== undefined) extra.proficienciesAndLanguages = sheet.proficienciesAndLanguages;
@@ -474,7 +539,12 @@ function applyFullSupabaseRowToSheet(sheet, row) {
   sheet.inspiration = extra.inspiration || false;
   sheet.advantage = extra.advantage || false;
   sheet.disadvantage = extra.disadvantage || false;
-  sheet.hideTokenStats = Boolean(extra.hideTokenStats);
+  const tokenStatsVisibilityMode = normalizeTokenStatsVisibilityMode(
+    extra.tokenStatsVisibilityMode,
+    Boolean(extra.hideTokenStats)
+  );
+  sheet.tokenStatsVisibilityMode = tokenStatsVisibilityMode;
+  sheet.hideTokenStats = getLegacyHideTokenStatsFromMode(tokenStatsVisibilityMode);
   sheet.deathSavesSuccess = Array.isArray(extra.deathSavesSuccess) ? extra.deathSavesSuccess : [false, false, false];
   sheet.deathSavesFailure = Array.isArray(extra.deathSavesFailure) ? extra.deathSavesFailure : [false, false, false];
   sheet.proficienciesAndLanguages = extra.proficienciesAndLanguages || '';
@@ -2162,10 +2232,13 @@ async function performTokenHealthSync(newHealth, tempHealth = null, forceReconci
         });
       }
 
-      const badgeIdsToUpdate = [];
+      const badgeUpdates = [];
       const badgesToCreate = [];
 
       characterTokens.forEach((token) => {
+        const tokenMode = getTokenStatsVisibilityModeForToken(token, currentSheet);
+        const visibleForGM = isTokenStatsVisibleForGM(tokenMode);
+        const visibleForPlayers = isTokenStatsVisibleForPlayers(tokenMode);
         const healthBadge = allItems.find((item) =>
           item.layer === 'ATTACHMENT' &&
           item.metadata?.healthBadge === true &&
@@ -2173,19 +2246,35 @@ async function performTokenHealthSync(newHealth, tempHealth = null, forceReconci
         );
 
         if (healthBadge) {
-          if (healthBadge.text?.plainText !== healthText) {
-            badgeIdsToUpdate.push(healthBadge.id);
+          if (!visibleForGM) {
+            badgeUpdates.push({ id: healthBadge.id, delete: true });
+            return;
+          }
+
+          if (healthBadge.text?.plainText !== healthText || healthBadge.visible !== visibleForPlayers) {
+            badgeUpdates.push({ id: healthBadge.id, text: healthText, visible: visibleForPlayers });
           }
           return;
         }
 
-        badgesToCreate.push(token);
+        if (visibleForGM) {
+          badgesToCreate.push({ token, visibleForPlayers });
+        }
       });
 
+      const badgeIdsToDelete = badgeUpdates.filter((entry) => entry.delete).map((entry) => entry.id);
+      if (badgeIdsToDelete.length > 0) {
+        await OBR.scene.items.deleteItems(badgeIdsToDelete);
+      }
+
+      const badgeIdsToUpdate = badgeUpdates.filter((entry) => !entry.delete).map((entry) => entry.id);
       if (badgeIdsToUpdate.length > 0) {
         await OBR.scene.items.updateItems(badgeIdsToUpdate, (items) => {
           items.forEach((item) => {
-            item.text.plainText = healthText;
+            const next = badgeUpdates.find((entry) => entry.id === item.id);
+            if (!next) return;
+            item.text.plainText = next.text;
+            item.visible = next.visible;
           });
         });
       }
@@ -2193,7 +2282,8 @@ async function performTokenHealthSync(newHealth, tempHealth = null, forceReconci
       if (badgesToCreate.length > 0) {
         const newHealthBadges = [];
 
-        for (const token of badgesToCreate) {
+        for (const entry of badgesToCreate) {
+          const token = entry.token;
           const tokenBounds = await OBR.scene.items.getItemBounds([token.id]);
           let badgeBuilder = buildLabel()
             .position({
@@ -2202,6 +2292,7 @@ async function performTokenHealthSync(newHealth, tempHealth = null, forceReconci
             })
             .layer('ATTACHMENT')
             .attachedTo(token.id)
+            .visible(entry.visibleForPlayers)
             .plainText(healthText)
             .locked(true)
             .metadata({
@@ -2309,24 +2400,88 @@ async function updateTokenAC(newAC) {
         });
       }
 
-      const badgeIdsToUpdate = [];
+      const badgeUpdates = [];
+      const badgesToCreate = [];
 
       characterTokens.forEach((token) => {
+        const tokenMode = getTokenStatsVisibilityModeForToken(token, currentSheet);
+        const visibleForGM = isTokenStatsVisibleForGM(tokenMode);
+        const visibleForPlayers = isTokenStatsVisibleForPlayers(tokenMode);
         const acBadge = allItems.find((item) =>
           item.layer === 'ATTACHMENT' &&
           item.metadata?.acBadge === true &&
           item.attachedTo === token.id
         );
 
-        if (acBadge && acBadge.text?.plainText !== `🛡${newAC}`) {
-          badgeIdsToUpdate.push(acBadge.id);
+        if (acBadge) {
+          if (!visibleForGM) {
+            badgeUpdates.push({ id: acBadge.id, delete: true });
+            return;
+          }
+
+          if (acBadge.text?.plainText !== `🛡${newAC}` || acBadge.visible !== visibleForPlayers) {
+            badgeUpdates.push({ id: acBadge.id, text: `🛡${newAC}`, visible: visibleForPlayers });
+          }
+          return;
+        }
+
+        if (visibleForGM) {
+          badgesToCreate.push({ token, visibleForPlayers });
         }
       });
 
+      const badgeIdsToDelete = badgeUpdates.filter((entry) => entry.delete).map((entry) => entry.id);
+      if (badgeIdsToDelete.length > 0) {
+        await OBR.scene.items.deleteItems(badgeIdsToDelete);
+      }
+
+      const badgeIdsToUpdate = badgeUpdates.filter((entry) => !entry.delete).map((entry) => entry.id);
       if (badgeIdsToUpdate.length > 0) {
         await OBR.scene.items.updateItems(badgeIdsToUpdate, (items) => {
           items.forEach((item) => {
-            item.text.plainText = `🛡${newAC}`;
+            const next = badgeUpdates.find((entry) => entry.id === item.id);
+            if (!next) return;
+            item.text.plainText = next.text;
+            item.visible = next.visible;
+          });
+        });
+      }
+
+      if (badgesToCreate.length > 0) {
+        const newAcBadges = [];
+        for (const entry of badgesToCreate) {
+          const tokenBounds = await OBR.scene.items.getItemBounds([entry.token.id]);
+          let badgeBuilder = buildLabel()
+            .position({ x: tokenBounds.min.x + 10, y: tokenBounds.min.y + 10 })
+            .layer('ATTACHMENT')
+            .attachedTo(entry.token.id)
+            .visible(entry.visibleForPlayers)
+            .plainText(`🛡${newAC}`)
+            .locked(true)
+            .metadata({
+              acBadge: true,
+              characterName: currentSheet.characterName,
+              playerName: currentSheet.playerName,
+            });
+
+          if (entry.token.createdUserId) {
+            badgeBuilder = badgeBuilder.createdUserId(entry.token.createdUserId);
+          }
+          newAcBadges.push(badgeBuilder.build());
+        }
+
+        await OBR.scene.items.addItems(newAcBadges);
+        await OBR.scene.items.updateItems(newAcBadges.map((badge) => badge.id), (items) => {
+          items.forEach((item) => {
+            item.scale = { x: 1, y: 1 };
+            item.style.pointerWidth = 0;
+            item.style.pointerHeight = 0;
+            item.style.backgroundColor = '#000000';
+            item.style.backgroundOpacity = 0.5;
+            item.style.cornerRadius = 8;
+            item.locked = true;
+            item.disableHit = true;
+            item.zIndex = 1000;
           });
         });
       }
@@ -2382,6 +2537,8 @@ async function syncCharacterTokenOwner(sheet, previousPlayerName = null) {
 
     const normalizedImageUrl = resolveTokenImageUrlFromSheet(sheet);
 
+    const tokenStatsVisibilityMode = getTokenStatsVisibilityModeForSheet(sheet);
+
     await OBR.scene.items.updateItems([characterToken.id], (items) => {
       items.forEach((item) => {
         item.createdUserId = ownerUserId;
@@ -2391,7 +2548,8 @@ async function syncCharacterTokenOwner(sheet, previousPlayerName = null) {
         if (item.metadata?.characterSheet) {
           item.metadata.characterSheet.playerName = sheet.playerName || '';
           item.metadata.characterSheet.ownerUserId = ownerUserId;
-          item.metadata.characterSheet.hideTokenStats = areTokenStatsHiddenForSheet(sheet);
+          item.metadata.characterSheet.tokenStatsVisibilityMode = tokenStatsVisibilityMode;
+          item.metadata.characterSheet.hideTokenStats = getLegacyHideTokenStatsFromMode(tokenStatsVisibilityMode);
         }
       });
     });
@@ -2428,7 +2586,9 @@ async function syncCharacterTokenOwner(sheet, previousPlayerName = null) {
 async function recreateCharacterTokenWithOwner(characterToken, sheet, ownerUserId) {
   const attachments = await OBR.scene.items.getItemAttachments([characterToken.id]);
   const badgeItems = attachments.filter((item) => item.metadata?.healthBadge === true || item.metadata?.acBadge === true);
-  const hideTokenStats = areTokenStatsHiddenForSheet(sheet);
+  const tokenStatsVisibilityMode = getTokenStatsVisibilityModeForSheet(sheet);
+  const shouldCreateBadges = isTokenStatsVisibleForGM(tokenStatsVisibilityMode);
+  const badgesVisibleToPlayers = isTokenStatsVisibleForPlayers(tokenStatsVisibilityMode);
 
   // Отримуємо актуальне зображення токена з таблиці персонажа замість зі сцени
   const actualTokenImageUrl = resolveTokenImageUrlFromSheet(sheet);
@@ -2461,7 +2621,8 @@ async function recreateCharacterTokenWithOwner(characterToken, sheet, ownerUserI
       characterSheet: {
         ...(characterToken.metadata?.characterSheet || {}),
         playerName: sheet.playerName || '',
-        hideTokenStats,
+        tokenStatsVisibilityMode,
+        hideTokenStats: getLegacyHideTokenStatsFromMode(tokenStatsVisibilityMode),
         ownerUserId: ownerUserId,
       },
     })
@@ -2473,12 +2634,12 @@ async function recreateCharacterTokenWithOwner(characterToken, sheet, ownerUserI
   const newToken = tokenBuilder.build();
   await OBR.scene.items.addItems([newToken]);
 
-  const newBadges = badgeItems.map((badge) => {
+  const newBadges = shouldCreateBadges ? badgeItems.map((badge) => {
     let badgeBuilder = buildLabel()
       .position(badge.position)
       .rotation(badge.rotation)
       .scale(badge.scale)
-      .visible(!hideTokenStats)
+      .visible(badgesVisibleToPlayers)
       .locked(badge.locked)
       .zIndex(badge.zIndex)
       .layer('ATTACHMENT')
@@ -2494,7 +2655,7 @@ async function recreateCharacterTokenWithOwner(characterToken, sheet, ownerUserI
 
     if (badge.disableHit) badgeBuilder = badgeBuilder.disableHit(true);
     return badgeBuilder.build();
-  });
+  }) : [];
 
   if (newBadges.length > 0) {
     await OBR.scene.items.addItems(newBadges);
@@ -2503,11 +2664,22 @@ async function recreateCharacterTokenWithOwner(characterToken, sheet, ownerUserI
   await OBR.scene.items.deleteItems([characterToken.id, ...badgeItems.map((i) => i.id)]);
 }
 
-async function applyTokenStatsVisibilityForCharacter(characterName, hideTokenStats) {
+async function applyTokenStatsVisibilityForCharacter(characterName, modeOrLegacyHidden) {
   if (!characterName) return;
 
+  const tokenStatsVisibilityMode = normalizeTokenStatsVisibilityMode(
+    modeOrLegacyHidden,
+    modeOrLegacyHidden === true
+  );
+  const badgesVisibleToPlayers = isTokenStatsVisibleForPlayers(tokenStatsVisibilityMode);
+  const badgesVisibleToGM = isTokenStatsVisibleForGM(tokenStatsVisibilityMode);
+
   const allItems = await OBR.scene.items.getItems();
-  const tokenIds = allItems
+  const tokens = allItems.filter((item) =>
+    item.layer === 'CHARACTER' &&
+    item.metadata?.characterSheet?.characterName === characterName
+  );
+  const tokenIds = tokens
     .filter((item) =>
       item.layer === 'CHARACTER' &&
       item.metadata?.characterSheet?.characterName === characterName
@@ -2518,7 +2690,8 @@ async function applyTokenStatsVisibilityForCharacter(characterName, hideTokenSta
     await OBR.scene.items.updateItems(tokenIds, (items) => {
       items.forEach((item) => {
         if (item.metadata?.characterSheet) {
-          item.metadata.characterSheet.hideTokenStats = hideTokenStats;
+          item.metadata.characterSheet.tokenStatsVisibilityMode = tokenStatsVisibilityMode;
+          item.metadata.characterSheet.hideTokenStats = getLegacyHideTokenStatsFromMode(tokenStatsVisibilityMode);
         }
       });
     });
@@ -2532,10 +2705,104 @@ async function applyTokenStatsVisibilityForCharacter(characterName, hideTokenSta
     )
     .map((item) => item.id);
 
+  if (badgeIds.length > 0 && !badgesVisibleToGM) {
+    await OBR.scene.items.deleteItems(badgeIds);
+    return;
+  }
+
   if (badgeIds.length > 0) {
     await OBR.scene.items.updateItems(badgeIds, (items) => {
       items.forEach((item) => {
-        item.visible = !hideTokenStats;
+        item.visible = badgesVisibleToPlayers;
+      });
+    });
+  }
+
+  if (!badgesVisibleToGM || tokens.length === 0) return;
+
+  const badgesByToken = new Map();
+  allItems.forEach((item) => {
+    if (
+      item.layer === 'ATTACHMENT' &&
+      tokenIds.includes(item.attachedTo) &&
+      (item.metadata?.healthBadge === true || item.metadata?.acBadge === true)
+    ) {
+      const entry = badgesByToken.get(item.attachedTo) || { hasHealth: false, hasAc: false };
+      if (item.metadata?.healthBadge === true) entry.hasHealth = true;
+      if (item.metadata?.acBadge === true) entry.hasAc = true;
+      badgesByToken.set(item.attachedTo, entry);
+    }
+  });
+
+  const badgesToCreate = [];
+  for (const token of tokens) {
+    const existing = badgesByToken.get(token.id) || { hasHealth: false, hasAc: false };
+    if (existing.hasHealth && existing.hasAc) continue;
+
+    const tokenBounds = await OBR.scene.items.getItemBounds([token.id]);
+    const hp = parseInt(token.metadata?.characterSheet?.healthPoints, 10)
+      || parseInt(token.metadata?.['com.owlbear.token']?.hp, 10)
+      || 0;
+    const tempHp = parseInt(token.metadata?.characterSheet?.healing, 10) || 0;
+    const ac = parseInt(token.metadata?.characterSheet?.armorClass, 10)
+      || parseInt(token.metadata?.['com.owlbear.token']?.ac, 10)
+      || 10;
+    const healthText = tempHp > 0 ? `♥${hp}(${tempHp})` : `♥${hp}`;
+
+    if (!existing.hasHealth) {
+      let healthBadgeBuilder = buildLabel()
+        .position({ x: tokenBounds.max.x - 10, y: tokenBounds.min.y + 10 })
+        .layer('ATTACHMENT')
+        .attachedTo(token.id)
+        .visible(badgesVisibleToPlayers)
+        .plainText(healthText)
+        .locked(true)
+        .metadata({
+          healthBadge: true,
+          characterName,
+          playerName: token.metadata?.characterSheet?.playerName || '',
+        });
+
+      if (token.createdUserId) {
+        healthBadgeBuilder = healthBadgeBuilder.createdUserId(token.createdUserId);
+      }
+      badgesToCreate.push(healthBadgeBuilder.build());
+    }
+
+    if (!existing.hasAc) {
+      let acBadgeBuilder = buildLabel()
+        .position({ x: tokenBounds.min.x + 10, y: tokenBounds.min.y + 10 })
+        .layer('ATTACHMENT')
+        .attachedTo(token.id)
+        .visible(badgesVisibleToPlayers)
+        .plainText(`🛡${ac}`)
+        .locked(true)
+        .metadata({
+          acBadge: true,
+          characterName,
+          playerName: token.metadata?.characterSheet?.playerName || '',
+        });
+
+      if (token.createdUserId) {
+        acBadgeBuilder = acBadgeBuilder.createdUserId(token.createdUserId);
+      }
+      badgesToCreate.push(acBadgeBuilder.build());
+    }
+  }
+
+  if (badgesToCreate.length > 0) {
+    await OBR.scene.items.addItems(badgesToCreate);
+    await OBR.scene.items.updateItems(badgesToCreate.map((badge) => badge.id), (items) => {
+      items.forEach((item) => {
+        item.scale = { x: 1, y: 1 };
+        item.style.pointerWidth = 0;
+        item.style.pointerHeight = 0;
+        item.style.backgroundColor = '#000000';
+        item.style.backgroundOpacity = 0.5;
+        item.style.cornerRadius = 8;
+        item.locked = true;
+        item.disableHit = true;
+        item.zIndex = 1000;
       });
     });
   }
@@ -2597,10 +2864,12 @@ function setupCharacterButtons() {
         const currentSheet = characterSheets[activeSheetIndex];
         if (!currentSheet) return;
 
-        const nextHiddenState = !areTokenStatsHiddenForSheet(currentSheet);
-        currentSheet.hideTokenStats = nextHiddenState;
+        const currentMode = getTokenStatsVisibilityModeForSheet(currentSheet);
+        const nextMode = getNextTokenStatsVisibilityMode(currentMode, isGM);
+        currentSheet.tokenStatsVisibilityMode = nextMode;
+        currentSheet.hideTokenStats = getLegacyHideTokenStatsFromMode(nextMode);
 
-        await applyTokenStatsVisibilityForCharacter(currentSheet.characterName, nextHiddenState);
+        await applyTokenStatsVisibilityForCharacter(currentSheet.characterName, nextMode);
         await saveSheetData(activeSheetIndex);
         updateTokenStatsToggleButtonState(currentSheet);
       } catch (error) {
@@ -2655,6 +2924,7 @@ function setupCharacterButtons() {
           inspiration: false,
           advantage: false,
           disadvantage: false,
+          tokenStatsVisibilityMode: TOKEN_STATS_VISIBLE_ALL,
           hideTokenStats: false,
         };
 
@@ -2772,7 +3042,9 @@ function setupCharacterButtons() {
 
         // Використовуємо фото токена/персонажа з Uploadcare, якщо воно є.
         const imageUrl = resolveTokenImageUrlFromSheet(currentSheet);
-        const hideTokenStats = areTokenStatsHiddenForSheet(currentSheet);
+        const tokenStatsVisibilityMode = getTokenStatsVisibilityModeForSheet(currentSheet);
+        const createBadgesForGM = isTokenStatsVisibleForGM(tokenStatsVisibilityMode);
+        const badgesVisibleToPlayers = isTokenStatsVisibleForPlayers(tokenStatsVisibilityMode);
 
         // Створюємо токен персонажа (займає 1 клітинку на карті)
         let tokenBuilder = buildImage(
@@ -2805,7 +3077,8 @@ function setupCharacterButtons() {
               maxHealthPoints: currentSheet.maxHealthPoints,
               healing: currentSheet.healing,
               armorClass: currentSheet.armorClass,
-              hideTokenStats,
+              tokenStatsVisibilityMode,
+              hideTokenStats: getLegacyHideTokenStatsFromMode(tokenStatsVisibilityMode),
               ownerUserId: ownerUserId
             }
           });
@@ -2838,7 +3111,7 @@ function setupCharacterButtons() {
           })
           .layer('ATTACHMENT')
           .attachedTo(tokenItem.id)
-          .visible(!hideTokenStats)
+          .visible(badgesVisibleToPlayers)
           .plainText(healthText)
           .locked(true)  // Блокуємо переміщення та редагування
           .metadata({
@@ -2855,7 +3128,7 @@ function setupCharacterButtons() {
           })
           .layer('ATTACHMENT')
           .attachedTo(tokenItem.id)
-          .visible(!hideTokenStats)
+          .visible(badgesVisibleToPlayers)
           .plainText(`🛡${currentSheet.armorClass || 5}`)
           .locked(true)  // Блокуємо переміщення та редагування
           .metadata({
@@ -2872,11 +3145,14 @@ function setupCharacterButtons() {
         const healthBadge = healthBadgeBuilder.build();
         const acBadge = acBadgeBuilder.build();
 
-        // Додаємо іконки здоров'я та класу броні на сцену
-        await OBR.scene.items.addItems([healthBadge, acBadge]);
+        if (createBadgesForGM) {
+          // Додаємо іконки здоров'я та класу броні на сцену
+          await OBR.scene.items.addItems([healthBadge, acBadge]);
+        }
         
         // Застосовуємо стилі до іконки здоров'я
-        await OBR.scene.items.updateItems([healthBadge.id], (items) => {
+        if (createBadgesForGM) {
+          await OBR.scene.items.updateItems([healthBadge.id], (items) => {
           items.forEach(item => {
             item.scale = { x: 1, y: 1 };  // Фіксований масштаб
             item.style.pointerWidth = 0;
@@ -2888,10 +3164,12 @@ function setupCharacterButtons() {
             item.disableHit = true;  // Вимикаємо взаємодію
             item.zIndex = 1000;  // Високий z-index щоб бути поверх
           });
-        });
+          });
+        }
         
         // Застосовуємо стилі до іконки класу броні
-        await OBR.scene.items.updateItems([acBadge.id], (items) => {
+        if (createBadgesForGM) {
+          await OBR.scene.items.updateItems([acBadge.id], (items) => {
           items.forEach(item => {
             item.scale = { x: 1, y: 1 };  // Фіксований масштаб
             item.style.pointerWidth = 0;
@@ -2903,7 +3181,8 @@ function setupCharacterButtons() {
             item.disableHit = true;  // Вимикаємо взаємодію
             item.zIndex = 1000;  // Високий z-index щоб бути поверх
           });
-        });
+          });
+        }
         
         console.log('Токен персонажа створено:', currentSheet.characterName);
         

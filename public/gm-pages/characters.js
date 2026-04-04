@@ -10,6 +10,9 @@ const DARQIE_SHEETS_KEY = 'darqie.characterSheets';
 const DARQIE_REGISTRY_KEY = 'darqie.v2.registry';
 const DARQIE_ROOM_ID_KEY = 'darqie.lastRoomId';
 const DICE_ROLL_THROTTLE_MS = 500;
+const TOKEN_STATS_VISIBLE_ALL = 'visible_all';
+const TOKEN_STATS_HIDDEN_PLAYERS = 'hidden_players';
+const TOKEN_STATS_HIDDEN_ALL = 'hidden_all';
 
 let cachedSupabaseClient = null;
 let cachedObrClient = null;
@@ -117,8 +120,51 @@ function appendCacheVersion(url, version) {
   return `${clean}?v=${encodeURIComponent(String(version || Date.now()))}`;
 }
 
+function normalizeTokenStatsVisibilityMode(rawMode, legacyHideTokenStats = false) {
+  if (rawMode === TOKEN_STATS_VISIBLE_ALL || rawMode === TOKEN_STATS_HIDDEN_PLAYERS || rawMode === TOKEN_STATS_HIDDEN_ALL) {
+    return rawMode;
+  }
+  return legacyHideTokenStats ? TOKEN_STATS_HIDDEN_PLAYERS : TOKEN_STATS_VISIBLE_ALL;
+}
+
+function getTokenStatsVisibilityModeInRow(row) {
+  return normalizeTokenStatsVisibilityMode(
+    row?.extra_data?.tokenStatsVisibilityMode,
+    Boolean(row?.extra_data?.hideTokenStats)
+  );
+}
+
+function getTokenStatsVisibilityModeForToken(token, rowFallback = null) {
+  const tokenSheet = token?.metadata?.characterSheet;
+  if (tokenSheet) {
+    return normalizeTokenStatsVisibilityMode(
+      tokenSheet.tokenStatsVisibilityMode,
+      Boolean(tokenSheet.hideTokenStats)
+    );
+  }
+  return getTokenStatsVisibilityModeInRow(rowFallback);
+}
+
+function isTokenStatsVisibleForGM(mode) {
+  return mode !== TOKEN_STATS_HIDDEN_ALL;
+}
+
+function isTokenStatsVisibleForPlayers(mode) {
+  return mode === TOKEN_STATS_VISIBLE_ALL;
+}
+
+function getLegacyHideTokenStatsFromMode(mode) {
+  return !isTokenStatsVisibleForPlayers(mode);
+}
+
+function getNextTokenStatsVisibilityMode(currentMode) {
+  if (currentMode === TOKEN_STATS_VISIBLE_ALL) return TOKEN_STATS_HIDDEN_PLAYERS;
+  if (currentMode === TOKEN_STATS_HIDDEN_PLAYERS) return TOKEN_STATS_HIDDEN_ALL;
+  return TOKEN_STATS_VISIBLE_ALL;
+}
+
 function areTokenStatsHiddenInRow(row) {
-  return Boolean(row?.extra_data?.hideTokenStats);
+  return !isTokenStatsVisibleForPlayers(getTokenStatsVisibilityModeInRow(row));
 }
 
 function escapeHtml(value) {
@@ -130,14 +176,16 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
-function getActionButtonsHtml(type, hideTokenStats = false) {
+function getActionButtonsHtml(type, tokenStatsVisibilityMode = TOKEN_STATS_VISIBLE_ALL) {
   const openBtn = type === CHARACTER_TYPE_PLAYER
     ? '<button type="button" class="gm-row-btn" data-action="open" title="До листа"><i class="fas fa-arrow-right"></i></button>'
     : '';
 
-  const toggleStatsBtn = hideTokenStats
-    ? '<button type="button" class="gm-row-btn is-active" data-action="toggleStats" title="Показати стати"><i class="fas fa-eye-slash"></i></button>'
-    : '<button type="button" class="gm-row-btn" data-action="toggleStats" title="Приховати стати"><i class="fas fa-eye"></i></button>';
+  const toggleStatsBtn = tokenStatsVisibilityMode === TOKEN_STATS_VISIBLE_ALL
+    ? '<button type="button" class="gm-row-btn" data-action="toggleStats" title="Стати: видимі всім"><i class="fas fa-eye"></i></button>'
+    : tokenStatsVisibilityMode === TOKEN_STATS_HIDDEN_PLAYERS
+      ? '<button type="button" class="gm-row-btn is-active" data-action="toggleStats" title="Стати: приховані для гравців"><i class="fas fa-eye-slash"></i></button>'
+      : '<button type="button" class="gm-row-btn is-active" data-action="toggleStats" title="Стати: повністю приховані для GM"><i class="fas fa-ban"></i></button>';
 
   return `
     <div class="gm-row-actions">
@@ -330,7 +378,7 @@ function buildCharacterRowHtml(row, players) {
           </button>
         </div>
       </td>
-      <td>${getActionButtonsHtml(type, areTokenStatsHiddenInRow(row))}</td>
+      <td>${getActionButtonsHtml(type, getTokenStatsVisibilityModeInRow(row))}</td>
     </tr>
   `;
 }
@@ -643,6 +691,8 @@ export function initPage({ root }) {
       weapons_json: isNpc ? [{ name: '', bonus: weaponBonusValue, damage: weaponDamageValue }] : [],
       extra_data: {
         characterType: type,
+        tokenStatsVisibilityMode: TOKEN_STATS_VISIBLE_ALL,
+        hideTokenStats: false,
       },
       updated_at: new Date().toISOString(),
     };
@@ -812,19 +862,27 @@ export function initPage({ root }) {
       });
     }
 
-    const badgeIdsToUpdate = [];
+    const badgeUpdates = [];
     const healthText = `♥${health}`;
     const acText = `🛡${armor}`;
 
     matchingTokens.forEach((token) => {
+      const tokenMode = getTokenStatsVisibilityModeForToken(token, row);
+      const visibleForGM = isTokenStatsVisibleForGM(tokenMode);
+      const visibleForPlayers = isTokenStatsVisibleForPlayers(tokenMode);
+
       if (syncHealth) {
         const healthBadge = allItems.find((item) =>
           item.layer === 'ATTACHMENT' &&
           item.metadata?.healthBadge === true &&
           item.attachedTo === token.id
         );
-        if (healthBadge && healthBadge.text?.plainText !== healthText) {
-          badgeIdsToUpdate.push({ id: healthBadge.id, text: healthText });
+        if (healthBadge) {
+          if (!visibleForGM) {
+            badgeUpdates.push({ id: healthBadge.id, delete: true });
+          } else if (healthBadge.text?.plainText !== healthText || healthBadge.visible !== visibleForPlayers) {
+            badgeUpdates.push({ id: healthBadge.id, text: healthText, visible: visibleForPlayers });
+          }
         }
       }
 
@@ -834,18 +892,29 @@ export function initPage({ root }) {
           item.metadata?.acBadge === true &&
           item.attachedTo === token.id
         );
-        if (acBadge && acBadge.text?.plainText !== acText) {
-          badgeIdsToUpdate.push({ id: acBadge.id, text: acText });
+        if (acBadge) {
+          if (!visibleForGM) {
+            badgeUpdates.push({ id: acBadge.id, delete: true });
+          } else if (acBadge.text?.plainText !== acText || acBadge.visible !== visibleForPlayers) {
+            badgeUpdates.push({ id: acBadge.id, text: acText, visible: visibleForPlayers });
+          }
         }
       }
     });
 
+    const badgeIdsToDelete = badgeUpdates.filter((entry) => entry.delete).map((entry) => entry.id);
+    if (badgeIdsToDelete.length > 0) {
+      await OBR.scene.items.deleteItems(badgeIdsToDelete);
+    }
+
+    const badgeIdsToUpdate = badgeUpdates.filter((entry) => !entry.delete);
     if (badgeIdsToUpdate.length > 0) {
       await OBR.scene.items.updateItems(badgeIdsToUpdate.map((entry) => entry.id), (items) => {
         items.forEach((item) => {
           const next = badgeIdsToUpdate.find((entry) => entry.id === item.id);
           if (next && item.text) {
             item.text.plainText = next.text;
+            item.visible = next.visible;
           }
         });
       });
@@ -872,7 +941,9 @@ export function initPage({ root }) {
     const imageUrl = resolveTokenImageUrlFromRow(row);
     const ownerUserId = await getOwnerUserIdByPlayerName(row.player_name || '');
 
-    const hideTokenStats = areTokenStatsHiddenInRow(row);
+    const tokenStatsVisibilityMode = getTokenStatsVisibilityModeInRow(row);
+    const createBadgesForGM = isTokenStatsVisibleForGM(tokenStatsVisibilityMode);
+    const badgesVisibleToPlayers = isTokenStatsVisibleForPlayers(tokenStatsVisibilityMode);
 
     let tokenBuilder = buildImage(
       {
@@ -904,7 +975,8 @@ export function initPage({ root }) {
           maxHealthPoints: row.max_health_points || '0',
           healing: row.healing || '0',
           armorClass: row.armor_class || '5',
-          hideTokenStats,
+          tokenStatsVisibilityMode,
+          hideTokenStats: getLegacyHideTokenStatsFromMode(tokenStatsVisibilityMode),
           ownerUserId: ownerUserId,
         },
       });
@@ -922,7 +994,7 @@ export function initPage({ root }) {
       .position({ x: tokenBounds.max.x - 10, y: tokenBounds.min.y + 10 })
       .layer('ATTACHMENT')
       .attachedTo(token.id)
-      .visible(!hideTokenStats)
+      .visible(badgesVisibleToPlayers)
       .plainText(`♥${row.health_points || 0}`)
       .locked(true)
       .metadata({ healthBadge: true, characterName: row.character_name, playerName: row.player_name || '' });
@@ -931,7 +1003,7 @@ export function initPage({ root }) {
       .position({ x: tokenBounds.min.x + 10, y: tokenBounds.min.y + 10 })
       .layer('ATTACHMENT')
       .attachedTo(token.id)
-      .visible(!hideTokenStats)
+      .visible(badgesVisibleToPlayers)
       .plainText(`🛡${row.armor_class || 5}`)
       .locked(true)
       .metadata({ acBadge: true, characterName: row.character_name, playerName: row.player_name || '' });
@@ -943,31 +1015,40 @@ export function initPage({ root }) {
 
     const healthBadge = healthBadgeBuilder.build();
     const acBadge = acBadgeBuilder.build();
-    await OBR.scene.items.addItems([healthBadge, acBadge]);
+    if (createBadgesForGM) {
+      await OBR.scene.items.addItems([healthBadge, acBadge]);
+    }
 
     await focusToken(token.id);
   }
 
-  async function applyTokenStatsVisibility(characterName, hideTokenStats) {
+  async function applyTokenStatsVisibility(characterName, modeOrLegacyHidden) {
     if (!OBR && window.OBR) { OBR = window.OBR; cachedObrClient = OBR; }
     if (!OBR || typeof OBR.scene?.isReady !== 'function') return;
 
     const sceneReady = await OBR.scene.isReady();
     if (!sceneReady) return;
 
+    const tokenStatsVisibilityMode = normalizeTokenStatsVisibilityMode(
+      modeOrLegacyHidden,
+      modeOrLegacyHidden === true
+    );
+    const badgesVisibleToPlayers = isTokenStatsVisibleForPlayers(tokenStatsVisibilityMode);
+    const badgesVisibleToGM = isTokenStatsVisibleForGM(tokenStatsVisibilityMode);
+
     const allItems = await OBR.scene.items.getItems();
-    const tokenIds = allItems
-      .filter((item) =>
-        item.layer === 'CHARACTER' &&
-        item.metadata?.characterSheet?.characterName === characterName
-      )
-      .map((item) => item.id);
+    const tokens = allItems.filter((item) =>
+      item.layer === 'CHARACTER' &&
+      item.metadata?.characterSheet?.characterName === characterName
+    );
+    const tokenIds = tokens.map((item) => item.id);
 
     if (tokenIds.length > 0) {
       await OBR.scene.items.updateItems(tokenIds, (items) => {
         items.forEach((item) => {
           if (item.metadata?.characterSheet) {
-            item.metadata.characterSheet.hideTokenStats = hideTokenStats;
+            item.metadata.characterSheet.tokenStatsVisibilityMode = tokenStatsVisibilityMode;
+            item.metadata.characterSheet.hideTokenStats = getLegacyHideTokenStatsFromMode(tokenStatsVisibilityMode);
           }
         });
       });
@@ -981,12 +1062,89 @@ export function initPage({ root }) {
       )
       .map((item) => item.id);
 
+    if (badgeIds.length > 0 && !badgesVisibleToGM) {
+      await OBR.scene.items.deleteItems(badgeIds);
+      return;
+    }
+
     if (badgeIds.length > 0) {
       await OBR.scene.items.updateItems(badgeIds, (items) => {
         items.forEach((item) => {
-          item.visible = !hideTokenStats;
+          item.visible = badgesVisibleToPlayers;
         });
       });
+    }
+
+    if (!badgesVisibleToGM || tokens.length === 0) return;
+
+    const badgesByToken = new Map();
+    allItems.forEach((item) => {
+      if (
+        item.layer === 'ATTACHMENT' &&
+        tokenIds.includes(item.attachedTo) &&
+        (item.metadata?.healthBadge === true || item.metadata?.acBadge === true)
+      ) {
+        const entry = badgesByToken.get(item.attachedTo) || { hasHealth: false, hasAc: false };
+        if (item.metadata?.healthBadge === true) entry.hasHealth = true;
+        if (item.metadata?.acBadge === true) entry.hasAc = true;
+        badgesByToken.set(item.attachedTo, entry);
+      }
+    });
+
+    const badgesToCreate = [];
+    for (const token of tokens) {
+      const existing = badgesByToken.get(token.id) || { hasHealth: false, hasAc: false };
+      if (existing.hasHealth && existing.hasAc) continue;
+
+      const tokenBounds = await OBR.scene.items.getItemBounds([token.id]);
+      const hp = parseInt(token.metadata?.characterSheet?.healthPoints, 10)
+        || parseInt(token.metadata?.['com.owlbear.token']?.hp, 10)
+        || 0;
+      const ac = parseInt(token.metadata?.characterSheet?.armorClass, 10)
+        || parseInt(token.metadata?.['com.owlbear.token']?.ac, 10)
+        || 10;
+
+      if (!existing.hasHealth) {
+        let healthBadgeBuilder = buildLabel()
+          .position({ x: tokenBounds.max.x - 10, y: tokenBounds.min.y + 10 })
+          .layer('ATTACHMENT')
+          .attachedTo(token.id)
+          .visible(badgesVisibleToPlayers)
+          .plainText(`♥${hp}`)
+          .locked(true)
+          .metadata({
+            healthBadge: true,
+            characterName,
+            playerName: token.metadata?.characterSheet?.playerName || '',
+          });
+        if (token.createdUserId) {
+          healthBadgeBuilder = healthBadgeBuilder.createdUserId(token.createdUserId);
+        }
+        badgesToCreate.push(healthBadgeBuilder.build());
+      }
+
+      if (!existing.hasAc) {
+        let acBadgeBuilder = buildLabel()
+          .position({ x: tokenBounds.min.x + 10, y: tokenBounds.min.y + 10 })
+          .layer('ATTACHMENT')
+          .attachedTo(token.id)
+          .visible(badgesVisibleToPlayers)
+          .plainText(`🛡${ac}`)
+          .locked(true)
+          .metadata({
+            acBadge: true,
+            characterName,
+            playerName: token.metadata?.characterSheet?.playerName || '',
+          });
+        if (token.createdUserId) {
+          acBadgeBuilder = acBadgeBuilder.createdUserId(token.createdUserId);
+        }
+        badgesToCreate.push(acBadgeBuilder.build());
+      }
+    }
+
+    if (badgesToCreate.length > 0) {
+      await OBR.scene.items.addItems(badgesToCreate);
     }
   }
 
@@ -1302,12 +1460,14 @@ export function initPage({ root }) {
       }
 
       if (action === 'toggleStats') {
-        const nextHideTokenStats = !areTokenStatsHiddenInRow(row);
-        await applyTokenStatsVisibility(row.character_name, nextHideTokenStats);
+        const currentMode = getTokenStatsVisibilityModeInRow(row);
+        const nextMode = getNextTokenStatsVisibilityMode(currentMode);
+        await applyTokenStatsVisibility(row.character_name, nextMode);
 
         const nextExtra = {
           ...(row.extra_data || {}),
-          hideTokenStats: nextHideTokenStats,
+          tokenStatsVisibilityMode: nextMode,
+          hideTokenStats: getLegacyHideTokenStatsFromMode(nextMode),
         };
 
         const updated = await patchByName(row.character_name, { extra_data: nextExtra });
