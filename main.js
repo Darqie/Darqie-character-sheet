@@ -3684,28 +3684,39 @@ function setupInterface() {
 
         const assignedName = String(msg?.characterName || '').trim();
 
-        // Ретрій потрібен, бо між broadcast і видимістю оновленого рядка в клієнті можливий невеликий лаг.
-        const tryCount = 5;
-        for (let attempt = 0; attempt < tryCount; attempt += 1) {
-          await updateCharacterDropdown();
+        // 1) Миттєво застосовуємо призначення з OBR registry (без очікування синку БД),
+        // щоб не показувати гравцю порожній/очікувальний екран.
+        try {
+          const metadata = await OBR.room.getMetadata();
+          const registry = Array.isArray(metadata?.[DARQIE_REGISTRY_KEY]) ? metadata[DARQIE_REGISTRY_KEY] : [];
+          const localByName = new Map(
+            characterSheets.map((sheet) => [normalizeName(sheet.characterName), sheet])
+          );
 
-          if (assignedName) {
-            const targetIndex = characterSheets.findIndex(
-              (sheet) => normalizeName(sheet.characterName) === normalizeName(assignedName)
-            );
-            if (targetIndex >= 0) {
-              activeSheetIndex = targetIndex;
-              const characterSelect = document.getElementById('characterSelect');
-              if (characterSelect) characterSelect.value = String(targetIndex);
-              loadSheetData();
-              break;
-            }
-          }
+          registry.forEach((entry) => {
+            const local = localByName.get(normalizeName(entry.characterName));
+            if (local) local.playerName = entry.playerName || '';
+          });
+        } catch (_) {}
 
-          if (attempt < tryCount - 1) {
-            await new Promise((resolve) => setTimeout(resolve, 250));
+        await refreshDropdownOnly();
+
+        if (assignedName) {
+          const targetIndex = characterSheets.findIndex(
+            (sheet) => normalizeName(sheet.characterName) === normalizeName(assignedName)
+          );
+          if (targetIndex >= 0) {
+            activeSheetIndex = targetIndex;
+            const characterSelect = document.getElementById('characterSelect');
+            if (characterSelect) characterSelect.value = String(targetIndex);
+            loadSheetData();
           }
         }
+
+        // 2) Відкладено підтягуємо стан з Supabase для фінальної конвергенції.
+        setTimeout(() => {
+          updateCharacterDropdown().catch(() => {});
+        }, 1200);
 
         await checkCharacterAndRedirect();
     });
