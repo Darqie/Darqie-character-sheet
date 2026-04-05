@@ -50,6 +50,136 @@
   const MIN_LOADING_MS = 1000;
   let openSheetSignalBound = false;
   let openSheetSignalRetryId = null;
+  let skillShareSignalBound = false;
+
+  function showInlineSkillPopover(skillName, skillDescription, initiatorName) {
+    const existing = document.getElementById('darqie-gm-inline-skill-popover-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'darqie-gm-inline-skill-popover-overlay';
+    overlay.style.position = 'fixed';
+    overlay.style.inset = '0';
+    overlay.style.background = 'rgba(0, 0, 0, 0.45)';
+    overlay.style.zIndex = '99999';
+    overlay.style.display = 'flex';
+    overlay.style.alignItems = 'center';
+    overlay.style.justifyContent = 'center';
+    overlay.style.padding = '16px';
+
+    const card = document.createElement('div');
+    card.style.width = 'min(560px, 100%)';
+    card.style.maxHeight = '80vh';
+    card.style.overflow = 'auto';
+    card.style.background = '#1f1f24';
+    card.style.color = '#f4f4f7';
+    card.style.border = '1px solid rgba(255,255,255,0.12)';
+    card.style.borderRadius = '12px';
+    card.style.boxShadow = '0 20px 40px rgba(0,0,0,0.45)';
+    card.style.padding = '16px';
+
+    const title = document.createElement('h3');
+    title.textContent = skillName || 'Навичка';
+    title.style.margin = '0 0 8px';
+    title.style.fontSize = '1.1rem';
+
+    const from = document.createElement('div');
+    from.textContent = initiatorName ? `Від: ${initiatorName}` : 'Поділився навичкою';
+    from.style.opacity = '0.8';
+    from.style.fontSize = '0.9rem';
+    from.style.marginBottom = '10px';
+
+    const desc = document.createElement('div');
+    desc.textContent = skillDescription || 'Опис відсутній';
+    desc.style.whiteSpace = 'pre-wrap';
+    desc.style.lineHeight = '1.45';
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.textContent = 'Закрити';
+    closeBtn.style.marginTop = '14px';
+    closeBtn.style.padding = '8px 12px';
+    closeBtn.style.borderRadius = '8px';
+    closeBtn.style.border = '1px solid rgba(255,255,255,0.2)';
+    closeBtn.style.background = '#2c2c33';
+    closeBtn.style.color = '#f4f4f7';
+    closeBtn.style.cursor = 'pointer';
+
+    const close = () => {
+      window.removeEventListener('keydown', onKeyDown);
+      overlay.remove();
+    };
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') close();
+    };
+
+    closeBtn.addEventListener('click', close);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) close();
+    });
+    window.addEventListener('keydown', onKeyDown);
+
+    card.appendChild(title);
+    card.appendChild(from);
+    card.appendChild(desc);
+    card.appendChild(closeBtn);
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+  }
+
+  async function openSkillPopoverForGm(skillName, skillDescription, initiatorName) {
+    const query = new URLSearchParams({
+      name: skillName || '',
+      desc: skillDescription || '',
+      player: initiatorName || '',
+      v: '2',
+    }).toString();
+
+    try {
+      await window.OBR.popover.open({
+        id: 'darqie-skill-popover',
+        url: `/skill-popover-v2.html?${query}`,
+        height: 260,
+        width: 420,
+      });
+    } catch (e1) {
+      try {
+        await window.OBR.popover.open({
+          id: 'darqie-skill-popover',
+          url: `skill-popover-v2.html?${query}`,
+          height: 260,
+          width: 420,
+        });
+      } catch (_) {
+        showInlineSkillPopover(skillName, skillDescription, initiatorName);
+      }
+    }
+  }
+
+  function bindSkillShareSignal() {
+    const OBR = window.OBR;
+    if (!OBR || skillShareSignalBound) return;
+    skillShareSignalBound = true;
+
+    OBR.broadcast.onMessage('skill-popover', async (data) => {
+      try {
+        const msg = data?.data || data;
+        if (!msg || msg.type !== 'open-skill-popover') return;
+        const myId = await OBR.player.getConnectionId();
+        if (msg.senderId && msg.senderId === myId) return;
+        await openSkillPopoverForGm(msg.name || '', msg.desc || '', msg.initiatorName || msg.playerName || '');
+      } catch (_) {}
+    });
+
+    // Backward compatibility for older clients that still send skill-message.
+    OBR.broadcast.onMessage('skill-message', async (data) => {
+      try {
+        const msg = data?.data || data;
+        if (!msg || msg.type !== 'skill-info') return;
+        await openSkillPopoverForGm(msg.skillName || '', msg.skillDescription || '', msg.playerName || '');
+      } catch (_) {}
+    });
+  }
 
   function bindOpenCharacterSheetSignal() {
     const OBR = window.OBR;
@@ -89,11 +219,13 @@
     if (typeof OBR.onReady === 'function') {
       OBR.onReady(() => {
         bindOpenCharacterSheetSignal();
+        bindSkillShareSignal();
       });
       return true;
     }
 
     bindOpenCharacterSheetSignal();
+    bindSkillShareSignal();
     return openSheetSignalBound;
   }
 
