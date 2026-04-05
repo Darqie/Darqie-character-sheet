@@ -1021,6 +1021,7 @@ async function handleRealtimeDelete(oldRow) {
  */
 function applyRealtimeUpdateToDOM(updatedSheet) {
   const focusedId = document.activeElement?.id;
+  const isEditingCoins = focusedId === 'senCoins' || focusedId === 'ginCoins' || focusedId === 'kinCoins';
   const elements = getSheetInputElements();
 
   for (const [key, el] of Object.entries(elements)) {
@@ -1083,8 +1084,10 @@ function applyRealtimeUpdateToDOM(updatedSheet) {
     equipmentRows = JSON.parse(JSON.stringify(updatedSheet.equipment)); renderEquipmentTable(false);
   }
 
-  coinsData = updatedSheet.coins ? JSON.parse(JSON.stringify(updatedSheet.coins)) : { sen: 0, gin: 0, kin: 0 };
-  loadCoinsData();
+  if (!isEditingCoins) {
+    coinsData = updatedSheet.coins ? JSON.parse(JSON.stringify(updatedSheet.coins)) : { sen: 0, gin: 0, kin: 0 };
+    loadCoinsData();
+  }
   updateModifiers();
   updateDeathOverlay();
   updateCurrentWeight();
@@ -3327,6 +3330,7 @@ function setupPhotoButtons() {
 
         if (characterSheets[activeSheetIndex]) {
           characterSheets[activeSheetIndex].characterPhoto = imageUrl;
+          markSheetFieldDirty(characterSheets[activeSheetIndex], 'characterPhoto');
           const sheetIdx = activeSheetIndex;
           await saveSheetData(sheetIdx);
         }
@@ -3345,6 +3349,7 @@ function setupPhotoButtons() {
 
     if (characterSheets[activeSheetIndex]) {
       characterSheets[activeSheetIndex].characterPhoto = '';
+      markSheetFieldDirty(characterSheets[activeSheetIndex], 'characterPhoto');
       photoImg.src = '';
       photoImg.style.display = 'none';
       const placeholder = document.getElementById('photoPlaceholder');
@@ -3423,6 +3428,7 @@ function setupPhotoButtons() {
         // Зберігаємо URL фото токена в метаданих персонажа
         if (characterSheets[activeSheetIndex]) {
           characterSheets[activeSheetIndex].tokenPhoto = tokenImageUrl;
+          markSheetFieldDirty(characterSheets[activeSheetIndex], 'tokenPhoto');
           const sheetIdx = activeSheetIndex;
           await saveSheetData(sheetIdx);
         }
@@ -5022,8 +5028,9 @@ const equipmentLabel = document.querySelector('.equipment-block .weapon-label');
 
 if (weaponLabel) {
   weaponLabel.addEventListener('blur', () => {
-    if (!weaponEditing) {
+    if (!weaponEditing && characterSheets[activeSheetIndex]) {
       characterSheets[activeSheetIndex].weaponTitle = weaponLabel.textContent;
+      markSheetFieldDirty(characterSheets[activeSheetIndex], 'weaponTitle');
       const sheetIdx = activeSheetIndex;
       debouncedSaveSheetData(sheetIdx);
     }
@@ -5032,8 +5039,9 @@ if (weaponLabel) {
 
 if (inventoryLabel) {
   inventoryLabel.addEventListener('blur', () => {
-    if (!editingInv) {
+    if (!editingInv && characterSheets[activeSheetIndex]) {
       characterSheets[activeSheetIndex].inventoryTitle = inventoryLabel.textContent;
+      markSheetFieldDirty(characterSheets[activeSheetIndex], 'inventoryTitle');
       const sheetIdx = activeSheetIndex;
       debouncedSaveSheetData(sheetIdx);
     }
@@ -5042,8 +5050,9 @@ if (inventoryLabel) {
 
 if (equipmentLabel) {
   equipmentLabel.addEventListener('blur', () => {
-    if (!editingEquip) {
+    if (!editingEquip && characterSheets[activeSheetIndex]) {
       characterSheets[activeSheetIndex].equipmentTitle = equipmentLabel.textContent;
+      markSheetFieldDirty(characterSheets[activeSheetIndex], 'equipmentTitle');
       const sheetIdx = activeSheetIndex;
       debouncedSaveSheetData(sheetIdx);
     }
@@ -5057,10 +5066,13 @@ document.addEventListener('DOMContentLoaded', function() {
   const kinInput = document.getElementById('kinCoins');
 
   function saveCoinsImmediate() {
+    if (!characterSheets[activeSheetIndex]) return;
+
     coinsData.sen = parseInt(senInput.value) || 0;
     coinsData.gin = parseInt(ginInput.value) || 0;
     coinsData.kin = parseInt(kinInput.value) || 0;
     characterSheets[activeSheetIndex].coins = JSON.parse(JSON.stringify(coinsData));
+    markSheetFieldDirty(characterSheets[activeSheetIndex], 'coins');
     const sheetIdx = activeSheetIndex;
     saveSheetData(sheetIdx);
   }
