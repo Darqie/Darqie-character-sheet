@@ -3652,6 +3652,25 @@ function setupInterface() {
           if (local) local.playerName = entry.playerName || '';
         });
         await refreshDropdownOnly();
+
+        // Для гравця після нової видачі фокусуємо саме виданого персонажа, а не "першого зі списку".
+        if (!isGM) {
+          const assignedEntry = registry.find(
+            (entry) => normalizeName(entry.playerName) === normalizeName(currentPlayerName)
+          );
+          const assignedName = String(assignedEntry?.characterName || '').trim();
+          if (assignedName) {
+            const targetIndex = characterSheets.findIndex(
+              (sheet) => normalizeName(sheet.characterName) === normalizeName(assignedName)
+            );
+            if (targetIndex >= 0) {
+              activeSheetIndex = targetIndex;
+              const characterSelect = document.getElementById('characterSelect');
+              if (characterSelect) characterSelect.value = String(targetIndex);
+              loadSheetData();
+            }
+          }
+        }
       }
 
       await checkCharacterAndRedirect();
@@ -3659,20 +3678,32 @@ function setupInterface() {
 
     // Додаємо підписку на повідомлення про призначення персонажа
     OBR.broadcast.onMessage("character-assignment", async (data) => {
-        if (data.playerName !== currentPlayerName) return;
+        const msg = data?.data || data;
+        const normalizeName = (value) => String(value || '').trim().toLowerCase();
+        if (normalizeName(msg?.playerName) !== normalizeName(currentPlayerName)) return;
 
-        await updateCharacterDropdown();
+        const assignedName = String(msg?.characterName || '').trim();
 
-        const assignedName = String(data.characterName || '').trim();
-        if (assignedName) {
-          const targetIndex = characterSheets.findIndex(
-            (sheet) => String(sheet.characterName || '').trim() === assignedName
-          );
-          if (targetIndex >= 0) {
-            activeSheetIndex = targetIndex;
-            const characterSelect = document.getElementById('characterSelect');
-            if (characterSelect) characterSelect.value = String(targetIndex);
-            loadSheetData();
+        // Ретрій потрібен, бо між broadcast і видимістю оновленого рядка в клієнті можливий невеликий лаг.
+        const tryCount = 5;
+        for (let attempt = 0; attempt < tryCount; attempt += 1) {
+          await updateCharacterDropdown();
+
+          if (assignedName) {
+            const targetIndex = characterSheets.findIndex(
+              (sheet) => normalizeName(sheet.characterName) === normalizeName(assignedName)
+            );
+            if (targetIndex >= 0) {
+              activeSheetIndex = targetIndex;
+              const characterSelect = document.getElementById('characterSelect');
+              if (characterSelect) characterSelect.value = String(targetIndex);
+              loadSheetData();
+              break;
+            }
+          }
+
+          if (attempt < tryCount - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 250));
           }
         }
 
@@ -3687,7 +3718,7 @@ function setupInterface() {
         if (skillData && skillData.type === 'skill-info') {
               // Додаємо невелику затримку для уникнення конфліктів
               setTimeout(async () => {
-            await showSkillNotification(skillData.skillName, skillData.skillDescription, skillData.playerName);
+            await openSkillPopoverFromBroadcast(skillData.skillName, skillData.skillDescription, skillData.playerName || '');
               }, 500);
         }
     });
@@ -5353,12 +5384,6 @@ async function showSkillNotification(skillName, skillDescription, playerName) {
 // Відкриття поповера з навичкою (з іменем ініціатора)
 async function openSkillPopoverFromBroadcast(skillName, skillDescription, initiatorName) {
   try {
-    const role = await OBR.player.getRole();
-    if (role !== 'GM') {
-      await showSkillNotification(skillName, skillDescription, initiatorName || '');
-      return;
-    }
-
     const query = new URLSearchParams({
       name: skillName || '',
       desc: skillDescription || '',
