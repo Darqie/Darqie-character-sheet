@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Darqie Music Player</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 300px; height: 60px; overflow: hidden; background: transparent; }
+
+    /*
+      The popover is 300×60px — this clip shows only the bottom 60px of the
+      YouTube iframe (the control bar area), so the user sees controls but not video.
+    */
+    #ytClip {
+      position: absolute;
+      bottom: 0; left: 0;
+      width: 300px; height: 60px;
+      overflow: hidden;
+      display: none;
+    }
+    #ytIframe {
+      position: absolute;
+      bottom: 0; left: 0;
+      width: 300px; height: 200px;
+      border: none;
+    }
+
+    /* Audio and Spotify iframes are completely off-screen */
+    #spotifyIframe {
+      position: absolute;
+      left: -9999px; top: 0;
+      width: 1px; height: 1px;
+      border: none;
+    }
+  </style>
+</head>
+<body>
+  <!-- Off-screen audio element for dropbox / direct mp3 -->
+  <audio id="bgAudio" preload="none" style="display:none;"></audio>
+
+  <!--
+    YouTube iframe container — clipped to 60px to show only the control bar.
+    The iframe itself is 200px tall so Chrome considers it a real visible iframe
+    and grants autoplay permission.
+  -->
+  <div id="ytClip">
+    <iframe id="ytIframe"
+      src=""
+      allow="autoplay; encrypted-media; fullscreen"
+      allowfullscreen>
+    </iframe>
+  </div>
+
+  <!-- Spotify hidden embed -->
+  <iframe id="spotifyIframe"
+    src=""
+    allow="autoplay; encrypted-media">
+  </iframe>
+
+  <script src="/music-player.js"></script>
+</body>
+</html>

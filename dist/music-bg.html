@@ -2,34 +2,17 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8">
-  <title>Darqie Music</title>
+  <title>Darqie Music Bootstrap</title>
 </head>
 <body>
-  <!-- Audio player for Dropbox / direct MP3 links -->
-  <audio id="bgAudio" preload="none"></audio>
-
   <!--
-    YouTube iframe — real size (320×200) so Chrome grants autoplay permission.
-    Positioned off-screen so users don't see a video window.
-    OBR grants allow="autoplay" to the background_url iframe, and we delegate
-    it further to YouTube here → depth 2 instead of previous depth 3.
+    This page is the OBR background_url — it stays alive for the entire room session.
+    It does NOT play audio itself (background pages never receive user activation,
+    so Chrome blocks all autoplay here).
+
+    Instead, music-bg.js opens a persistent OBR popover (music-player.html) which
+    *does* receive allow="autoplay" from OBR and can play audio+YouTube+Spotify.
   -->
-  <iframe
-    id="bgYtIframe"
-    src=""
-    allow="autoplay; encrypted-media; fullscreen"
-    allowfullscreen
-    style="position:absolute;left:-9999px;top:0;width:320px;height:200px;border:none;">
-  </iframe>
-
-  <!-- Spotify hidden embed -->
-  <iframe
-    id="bgSpotifyIframe"
-    src=""
-    allow="autoplay; encrypted-media"
-    style="position:absolute;left:-9999px;top:0;width:1px;height:1px;border:none;">
-  </iframe>
-
   <script src="/music-bg.js"></script>
 </body>
 </html>
