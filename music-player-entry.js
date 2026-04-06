@@ -148,19 +148,31 @@ async function startYouTube(videoId, startSec, repeat) {
     width: 300,
     height: 200,
     playerVars: {
-      autoplay: 1,
+      // NO autoplay:1 — let onReady call playVideo() after unMute so YouTube
+      // never applies its "autoplay must be muted" restriction
       controls: 1,
       rel: 0,
       playsinline: 1,
       modestbranding: 1,
+      mute: 0,
       loop: repeat ? 1 : 0,
       playlist: repeat ? videoId : '',
       start: Math.max(0, Math.floor(startSec)),
     },
     events: {
       onReady(e) {
+        // Unmute first, then play — this way YouTube sees a "user-initiated"
+        // play request inside an OBR popover that has allow="autoplay"
         e.target.unMute();
         e.target.setVolume(100);
+        e.target.playVideo();
+      },
+      onStateChange(e) {
+        // YT.PlayerState.PLAYING = 1 — ensure still unmuted
+        if (e.data === 1) {
+          e.target.unMute();
+          e.target.setVolume(100);
+        }
       },
     },
   });
