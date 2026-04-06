@@ -149,6 +149,7 @@ function toSpotifyEmbedUrl(rawUrl) {
 }
 
 function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0, muted = true) {
+function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0) {
   const videoId = extractYouTubeVideoId(rawUrl);
   if (!videoId) return '';
 
@@ -160,11 +161,9 @@ function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0, muted = true) {
     playsinline: '1',
     modestbranding: '1',
   });
-  if (muted) query.set('mute', '1');
   if (origin) query.set('origin', origin);
 
   const normalizedStart = Math.max(0, Math.floor(Number(startSec) || 0));
-  if (normalizedStart > 0) query.set('start', String(normalizedStart));
 
   if (repeat) {
     query.set('loop', '1');
@@ -324,9 +323,6 @@ export function initPage({ root }) {
   const playPauseButton = root.querySelector('#gmMusicPlayPauseButton');
   const nextButton = root.querySelector('#gmMusicNextButton');
   const repeatButton = root.querySelector('#gmMusicRepeatButton');
-  const youtubePlayerWrap = root.querySelector('#gmMusicYoutubeWrap');
-  const youtubePlayerIframe = root.querySelector('#gmMusicYoutubeIframe');
-
   const globalVolumeSlider = root.querySelector('#gmMusicGlobalVolumeSlider');
   const globalVolumeValue = root.querySelector('#gmMusicGlobalVolumeValue');
   const volumeSlider = root.querySelector('#gmMusicVolumeSlider');
@@ -339,6 +335,7 @@ export function initPage({ root }) {
   const audioPlayer = root.querySelector('#gmMusicAudioPlayer');
 
   if (!openAddModalButton || !addModal || !cancelAddButton || !urlInput || !nameInput || !addButton || !tableBody || !prevButton || !playPauseButton || !nextButton || !repeatButton || !youtubePlayerWrap || !youtubePlayerIframe || !globalVolumeSlider || !globalVolumeValue || !volumeSlider || !volumeValue || !seekSlider || !seekValue || !nowPlaying || !audioPlayer) {
+      if (!openAddModalButton || !addModal || !cancelAddButton || !urlInput || !nameInput || !addButton || !tableBody || !prevButton || !playPauseButton || !nextButton || !repeatButton || !globalVolumeSlider || !globalVolumeValue || !volumeSlider || !volumeValue || !seekSlider || !seekValue || !nowPlaying || !audioPlayer) {
     return;
   }
 
@@ -427,8 +424,6 @@ export function initPage({ root }) {
   }
 
   // true while a GM click handler has already loaded the YT iframe without mute
-  let gmYoutubeGestureActive = false;
-
   function getCurrentTrack() {
     if (!playbackState.currentTrackId) return null;
     return playlist.find((track) => track.id === playbackState.currentTrackId) || null;
@@ -439,8 +434,6 @@ export function initPage({ root }) {
     audioPlayer.removeAttribute('src');
     audioPlayer.load();
     clearHiddenEmbed();
-    youtubePlayerIframe.src = '';
-    youtubePlayerWrap.style.display = 'none';
     currentRuntimeKey = '';
   }
 
@@ -501,8 +494,6 @@ export function initPage({ root }) {
     const directUrl = normalizeTrackUrlByType(track.url, track.type);
 
     if (track.type === TRACK_TYPE_AUDIO || track.type === TRACK_TYPE_DROPBOX) {
-      youtubePlayerWrap.style.display = 'none';
-      youtubePlayerIframe.src = '';
       clearHiddenEmbed();
 
       const nextKey = `${track.id}|${playbackState.repeat ? '1' : '0'}|audio`;
@@ -535,21 +526,11 @@ export function initPage({ root }) {
     const nextKey = `${track.id}|${playbackState.repeat ? '1' : '0'}|${track.type}|${playbackState.anchorTimestampMs}`;
 
     if (track.type === TRACK_TYPE_YOUTUBE) {
-      youtubePlayerWrap.style.display = '';
-      if (currentRuntimeKey !== nextKey) {
-        if (gmYoutubeGestureActive) {
-          // Click handler already loaded iframe without mute — don’t override
-          gmYoutubeGestureActive = false;
-        } else {
-          const embedUrl = toYouTubeEmbedUrl(track.url, playbackState.repeat, currentPos, true);
-          if (!embedUrl) { stopAllPlayback(); nowPlaying.textContent = `Невідомий тип треку: ${track.name}`; updateSeekUi(); return; }
-          youtubePlayerIframe.src = embedUrl;
-        }
-        currentRuntimeKey = nextKey;
-      }
+      // YouTube audio is handled by main.js ensureYoutubeAudioBar for all clients
+      currentRuntimeKey = nextKey;
+      updateSeekUi();
+      return;
     } else if (track.type === TRACK_TYPE_SPOTIFY) {
-      youtubePlayerWrap.style.display = 'none';
-      youtubePlayerIframe.src = '';
       if (currentRuntimeKey !== nextKey) {
         const embedUrl = toSpotifyEmbedUrl(track.url);
         if (!embedUrl) {
@@ -857,34 +838,14 @@ export function initPage({ root }) {
     });
 
     playPauseButton.addEventListener('click', async () => {
-      if (!playbackState.isPlaying && playlist.length) {
-        const targetId = playbackState.currentTrackId || playlist[0]?.id;
-        const targetTrack = playlist.find((t) => t.id === targetId);
-        if (targetTrack?.type === TRACK_TYPE_YOUTUBE) {
-          gmYoutubeGestureActive = true;
-          youtubePlayerIframe.src = toYouTubeEmbedUrl(targetTrack.url, Boolean(playbackState.repeat), getStatePositionSec(playbackState), false);
-        }
-      }
       await togglePlayPause();
     });
 
     prevButton.addEventListener('click', async () => {
-      const targetId = getNextTrackId(playbackState.currentTrackId, -1);
-      const targetTrack = playlist.find((t) => t.id === targetId);
-      if (targetTrack?.type === TRACK_TYPE_YOUTUBE) {
-        gmYoutubeGestureActive = true;
-        youtubePlayerIframe.src = toYouTubeEmbedUrl(targetTrack.url, Boolean(playbackState.repeat), 0, false);
-      }
       await goRelative(-1);
     });
 
     nextButton.addEventListener('click', async () => {
-      const targetId = getNextTrackId(playbackState.currentTrackId, 1);
-      const targetTrack = playlist.find((t) => t.id === targetId);
-      if (targetTrack?.type === TRACK_TYPE_YOUTUBE) {
-        gmYoutubeGestureActive = true;
-        youtubePlayerIframe.src = toYouTubeEmbedUrl(targetTrack.url, Boolean(playbackState.repeat), 0, false);
-      }
       await goRelative(1);
     });
 
@@ -940,11 +901,6 @@ export function initPage({ root }) {
       const id = target.getAttribute('data-id') || '';
 
       if (action === 'play') {
-        const targetTrack = playlist.find((t) => t.id === id);
-        if (targetTrack?.type === TRACK_TYPE_YOUTUBE) {
-          gmYoutubeGestureActive = true;
-          youtubePlayerIframe.src = toYouTubeEmbedUrl(targetTrack.url, Boolean(playbackState.repeat), 0, false);
-        }
         await playTrack(id, 0);
       }
 

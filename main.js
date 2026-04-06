@@ -3160,7 +3160,7 @@ function toSpotifyEmbedUrl(rawUrl) {
   }
 }
 
-function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0, muted = true) {
+function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0) {
   const videoId = extractYouTubeVideoId(rawUrl);
   if (!videoId) return '';
 
@@ -3172,7 +3172,6 @@ function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0, muted = true) {
     playsinline: '1',
     modestbranding: '1',
   });
-  if (muted) query.set('mute', '1');
   if (origin) query.set('origin', origin);
 
   const start = Math.max(0, Math.floor(Number(startSec) || 0));
@@ -3331,7 +3330,6 @@ function openMusicVolumePopover(button) {
 }
 
 async function applySharedMusicFromMetadata(metadata) {
-  if (isGM) return; // GM panel handles music playback
   const playlist = Array.isArray(metadata?.[DARQIE_MUSIC_PLAYLIST_KEY]) ? metadata[DARQIE_MUSIC_PLAYLIST_KEY] : [];
   const state = normalizeSharedMusicState(metadata?.[DARQIE_MUSIC_STATE_KEY] || {});
 
@@ -3349,19 +3347,18 @@ async function applySharedMusicFromMetadata(metadata) {
   }
 
   const trackType = track.type || detectMusicTrackType(track.url);
+  // GM panel handles audio/dropbox/spotify; main.js handles YouTube for everyone
+  if (isGM && trackType !== 'youtube') return;
+
   const repeat = Boolean(state.repeat);
   const startSec = getSharedMusicPositionSec(state, Date.now());
   const globalVolume = normalizeMusicVolumeValue(state.globalVolume, 1);
   const effectiveVolume = normalizeMusicVolumeValue(localMusicVolume, MUSIC_LOCAL_VOLUME_DEFAULT) * globalVolume;
 
   if (trackType === 'audio' || trackType === 'dropbox') {
-    // Hide YouTube widget when switching to audio
-    const ytWidget = document.getElementById('darqie-yt-widget');
-    if (ytWidget) ytWidget.style.display = 'none';
-    if (musicIframeElement) {
-      musicIframeElement.remove();
-      musicIframeElement = null;
-    }
+    // Hide YouTube audio bar when switching to audio
+    const ytBar = document.getElementById('darqie-yt-bar');
+    if (ytBar) ytBar.style.display = 'none';
 
     const audio = ensureMusicAudioElement();
     const sourceUrl = trackType === 'dropbox' ? normalizeDropboxMediaUrl(track.url) : String(track.url || '').trim();
@@ -3397,7 +3394,7 @@ async function applySharedMusicFromMetadata(metadata) {
     if (musicTrackRuntimeKey !== runtimeKey) {
       musicTrackRuntimeKey = runtimeKey;
       const iframeStartSec = getSharedMusicPositionSec(state, Date.now());
-      const ytEmbedUrl = toYouTubeEmbedUrl(track.url, repeat, iframeStartSec, true);
+      const ytEmbedUrl = toYouTubeEmbedUrl(track.url, repeat, iframeStartSec);
       if (!ytEmbedUrl) { stopSharedMusicPlayback(); return; }
       iframe.src = ytEmbedUrl;
     }
