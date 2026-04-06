@@ -289,6 +289,26 @@
       transition: outline 0.15s;
     }
 
+    .gm-cell-select {
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      border: 1px solid #5a607c !important;
+      border-radius: 6px !important;
+      background-color: rgba(33, 37, 51, 0.2) !important;
+      background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292%22%20height%3D%22292%22%3E%3Cpath%20fill%3D%22%23e0e0e0%22%20d%3D%22M287%2069L146%20208%205%2069z%22%2F%3E%3C%2Fsvg%3E');
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      background-size: 12px;
+      padding-right: 28px !important;
+      backdrop-filter: blur(6px);
+    }
+
+    .gm-cell-select option {
+      background-color: rgba(67, 45, 51, 0.88);
+      color: #e0e0e0;
+    }
+
     .gm-cell-input:focus,
     .gm-cell-select:focus {
       outline: none !important;
@@ -771,6 +791,10 @@
             <button id="gmPanelEquipmentButton" class="gm-panel-nav-btn" type="button" title="Спорядження" aria-label="Спорядження">
               <i class="fas fa-shield-alt"></i>
               <span>Спорядження</span>
+            </button>
+            <button id="gmPanelMusicButton" class="gm-panel-nav-btn" type="button" title="Музика" aria-label="Музика">
+              <i class="fas fa-music"></i>
+              <span>Музика</span>
             </button>
             <button id="gmPanelPlayersButton" class="gm-panel-nav-btn gm-panel-nav-btn--players" type="button" title="Гравці" aria-label="Гравці">
               <i class="fas fa-users"></i>

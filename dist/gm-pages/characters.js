@@ -153,6 +153,10 @@ function isTokenStatsVisibleForPlayers(mode) {
   return mode === TOKEN_STATS_VISIBLE_ALL;
 }
 
+function areTokenBadgesVisibleForPlayers(token, mode) {
+  return isTokenStatsVisibleForPlayers(mode) && token?.visible !== false;
+}
+
 function getLegacyHideTokenStatsFromMode(mode) {
   return !isTokenStatsVisibleForPlayers(mode);
 }
@@ -947,7 +951,7 @@ export function initPage({ root }) {
     matchingTokens.forEach((token) => {
       const tokenMode = getTokenStatsVisibilityModeForToken(token, row);
       const visibleForGM = isTokenStatsVisibleForGM(tokenMode);
-      const visibleForPlayers = isTokenStatsVisibleForPlayers(tokenMode);
+      const visibleForPlayers = areTokenBadgesVisibleForPlayers(token, tokenMode);
 
       if (syncHealth) {
         const healthBadge = allItems.find((item) =>
@@ -1021,7 +1025,7 @@ export function initPage({ root }) {
 
     const tokenStatsVisibilityMode = getTokenStatsVisibilityModeInRow(row);
     const createBadgesForGM = isTokenStatsVisibleForGM(tokenStatsVisibilityMode);
-    const badgesVisibleToPlayers = isTokenStatsVisibleForPlayers(tokenStatsVisibilityMode);
+    const badgesVisibleToPlayers = areTokenBadgesVisibleForPlayers({ visible: true }, tokenStatsVisibilityMode);
 
     let tokenBuilder = buildImage(
       {
@@ -1116,7 +1120,6 @@ export function initPage({ root }) {
       modeOrLegacyHidden,
       modeOrLegacyHidden === true
     );
-    const badgesVisibleToPlayers = isTokenStatsVisibleForPlayers(tokenStatsVisibilityMode);
     const badgesVisibleToGM = isTokenStatsVisibleForGM(tokenStatsVisibilityMode);
 
     const allItems = await OBR.scene.items.getItems();
@@ -1145,6 +1148,21 @@ export function initPage({ root }) {
       )
       .map((item) => item.id);
 
+    const tokenById = new Map(tokens.map((token) => [token.id, token]));
+    const badgeVisibleById = new Map(
+      allItems
+        .filter((item) =>
+          item.layer === 'ATTACHMENT' &&
+          tokenIds.includes(item.attachedTo) &&
+          (item.metadata?.healthBadge === true || item.metadata?.acBadge === true)
+        )
+        .map((item) => {
+          const token = tokenById.get(item.attachedTo);
+          const visible = token ? areTokenBadgesVisibleForPlayers(token, tokenStatsVisibilityMode) : false;
+          return [item.id, visible];
+        })
+    );
+
     if (badgeIds.length > 0 && !badgesVisibleToGM) {
       await OBR.scene.items.deleteItems(badgeIds);
       return;
@@ -1153,7 +1171,7 @@ export function initPage({ root }) {
     if (badgeIds.length > 0) {
       await OBR.scene.items.updateItems(badgeIds, (items) => {
         items.forEach((item) => {
-          item.visible = badgesVisibleToPlayers;
+          item.visible = badgeVisibleById.get(item.id) ?? false;
         });
       });
     }
@@ -1188,11 +1206,12 @@ export function initPage({ root }) {
         || 10;
 
       if (!existing.hasHealth) {
+        const visibleForPlayers = areTokenBadgesVisibleForPlayers(token, tokenStatsVisibilityMode);
         let healthBadgeBuilder = buildLabel()
           .position({ x: tokenBounds.max.x - 10, y: tokenBounds.min.y + 10 })
           .layer('ATTACHMENT')
           .attachedTo(token.id)
-          .visible(badgesVisibleToPlayers)
+          .visible(visibleForPlayers)
           .plainText(`♥${hp}`)
           .locked(true)
           .metadata({
@@ -1207,11 +1226,12 @@ export function initPage({ root }) {
       }
 
       if (!existing.hasAc) {
+        const visibleForPlayers = areTokenBadgesVisibleForPlayers(token, tokenStatsVisibilityMode);
         let acBadgeBuilder = buildLabel()
           .position({ x: tokenBounds.min.x + 10, y: tokenBounds.min.y + 10 })
           .layer('ATTACHMENT')
           .attachedTo(token.id)
-          .visible(badgesVisibleToPlayers)
+          .visible(visibleForPlayers)
           .plainText(`🛡${ac}`)
           .locked(true)
           .metadata({
@@ -1563,6 +1583,14 @@ export function initPage({ root }) {
           if (idx !== -1) rows[idx] = updated;
           rowsSignature = buildRowsSignature(rows);
           renderTable();
+
+          if (OBR) {
+            await OBR.broadcast.sendMessage('token-stats-visibility', {
+              characterName: updated.character_name,
+              mode: nextMode,
+              ts: Date.now(),
+            });
+          }
         }
         return;
       }
