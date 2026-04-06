@@ -501,53 +501,31 @@ export function initPage({ root }) {
         audioPlayer.loop = Boolean(playbackState.repeat);
       }
 
+      // Sync position only when there is meaningful drift
       const driftSec = Math.abs((audioPlayer.currentTime || 0) - currentPos);
       if (driftSec > POSITION_DRIFT_SEC) {
-        try {
-          audioPlayer.currentTime = currentPos;
-        } catch (_) {}
+        try { audioPlayer.currentTime = currentPos; } catch (_) {}
       }
 
-      audioPlayer.volume = effectiveVolume;
-      try {
-        await audioPlayer.play();
-      } catch (_) {}
+      // NOTE: Actual playback is handled by music-bg.js (background_url).
+      // Here we only load metadata so the seek slider can show track duration.
+      audioPlayer.preload = 'metadata';
+      if (!audioPlayer.src || audioPlayer.src !== directUrl) {
+        audioPlayer.load();
+      }
 
       updateSeekUi();
       return;
     }
 
+    // For YouTube / Spotify / unknown — background page handles playback.
+    // GM panel just updates its UI.
     audioPlayer.pause();
     audioPlayer.removeAttribute('src');
     audioPlayer.load();
 
     const nextKey = `${track.id}|${playbackState.repeat ? '1' : '0'}|${track.type}|${playbackState.anchorTimestampMs}`;
-
-    if (track.type === TRACK_TYPE_YOUTUBE) {
-      // YouTube audio is handled by main.js ensureYoutubeAudioBar for all clients
-      currentRuntimeKey = nextKey;
-      updateSeekUi();
-      return;
-    } else if (track.type === TRACK_TYPE_SPOTIFY) {
-      if (currentRuntimeKey !== nextKey) {
-        const embedUrl = toSpotifyEmbedUrl(track.url);
-        if (!embedUrl) {
-          stopAllPlayback();
-          nowPlaying.textContent = `Невідомий тип треку: ${track.name}`;
-          updateSeekUi();
-          return;
-        }
-        currentRuntimeKey = nextKey;
-        const iframe = ensureHiddenEmbed();
-        iframe.src = embedUrl;
-      }
-    } else {
-      stopAllPlayback();
-      nowPlaying.textContent = `Невідомий тип треку: ${track.name}`;
-      updateSeekUi();
-      return;
-    }
-
+    currentRuntimeKey = nextKey;
     updateSeekUi();
   }
 
