@@ -1198,7 +1198,6 @@ let musicAudioElement = null;
 let musicIframeElement = null;
 let musicTrackRuntimeKey = '';
 let musicSyncTimerId = null;
-let ytPlayerCurrentTrackInfo = null; // { url, repeat, startSec } for unmute button
 
 function ensureSharedYoutubeWidget() {
   let widget = document.getElementById('darqie-yt-widget');
@@ -3198,28 +3197,54 @@ function ensureMusicAudioElement() {
   return musicAudioElement;
 }
 
-function ensurePlayerUnmuteButton() {
-  let btn = document.getElementById('darqie-yt-unmute-btn');
-  if (btn) return btn;
-  btn = document.createElement('button');
-  btn.id = 'darqie-yt-unmute-btn';
-  btn.type = 'button';
-  btn.textContent = '🔊 Увімкнути звук';
-  btn.style.cssText = 'display:none;position:fixed;bottom:8px;right:8px;background:rgba(0,0,0,0.8);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:20px;padding:6px 14px;cursor:pointer;font-size:12px;z-index:99999;white-space:nowrap;';
-  btn.addEventListener('click', () => {
-    if (!musicIframeElement || !ytPlayerCurrentTrackInfo) { btn.style.display = 'none'; return; }
-    // Reload iframe WITHOUT mute in user gesture context → Chrome allows autoplay with sound
-    // musicTrackRuntimeKey is unchanged → next timer tick sees same key+iframe → skips reload → stays unmuted
-    musicIframeElement.src = toYouTubeEmbedUrl(
-      ytPlayerCurrentTrackInfo.url,
-      ytPlayerCurrentTrackInfo.repeat,
-      ytPlayerCurrentTrackInfo.startSec,
-      false
-    );
-    btn.style.display = 'none';
-  });
-  document.body.appendChild(btn);
-  return btn;
+function ensureYoutubeAudioBar() {
+  let bar = document.getElementById('darqie-yt-bar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'darqie-yt-bar';
+    bar.style.cssText = 'position:fixed;bottom:8px;right:8px;z-index:9999;display:none;border-radius:6px;box-shadow:0 4px 20px rgba(0,0,0,0.5);';
+
+    // Small header strip with label + toggle
+    const header = document.createElement('div');
+    header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;background:#18181e;border-radius:6px 6px 0 0;padding:2px 8px;font-size:11px;color:#aaa;cursor:default;';
+    const label = document.createElement('span');
+    label.textContent = '\u266a YouTube';
+    const toggleBtn = document.createElement('button');
+    toggleBtn.type = 'button';
+    toggleBtn.textContent = '\u25bc';
+    toggleBtn.title = '\u0417\u0433\u043e\u0440\u043d\u0443\u0442\u0438';
+    toggleBtn.style.cssText = 'background:none;border:none;color:#aaa;cursor:pointer;font-size:11px;padding:2px 4px;line-height:1;';
+    header.appendChild(label);
+    header.appendChild(toggleBtn);
+
+    // Clipping container — only shows bottom 50px of the iframe (the control bar)
+    const clip = document.createElement('div');
+    clip.id = 'darqie-yt-bar-clip';
+    clip.style.cssText = 'position:relative;width:280px;height:50px;overflow:hidden;background:#0f0f0f;border-radius:0 0 6px 6px;';
+
+    const iframe = document.createElement('iframe');
+    iframe.id = 'darqie-yt-bar-iframe';
+    iframe.allow = 'autoplay; encrypted-media; fullscreen';
+    iframe.setAttribute('allowfullscreen', '');
+    iframe.style.cssText = 'position:absolute;bottom:0;left:0;width:280px;height:200px;border:0;';
+    clip.appendChild(iframe);
+
+    let collapsed = false;
+    toggleBtn.addEventListener('click', () => {
+      collapsed = !collapsed;
+      clip.style.height = collapsed ? '0' : '50px';
+      toggleBtn.textContent = collapsed ? '\u25b2' : '\u25bc';
+      toggleBtn.title = collapsed ? '\u0420\u043e\u0437\u0433\u043e\u0440\u043d\u0443\u0442\u0438' : '\u0417\u0433\u043e\u0440\u043d\u0443\u0442\u0438';
+    });
+
+    bar.appendChild(header);
+    bar.appendChild(clip);
+    document.body.appendChild(bar);
+  }
+  return {
+    bar,
+    iframe: document.getElementById('darqie-yt-bar-iframe'),
+  };
 }
 
 function stopSharedMusicPlayback() {
@@ -3229,13 +3254,18 @@ function stopSharedMusicPlayback() {
     musicAudioElement.load();
   }
 
+  // Hide youtube audio bar and clear its iframe src
+  const ytBar = document.getElementById('darqie-yt-bar');
+  if (ytBar) {
+    ytBar.style.display = 'none';
+    const ytIframe = document.getElementById('darqie-yt-bar-iframe');
+    if (ytIframe) ytIframe.src = '';
+  }
+
   if (musicIframeElement) {
     musicIframeElement.remove();
     musicIframeElement = null;
   }
-
-  const btn = document.getElementById('darqie-yt-unmute-btn');
-  if (btn) btn.style.display = 'none';
 
   musicTrackRuntimeKey = '';
 }
@@ -3363,28 +3393,26 @@ async function applySharedMusicFromMetadata(metadata) {
   const runtimeKey = `${track.id}|${repeat ? '1' : '0'}|${trackType}|${anchorTimestampMs}`;
 
   if (trackType === 'youtube') {
-    if (musicTrackRuntimeKey === runtimeKey && musicIframeElement) return;
-    musicTrackRuntimeKey = runtimeKey;
-    const iframeStartSec = getSharedMusicPositionSec(state, Date.now());
-    ytPlayerCurrentTrackInfo = { url: track.url, repeat, startSec: iframeStartSec };
-    const ytEmbedUrl = toYouTubeEmbedUrl(track.url, repeat, iframeStartSec, true);
-    if (!ytEmbedUrl) { stopSharedMusicPlayback(); return; }
-    if (musicIframeElement) musicIframeElement.remove();
-    const ytHiddenIframe = document.createElement('iframe');
-    ytHiddenIframe.id = 'darqie-shared-music-iframe';
-    ytHiddenIframe.src = ytEmbedUrl;
-    ytHiddenIframe.allow = 'autoplay; encrypted-media; fullscreen';
-    ytHiddenIframe.setAttribute('allowfullscreen', '');
-    ytHiddenIframe.style.cssText = 'position:fixed;bottom:0;left:0;width:1px;height:1px;border:none;pointer-events:none;z-index:-1;';
-    document.body.appendChild(ytHiddenIframe);
-    musicIframeElement = ytHiddenIframe;
-    ensurePlayerUnmuteButton().style.display = '';
+    const { bar, iframe } = ensureYoutubeAudioBar();
+    if (musicTrackRuntimeKey !== runtimeKey) {
+      musicTrackRuntimeKey = runtimeKey;
+      const iframeStartSec = getSharedMusicPositionSec(state, Date.now());
+      const ytEmbedUrl = toYouTubeEmbedUrl(track.url, repeat, iframeStartSec, true);
+      if (!ytEmbedUrl) { stopSharedMusicPlayback(); return; }
+      iframe.src = ytEmbedUrl;
+    }
+    // musicIframeElement not used for YT bar — set to null so Spotify cleanup still works
+    if (musicIframeElement && musicIframeElement !== iframe) {
+      musicIframeElement.remove();
+      musicIframeElement = null;
+    }
+    bar.style.display = '';
     return;
   }
 
-  // Spotify and other embeds — hidden iframe
-  const ytWidget = document.getElementById('darqie-yt-widget');
-  if (ytWidget) ytWidget.style.display = 'none';
+  // Spotify and other embeds — hidden 1x1px iframe
+  const ytBar = document.getElementById('darqie-yt-bar');
+  if (ytBar) ytBar.style.display = 'none';
 
   if (musicTrackRuntimeKey === runtimeKey && musicIframeElement) return;
   musicTrackRuntimeKey = runtimeKey;

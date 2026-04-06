@@ -326,7 +326,6 @@ export function initPage({ root }) {
   const repeatButton = root.querySelector('#gmMusicRepeatButton');
   const youtubePlayerWrap = root.querySelector('#gmMusicYoutubeWrap');
   const youtubePlayerIframe = root.querySelector('#gmMusicYoutubeIframe');
-  const youtubeUnlockButton = root.querySelector('#gmMusicYoutubeUnmuteBtn');
 
   const globalVolumeSlider = root.querySelector('#gmMusicGlobalVolumeSlider');
   const globalVolumeValue = root.querySelector('#gmMusicGlobalVolumeValue');
@@ -339,7 +338,7 @@ export function initPage({ root }) {
   const nowPlaying = root.querySelector('#gmMusicNowPlaying');
   const audioPlayer = root.querySelector('#gmMusicAudioPlayer');
 
-  if (!openAddModalButton || !addModal || !cancelAddButton || !urlInput || !nameInput || !addButton || !tableBody || !prevButton || !playPauseButton || !nextButton || !repeatButton || !youtubePlayerWrap || !youtubePlayerIframe || !youtubeUnlockButton || !globalVolumeSlider || !globalVolumeValue || !volumeSlider || !volumeValue || !seekSlider || !seekValue || !nowPlaying || !audioPlayer) {
+  if (!openAddModalButton || !addModal || !cancelAddButton || !urlInput || !nameInput || !addButton || !tableBody || !prevButton || !playPauseButton || !nextButton || !repeatButton || !youtubePlayerWrap || !youtubePlayerIframe || !globalVolumeSlider || !globalVolumeValue || !volumeSlider || !volumeValue || !seekSlider || !seekValue || !nowPlaying || !audioPlayer) {
     return;
   }
 
@@ -441,7 +440,7 @@ export function initPage({ root }) {
     audioPlayer.load();
     clearHiddenEmbed();
     youtubePlayerIframe.src = '';
-    youtubeUnlockButton.style.display = 'none';
+    youtubePlayerWrap.style.display = 'none';
     currentRuntimeKey = '';
   }
 
@@ -489,7 +488,6 @@ export function initPage({ root }) {
     if (!isPlaying) {
       playPauseButton.innerHTML = '<i class="fas fa-play"></i>';
       nowPlaying.textContent = track ? `Пауза: ${track.name}` : 'Відтворення зупинено';
-      youtubeUnlockButton.style.display = 'none';
       stopAllPlayback();
       updateSeekUi();
       return;
@@ -503,8 +501,8 @@ export function initPage({ root }) {
     const directUrl = normalizeTrackUrlByType(track.url, track.type);
 
     if (track.type === TRACK_TYPE_AUDIO || track.type === TRACK_TYPE_DROPBOX) {
+      youtubePlayerWrap.style.display = 'none';
       youtubePlayerIframe.src = '';
-      youtubeUnlockButton.style.display = 'none';
       clearHiddenEmbed();
 
       const nextKey = `${track.id}|${playbackState.repeat ? '1' : '0'}|audio`;
@@ -537,27 +535,21 @@ export function initPage({ root }) {
     const nextKey = `${track.id}|${playbackState.repeat ? '1' : '0'}|${track.type}|${playbackState.anchorTimestampMs}`;
 
     if (track.type === TRACK_TYPE_YOUTUBE) {
+      youtubePlayerWrap.style.display = '';
       if (currentRuntimeKey !== nextKey) {
         if (gmYoutubeGestureActive) {
-          // Click handler already loaded iframe without mute — don't override with muted src
+          // Click handler already loaded iframe without mute — don’t override
           gmYoutubeGestureActive = false;
-          youtubeUnlockButton.style.display = 'none';
         } else {
           const embedUrl = toYouTubeEmbedUrl(track.url, playbackState.repeat, currentPos, true);
-          if (!embedUrl) {
-            stopAllPlayback();
-            nowPlaying.textContent = `Невідомий тип треку: ${track.name}`;
-            updateSeekUi();
-            return;
-          }
+          if (!embedUrl) { stopAllPlayback(); nowPlaying.textContent = `Невідомий тип треку: ${track.name}`; updateSeekUi(); return; }
           youtubePlayerIframe.src = embedUrl;
-          youtubeUnlockButton.style.display = '';
         }
         currentRuntimeKey = nextKey;
       }
     } else if (track.type === TRACK_TYPE_SPOTIFY) {
+      youtubePlayerWrap.style.display = 'none';
       youtubePlayerIframe.src = '';
-      youtubeUnlockButton.style.display = 'none';
       if (currentRuntimeKey !== nextKey) {
         const embedUrl = toSpotifyEmbedUrl(track.url);
         if (!embedUrl) {
@@ -871,7 +863,6 @@ export function initPage({ root }) {
         if (targetTrack?.type === TRACK_TYPE_YOUTUBE) {
           gmYoutubeGestureActive = true;
           youtubePlayerIframe.src = toYouTubeEmbedUrl(targetTrack.url, Boolean(playbackState.repeat), getStatePositionSec(playbackState), false);
-          youtubeUnlockButton.style.display = 'none';
         }
       }
       await togglePlayPause();
@@ -883,7 +874,6 @@ export function initPage({ root }) {
       if (targetTrack?.type === TRACK_TYPE_YOUTUBE) {
         gmYoutubeGestureActive = true;
         youtubePlayerIframe.src = toYouTubeEmbedUrl(targetTrack.url, Boolean(playbackState.repeat), 0, false);
-        youtubeUnlockButton.style.display = 'none';
       }
       await goRelative(-1);
     });
@@ -894,7 +884,6 @@ export function initPage({ root }) {
       if (targetTrack?.type === TRACK_TYPE_YOUTUBE) {
         gmYoutubeGestureActive = true;
         youtubePlayerIframe.src = toYouTubeEmbedUrl(targetTrack.url, Boolean(playbackState.repeat), 0, false);
-        youtubeUnlockButton.style.display = 'none';
       }
       await goRelative(1);
     });
@@ -955,7 +944,6 @@ export function initPage({ root }) {
         if (targetTrack?.type === TRACK_TYPE_YOUTUBE) {
           gmYoutubeGestureActive = true;
           youtubePlayerIframe.src = toYouTubeEmbedUrl(targetTrack.url, Boolean(playbackState.repeat), 0, false);
-          youtubeUnlockButton.style.display = 'none';
         }
         await playTrack(id, 0);
       }
@@ -971,18 +959,6 @@ export function initPage({ root }) {
 
       const id = input.getAttribute('data-id') || '';
       await renameTrack(id, input.value);
-    });
-
-    youtubeUnlockButton.addEventListener('click', () => {
-      const track = getCurrentTrack();
-      if (!track || track.type !== TRACK_TYPE_YOUTUBE) return;
-      const currentPos = getStatePositionSec(playbackState);
-      const repeat = Boolean(playbackState.repeat);
-      const nextKey = `${track.id}|${repeat ? '1' : '0'}|${track.type}|${playbackState.anchorTimestampMs}`;
-      // Reload WITHOUT mute in user gesture context → Chrome allows autoplay with sound
-      currentRuntimeKey = nextKey; // exact match → syncPlaybackUi won't override on next tick
-      youtubePlayerIframe.src = toYouTubeEmbedUrl(track.url, repeat, currentPos, false);
-      youtubeUnlockButton.style.display = 'none';
     });
 
     audioPlayer.addEventListener('ended', async () => {
