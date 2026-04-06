@@ -1198,46 +1198,41 @@ let musicAudioElement = null;
 let musicIframeElement = null;
 let musicTrackRuntimeKey = '';
 let musicSyncTimerId = null;
-let sharedMusicYoutubeUnlocked = false;
 
-function showMusicUnlockToast(show) {
-  let toast = document.getElementById('darqie-music-unlock-toast');
-  if (!show) {
-    if (toast) toast.style.display = 'none';
-    return;
-  }
-  if (!toast) {
-    toast = document.createElement('button');
-    toast.id = 'darqie-music-unlock-toast';
-    toast.type = 'button';
-    toast.style.cssText = [
-      'position:fixed',
-      'bottom:12px',
-      'left:50%',
-      'transform:translateX(-50%)',
-      'z-index:99999',
-      'background:rgba(24,24,30,0.95)',
-      'color:#f0f0f0',
-      'border:1px solid rgba(255,180,60,0.7)',
-      'border-radius:8px',
-      'padding:8px 16px',
-      'font-family:inherit',
-      'font-size:0.9rem',
-      'cursor:pointer',
-      'display:block',
-    ].join(';');
-    toast.innerHTML = '<i class="fas fa-volume-up" style="margin-right:6px;"></i>\u041d\u0430\u0442\u0438\u0441\u043d\u0456\u0442\u044c \u0434\u043b\u044f \u0443\u0432\u0456\u043c\u043a\u043d\u0435\u043d\u043d\u044f \u0437\u0432\u0443\u043a\u0443 YouTube';
-    document.body.appendChild(toast);
+function ensureSharedYoutubeWidget() {
+  let widget = document.getElementById('darqie-yt-widget');
+  if (!widget) {
+    widget = document.createElement('div');
+    widget.id = 'darqie-yt-widget';
+    widget.style.cssText = 'position:fixed;bottom:8px;right:8px;z-index:99998;border-radius:8px;overflow:visible;box-shadow:0 4px 20px rgba(0,0,0,0.5);display:none;background:#000;border-radius:8px;';
 
-    toast.addEventListener('click', () => {
-      sharedMusicYoutubeUnlocked = true;
-      toast.style.display = 'none';
-      // Force iframe recreation in user gesture context
-      musicTrackRuntimeKey = '';
-      OBR.room.getMetadata().then((meta) => applySharedMusicFromMetadata(meta)).catch(() => {});
+    const iframe = document.createElement('iframe');
+    iframe.id = 'darqie-yt-iframe';
+    iframe.style.cssText = 'width:200px;height:113px;border:0;display:block;border-radius:8px;';
+    iframe.allow = 'autoplay; encrypted-media; fullscreen';
+    iframe.setAttribute('allowfullscreen', '');
+
+    const minBtn = document.createElement('button');
+    minBtn.type = 'button';
+    minBtn.textContent = '▼';
+    minBtn.title = 'Згорнути';
+    minBtn.style.cssText = 'position:absolute;top:-18px;right:0;background:rgba(24,24,30,0.85);color:#ccc;border:1px solid rgba(255,255,255,0.15);border-radius:4px 4px 0 0;padding:0 7px;line-height:18px;cursor:pointer;font-size:11px;';
+
+    let minimized = false;
+    minBtn.addEventListener('click', () => {
+      minimized = !minimized;
+      iframe.style.display = minimized ? 'none' : 'block';
+      minBtn.textContent = minimized ? '▲' : '▼';
     });
+
+    widget.appendChild(iframe);
+    widget.appendChild(minBtn);
+    document.body.appendChild(widget);
   }
-  toast.style.display = 'block';
+  return {
+    widget,
+    iframe: document.getElementById('darqie-yt-iframe'),
+  };
 }
 
 function isTokenForSheet(item, sheet) {
@@ -3149,20 +3144,19 @@ function toSpotifyEmbedUrl(rawUrl) {
   }
 }
 
-function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0, muted = true) {
+function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0) {
   const videoId = extractYouTubeVideoId(rawUrl);
   if (!videoId) return '';
 
   const origin = (typeof window !== 'undefined' && window.location?.origin) ? window.location.origin : '';
   const query = new URLSearchParams({
     autoplay: '1',
-    controls: '0',
+    controls: '1',
     rel: '0',
     playsinline: '1',
     modestbranding: '1',
     enablejsapi: '1',
   });
-  if (muted) query.set('mute', '1');
   if (origin) query.set('origin', origin);
 
   const start = Math.max(0, Math.floor(Number(startSec) || 0));
@@ -3194,19 +3188,19 @@ function stopSharedMusicPlayback() {
     musicAudioElement.load();
   }
 
+  const ytWidget = document.getElementById('darqie-yt-widget');
+  if (ytWidget) {
+    ytWidget.style.display = 'none';
+    const ytIframe = document.getElementById('darqie-yt-iframe');
+    if (ytIframe) ytIframe.src = '';
+  }
+
   if (musicIframeElement) {
     musicIframeElement.remove();
     musicIframeElement = null;
   }
 
   musicTrackRuntimeKey = '';
-}
-
-function sendSharedYouTubeCommand(iframe, func, args = []) {
-  try {
-    if (!iframe?.contentWindow) return;
-    iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func, args }), '*');
-  } catch (_) {}
 }
 
 function ensureMusicVolumePopover(button) {
@@ -3293,6 +3287,9 @@ async function applySharedMusicFromMetadata(metadata) {
   const effectiveVolume = normalizeMusicVolumeValue(localMusicVolume, MUSIC_LOCAL_VOLUME_DEFAULT) * globalVolume;
 
   if (trackType === 'audio' || trackType === 'dropbox') {
+    // Hide YouTube widget when switching to audio
+    const ytWidget = document.getElementById('darqie-yt-widget');
+    if (ytWidget) ytWidget.style.display = 'none';
     if (musicIframeElement) {
       musicIframeElement.remove();
       musicIframeElement = null;
@@ -3325,23 +3322,29 @@ async function applySharedMusicFromMetadata(metadata) {
   }
 
   const anchorTimestampMs = normalizeMusicTimestampMs(state.anchorTimestampMs, 0);
-  const youtubeUnlockedFlag = sharedMusicYoutubeUnlocked ? '1' : '0';
-  const runtimeKey = `${track.id}|${repeat ? '1' : '0'}|${trackType}|${anchorTimestampMs}|${youtubeUnlockedFlag}`;
-  if (musicTrackRuntimeKey === runtimeKey && musicIframeElement) {
-    if (trackType === 'youtube') {
-      sendSharedYouTubeCommand(musicIframeElement, 'setVolume', [Math.round(effectiveVolume * 100)]);
+  const runtimeKey = `${track.id}|${repeat ? '1' : '0'}|${trackType}|${anchorTimestampMs}`;
+
+  if (trackType === 'youtube') {
+    const { widget, iframe } = ensureSharedYoutubeWidget();
+    if (musicTrackRuntimeKey !== runtimeKey) {
+      musicTrackRuntimeKey = runtimeKey;
+      const iframeStartSec = getSharedMusicPositionSec(state, Date.now());
+      iframe.src = toYouTubeEmbedUrl(track.url, repeat, iframeStartSec);
     }
+    widget.style.display = 'block';
+    musicIframeElement = iframe;
     return;
   }
+
+  // Spotify and other embeds — hidden iframe
+  const ytWidget = document.getElementById('darqie-yt-widget');
+  if (ytWidget) ytWidget.style.display = 'none';
+
+  if (musicTrackRuntimeKey === runtimeKey && musicIframeElement) return;
   musicTrackRuntimeKey = runtimeKey;
 
-  const isMuted = trackType === 'youtube' && !sharedMusicYoutubeUnlocked;
-
   let embedUrl = '';
-  if (trackType === 'youtube') {
-    const iframeStartSec = getSharedMusicPositionSec(state, Date.now());
-    embedUrl = toYouTubeEmbedUrl(track.url, repeat, iframeStartSec, isMuted);
-  } else if (trackType === 'spotify') {
+  if (trackType === 'spotify') {
     embedUrl = toSpotifyEmbedUrl(track.url);
   }
 
@@ -3350,13 +3353,11 @@ async function applySharedMusicFromMetadata(metadata) {
     return;
   }
 
-  showMusicUnlockToast(trackType === 'youtube' && isMuted);
-
   if (musicIframeElement) musicIframeElement.remove();
   const iframe = document.createElement('iframe');
   iframe.id = 'darqie-shared-music-iframe';
   iframe.src = embedUrl;
-  iframe.allow = 'autoplay *; encrypted-media *; fullscreen *';
+  iframe.allow = 'autoplay; encrypted-media; fullscreen';
   iframe.style.position = 'fixed';
   iframe.style.bottom = '0';
   iframe.style.right = '0';
@@ -3397,20 +3398,6 @@ async function initSharedMusicClient() {
   musicClientBound = true;
 
   localMusicVolume = loadLocalMusicVolume();
-
-  window.addEventListener('message', (event) => {
-    if (!musicIframeElement) return;
-    if (event.source !== musicIframeElement.contentWindow) return;
-    try {
-      const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-      if (data?.event === 'onReady') {
-        sendSharedYouTubeCommand(musicIframeElement, 'unMute', []);
-        // Re-read effective volume from the last stored state
-        const vol = normalizeMusicVolumeValue(localMusicVolume, MUSIC_LOCAL_VOLUME_DEFAULT);
-        sendSharedYouTubeCommand(musicIframeElement, 'setVolume', [Math.round(vol * 100)]);
-      }
-    } catch (_) {}
-  });
 
   try {
     const initialMetadata = await OBR.room.getMetadata();
