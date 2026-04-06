@@ -101,12 +101,31 @@ function toYtUrl(rawUrl, repeat, startSec) {
   const videoId = extractYtId(rawUrl);
   if (!videoId) return '';
   const origin = window.location?.origin || '';
-  const q = new URLSearchParams({ autoplay: '1', controls: '1', rel: '0', playsinline: '1', modestbranding: '1' });
+  const q = new URLSearchParams({ autoplay: '1', controls: '1', rel: '0', playsinline: '1', modestbranding: '1', enablejsapi: '1' });
   if (origin) q.set('origin', origin);
   const start = Math.max(0, Math.floor(Number(startSec) || 0));
   if (start > 0) q.set('start', String(start));
   if (repeat) { q.set('loop', '1'); q.set('playlist', videoId); }
   return `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?${q.toString()}`;
+}
+
+function ytUnmute() {
+  // YouTube IFrame API — sends unMute and full volume after player loads
+  const send = (func, args = []) => {
+    try {
+      ytIframe.contentWindow?.postMessage(
+        JSON.stringify({ event: 'command', func, args }),
+        'https://www.youtube.com'
+      );
+    } catch (_) {}
+  };
+  // Retry a few times; player may not be ready immediately
+  let attempts = 0;
+  const iv = setInterval(() => {
+    send('unMute');
+    send('setVolume', [100]);
+    if (++attempts >= 5) clearInterval(iv);
+  }, 800);
 }
 
 function toSpotifyUrl(rawUrl) {
@@ -183,6 +202,7 @@ function applyMusic(metadata) {
       currentRuntimeKey = rk;
       const ytUrl = toYtUrl(track.url, repeat, posSec);
       if (!ytUrl) { stopAll(); return; }
+      ytIframe.onload = ytUnmute;
       ytIframe.src         = ytUrl;
       ytClip.style.display = 'block';
     }
