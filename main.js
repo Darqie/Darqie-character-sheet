@@ -1198,6 +1198,7 @@ let musicAudioElement = null;
 let musicIframeElement = null;
 let musicTrackRuntimeKey = '';
 let musicSyncTimerId = null;
+let ytPlayerCurrentTrackInfo = null; // { url, repeat, startSec } for unmute button
 
 function ensureSharedYoutubeWidget() {
   let widget = document.getElementById('darqie-yt-widget');
@@ -3160,20 +3161,19 @@ function toSpotifyEmbedUrl(rawUrl) {
   }
 }
 
-function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0) {
+function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0, muted = true) {
   const videoId = extractYouTubeVideoId(rawUrl);
   if (!videoId) return '';
 
   const origin = (typeof window !== 'undefined' && window.location?.origin) ? window.location.origin : '';
   const query = new URLSearchParams({
     autoplay: '1',
-    mute: '1',
     controls: '1',
     rel: '0',
     playsinline: '1',
     modestbranding: '1',
-    enablejsapi: '1',
   });
+  if (muted) query.set('mute', '1');
   if (origin) query.set('origin', origin);
 
   const start = Math.max(0, Math.floor(Number(startSec) || 0));
@@ -3207,10 +3207,15 @@ function ensurePlayerUnmuteButton() {
   btn.textContent = '🔊 Увімкнути звук';
   btn.style.cssText = 'display:none;position:fixed;bottom:8px;right:8px;background:rgba(0,0,0,0.8);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:20px;padding:6px 14px;cursor:pointer;font-size:12px;z-index:99999;white-space:nowrap;';
   btn.addEventListener('click', () => {
-    if (musicIframeElement?.contentWindow) {
-      musicIframeElement.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'unMute', args: [] }), '*');
-      musicIframeElement.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'setVolume', args: [100] }), '*');
-    }
+    if (!musicIframeElement || !ytPlayerCurrentTrackInfo) { btn.style.display = 'none'; return; }
+    // Reload iframe WITHOUT mute in user gesture context → Chrome allows autoplay with sound
+    // musicTrackRuntimeKey is unchanged → next timer tick sees same key+iframe → skips reload → stays unmuted
+    musicIframeElement.src = toYouTubeEmbedUrl(
+      ytPlayerCurrentTrackInfo.url,
+      ytPlayerCurrentTrackInfo.repeat,
+      ytPlayerCurrentTrackInfo.startSec,
+      false
+    );
     btn.style.display = 'none';
   });
   document.body.appendChild(btn);
@@ -3361,7 +3366,8 @@ async function applySharedMusicFromMetadata(metadata) {
     if (musicTrackRuntimeKey === runtimeKey && musicIframeElement) return;
     musicTrackRuntimeKey = runtimeKey;
     const iframeStartSec = getSharedMusicPositionSec(state, Date.now());
-    const ytEmbedUrl = toYouTubeEmbedUrl(track.url, repeat, iframeStartSec);
+    ytPlayerCurrentTrackInfo = { url: track.url, repeat, startSec: iframeStartSec };
+    const ytEmbedUrl = toYouTubeEmbedUrl(track.url, repeat, iframeStartSec, true);
     if (!ytEmbedUrl) { stopSharedMusicPlayback(); return; }
     if (musicIframeElement) musicIframeElement.remove();
     const ytHiddenIframe = document.createElement('iframe');
@@ -3436,19 +3442,6 @@ async function refreshSharedMusicFromSupabaseIfNeeded(metadata) {
 async function initSharedMusicClient() {
   if (musicClientBound) return;
   musicClientBound = true;
-
-  window.addEventListener('message', (event) => {
-    if (!musicIframeElement || event.source !== musicIframeElement.contentWindow) return;
-    try {
-      const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-      if (data?.event === 'onReady') {
-        musicIframeElement.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'unMute', args: [] }), '*');
-        musicIframeElement.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'setVolume', args: [100] }), '*');
-        const btn = document.getElementById('darqie-yt-unmute-btn');
-        if (btn) btn.style.display = 'none';
-      }
-    } catch (_) {}
-  });
 
   localMusicVolume = loadLocalMusicVolume();
 

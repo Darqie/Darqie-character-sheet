@@ -148,20 +148,19 @@ function toSpotifyEmbedUrl(rawUrl) {
   }
 }
 
-function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0) {
+function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0, muted = true) {
   const videoId = extractYouTubeVideoId(rawUrl);
   if (!videoId) return '';
 
   const origin = (typeof window !== 'undefined' && window.location?.origin) ? window.location.origin : '';
   const query = new URLSearchParams({
     autoplay: '1',
-    mute: '1',
     controls: '1',
     rel: '0',
     playsinline: '1',
     modestbranding: '1',
-    enablejsapi: '1',
   });
+  if (muted) query.set('mute', '1');
   if (origin) query.set('origin', origin);
 
   const normalizedStart = Math.max(0, Math.floor(Number(startSec) || 0));
@@ -428,29 +427,8 @@ export function initPage({ root }) {
     hiddenEmbed = null;
   }
 
-  function sendYouTubeCommand(iframe, func, args = []) {
-    try {
-      if (!iframe?.contentWindow) return;
-      iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func, args }), '*');
-    } catch (_) {}
-  }
-
-  let gmYoutubeMessageHandler = null;
-  function installGmYoutubeReadyListener() {
-    if (gmYoutubeMessageHandler) window.removeEventListener('message', gmYoutubeMessageHandler);
-    gmYoutubeMessageHandler = (event) => {
-      if (!youtubePlayerIframe || event.source !== youtubePlayerIframe.contentWindow) return;
-      try {
-        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-        if (data?.event === 'onReady') {
-          sendYouTubeCommand(youtubePlayerIframe, 'unMute', []);
-          sendYouTubeCommand(youtubePlayerIframe, 'setVolume', [Math.round(getEffectiveVolume() * 100)]);
-          youtubeUnlockButton.style.display = 'none';
-        }
-      } catch (_) {}
-    };
-    window.addEventListener('message', gmYoutubeMessageHandler);
-  }
+  // true while a GM click handler has already loaded the YT iframe without mute
+  let gmYoutubeGestureActive = false;
 
   function getCurrentTrack() {
     if (!playbackState.currentTrackId) return null;
@@ -560,17 +538,22 @@ export function initPage({ root }) {
 
     if (track.type === TRACK_TYPE_YOUTUBE) {
       if (currentRuntimeKey !== nextKey) {
-        const embedUrl = toYouTubeEmbedUrl(track.url, playbackState.repeat, currentPos);
-        if (!embedUrl) {
-          stopAllPlayback();
-          nowPlaying.textContent = `Невідомий тип треку: ${track.name}`;
-          updateSeekUi();
-          return;
+        if (gmYoutubeGestureActive) {
+          // Click handler already loaded iframe without mute — don't override with muted src
+          gmYoutubeGestureActive = false;
+          youtubeUnlockButton.style.display = 'none';
+        } else {
+          const embedUrl = toYouTubeEmbedUrl(track.url, playbackState.repeat, currentPos, true);
+          if (!embedUrl) {
+            stopAllPlayback();
+            nowPlaying.textContent = `Невідомий тип треку: ${track.name}`;
+            updateSeekUi();
+            return;
+          }
+          youtubePlayerIframe.src = embedUrl;
+          youtubeUnlockButton.style.display = '';
         }
         currentRuntimeKey = nextKey;
-        youtubePlayerIframe.src = embedUrl;
-        installGmYoutubeReadyListener();
-        youtubeUnlockButton.style.display = '';
       }
     } else if (track.type === TRACK_TYPE_SPOTIFY) {
       youtubePlayerIframe.src = '';
@@ -882,14 +865,37 @@ export function initPage({ root }) {
     });
 
     playPauseButton.addEventListener('click', async () => {
+      if (!playbackState.isPlaying && playlist.length) {
+        const targetId = playbackState.currentTrackId || playlist[0]?.id;
+        const targetTrack = playlist.find((t) => t.id === targetId);
+        if (targetTrack?.type === TRACK_TYPE_YOUTUBE) {
+          gmYoutubeGestureActive = true;
+          youtubePlayerIframe.src = toYouTubeEmbedUrl(targetTrack.url, Boolean(playbackState.repeat), getStatePositionSec(playbackState), false);
+          youtubeUnlockButton.style.display = 'none';
+        }
+      }
       await togglePlayPause();
     });
 
     prevButton.addEventListener('click', async () => {
+      const targetId = getNextTrackId(playbackState.currentTrackId, -1);
+      const targetTrack = playlist.find((t) => t.id === targetId);
+      if (targetTrack?.type === TRACK_TYPE_YOUTUBE) {
+        gmYoutubeGestureActive = true;
+        youtubePlayerIframe.src = toYouTubeEmbedUrl(targetTrack.url, Boolean(playbackState.repeat), 0, false);
+        youtubeUnlockButton.style.display = 'none';
+      }
       await goRelative(-1);
     });
 
     nextButton.addEventListener('click', async () => {
+      const targetId = getNextTrackId(playbackState.currentTrackId, 1);
+      const targetTrack = playlist.find((t) => t.id === targetId);
+      if (targetTrack?.type === TRACK_TYPE_YOUTUBE) {
+        gmYoutubeGestureActive = true;
+        youtubePlayerIframe.src = toYouTubeEmbedUrl(targetTrack.url, Boolean(playbackState.repeat), 0, false);
+        youtubeUnlockButton.style.display = 'none';
+      }
       await goRelative(1);
     });
 
@@ -945,6 +951,12 @@ export function initPage({ root }) {
       const id = target.getAttribute('data-id') || '';
 
       if (action === 'play') {
+        const targetTrack = playlist.find((t) => t.id === id);
+        if (targetTrack?.type === TRACK_TYPE_YOUTUBE) {
+          gmYoutubeGestureActive = true;
+          youtubePlayerIframe.src = toYouTubeEmbedUrl(targetTrack.url, Boolean(playbackState.repeat), 0, false);
+          youtubeUnlockButton.style.display = 'none';
+        }
         await playTrack(id, 0);
       }
 
@@ -962,8 +974,14 @@ export function initPage({ root }) {
     });
 
     youtubeUnlockButton.addEventListener('click', () => {
-      sendYouTubeCommand(youtubePlayerIframe, 'unMute', []);
-      sendYouTubeCommand(youtubePlayerIframe, 'setVolume', [Math.round(getEffectiveVolume() * 100)]);
+      const track = getCurrentTrack();
+      if (!track || track.type !== TRACK_TYPE_YOUTUBE) return;
+      const currentPos = getStatePositionSec(playbackState);
+      const repeat = Boolean(playbackState.repeat);
+      const nextKey = `${track.id}|${repeat ? '1' : '0'}|${track.type}|${playbackState.anchorTimestampMs}`;
+      // Reload WITHOUT mute in user gesture context → Chrome allows autoplay with sound
+      currentRuntimeKey = nextKey; // exact match → syncPlaybackUi won't override on next tick
+      youtubePlayerIframe.src = toYouTubeEmbedUrl(track.url, repeat, currentPos, false);
       youtubeUnlockButton.style.display = 'none';
     });
 
