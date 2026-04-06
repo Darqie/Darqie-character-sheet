@@ -22,7 +22,7 @@ const SUPABASE_MUSIC_TABLE = 'room_music_state';
 
 const bgAudio       = document.getElementById('bgAudio');
 const ytClip        = document.getElementById('ytClip');
-const ytContainer   = document.getElementById('ytContainer');
+const ytIframe      = document.getElementById('ytIframe');
 const spotifyIframe = document.getElementById('spotifyIframe');
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -134,42 +134,40 @@ function destroyYtPlayer() {
     try { ytPlayer.destroy(); } catch (_) {}
     ytPlayer = null;
   }
-  ytContainer.innerHTML = '';
+  // destroy() removes the iframe from DOM — recreate it so next YT.Player call works
+  const fresh = document.createElement('iframe');
+  fresh.id = 'ytIframe';
+  fresh.setAttribute('allow', 'autoplay; encrypted-media; fullscreen; picture-in-picture');
+  ytClip.innerHTML = '';
+  ytClip.appendChild(fresh);
 }
 
 async function startYouTube(videoId, startSec, repeat) {
   destroyYtPlayer();
   const YT = await loadYtApi();
-  // YT.Player needs a real DOM element, recreate inner div each time
-  const inner = document.createElement('div');
-  ytContainer.appendChild(inner);
-  ytPlayer = new YT.Player(inner, {
+  // Pass element ID — YT.Player reuses the static iframe, keeping its allow=autoplay
+  ytPlayer = new YT.Player('ytIframe', {
     videoId,
     width: 300,
     height: 200,
     playerVars: {
-      // NO autoplay:1 — let onReady call playVideo() after unMute so YouTube
-      // never applies its "autoplay must be muted" restriction
+      autoplay: 1,   // YouTube starts loading; onReady will unMute before first frame
+      mute: 0,       // request unmuted — permission granted by allow="autoplay" on iframe
       controls: 1,
       rel: 0,
       playsinline: 1,
       modestbranding: 1,
-      mute: 0,
       loop: repeat ? 1 : 0,
       playlist: repeat ? videoId : '',
       start: Math.max(0, Math.floor(startSec)),
     },
     events: {
       onReady(e) {
-        // Unmute first, then play — this way YouTube sees a "user-initiated"
-        // play request inside an OBR popover that has allow="autoplay"
         e.target.unMute();
         e.target.setVolume(100);
-        e.target.playVideo();
       },
       onStateChange(e) {
-        // YT.PlayerState.PLAYING = 1 — ensure still unmuted
-        if (e.data === 1) {
+        if (e.data === 1 /* PLAYING */) {
           e.target.unMute();
           e.target.setVolume(100);
         }

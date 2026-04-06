@@ -28,8 +28,12 @@
   <audio id="bgAudio" preload="none" style="display:none;"></audio>
 
   <div id="ytClip">
-    <!-- YT.Player will inject an iframe here -->
-    <div id="ytContainer"></div>
+    <!-- Static iframe with allow="autoplay" so Chrome delegates the permission
+         to YouTube content. YT.Player will reuse this element. -->
+    <iframe
+      id="ytIframe"
+      allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+    ></iframe>
   </div>
 
   <iframe

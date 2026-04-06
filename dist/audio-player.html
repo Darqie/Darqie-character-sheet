@@ -23,15 +23,19 @@
       width: 1px; height: 1px; border: none;
     }
   </style>
-  <script type="module" crossorigin src="/assets/audioPlayer-wDVYy3Ey.js"></script>
+  <script type="module" crossorigin src="/assets/audioPlayer-DG7EiYpM.js"></script>
   <link rel="modulepreload" crossorigin href="/assets/index-Cfa9MU8H.js">
 </head>
 <body>
   <audio id="bgAudio" preload="none" style="display:none;"></audio>
 
   <div id="ytClip">
-    <!-- YT.Player will inject an iframe here -->
-    <div id="ytContainer"></div>
+    <!-- Static iframe with allow="autoplay" so Chrome delegates the permission
+         to YouTube content. YT.Player will reuse this element. -->
+    <iframe
+      id="ytIframe"
+      allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+    ></iframe>
   </div>
 
   <iframe
