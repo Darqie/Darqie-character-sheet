@@ -160,6 +160,10 @@ function isTokenStatsVisibleForPlayers(mode) {
   return mode === TOKEN_STATS_VISIBLE_ALL;
 }
 
+function areTokenBadgesVisibleForPlayers(token, mode) {
+  return isTokenStatsVisibleForPlayers(mode) && token?.visible !== false;
+}
+
 function getLegacyHideTokenStatsFromMode(mode) {
   return !isTokenStatsVisibleForPlayers(mode);
 }
@@ -1179,6 +1183,10 @@ const TOKEN_HEALTH_RECONCILE_INTERVAL_MS = 12000;
 let lastTokenACSyncKey = '';
 let lastTokenACReconcileAt = 0;
 const TOKEN_AC_RECONCILE_INTERVAL_MS = 12000;
+let tokenStatsReconcileInFlight = false;
+let tokenStatsReconcileSignature = '';
+let tokenStatsReconcileAt = 0;
+const TOKEN_STATS_RECONCILE_INTERVAL_MS = 3500;
 let realtimeChannel = null;
 let fallbackSyncIntervalId = null;
 let modalOpenRequestId = 0;
@@ -2326,7 +2334,7 @@ async function performTokenHealthSync(newHealth, tempHealth = null, forceReconci
       characterTokens.forEach((token) => {
         const tokenMode = getTokenStatsVisibilityModeForToken(token, currentSheet);
         const visibleForGM = isTokenStatsVisibleForGM(tokenMode);
-        const visibleForPlayers = isTokenStatsVisibleForPlayers(tokenMode);
+        const visibleForPlayers = areTokenBadgesVisibleForPlayers(token, tokenMode);
         const healthBadge = allItems.find((item) =>
           item.layer === 'ATTACHMENT' &&
           item.metadata?.healthBadge === true &&
@@ -2494,7 +2502,7 @@ async function updateTokenAC(newAC) {
       characterTokens.forEach((token) => {
         const tokenMode = getTokenStatsVisibilityModeForToken(token, currentSheet);
         const visibleForGM = isTokenStatsVisibleForGM(tokenMode);
-        const visibleForPlayers = isTokenStatsVisibleForPlayers(tokenMode);
+        const visibleForPlayers = areTokenBadgesVisibleForPlayers(token, tokenMode);
         const acBadge = allItems.find((item) =>
           item.layer === 'ATTACHMENT' &&
           item.metadata?.acBadge === true &&
@@ -2676,7 +2684,6 @@ async function recreateCharacterTokenWithOwner(characterToken, sheet, ownerUserI
   const badgeItems = attachments.filter((item) => item.metadata?.healthBadge === true || item.metadata?.acBadge === true);
   const tokenStatsVisibilityMode = getTokenStatsVisibilityModeForSheet(sheet);
   const shouldCreateBadges = isTokenStatsVisibleForGM(tokenStatsVisibilityMode);
-  const badgesVisibleToPlayers = isTokenStatsVisibleForPlayers(tokenStatsVisibilityMode);
 
   // Отримуємо актуальне зображення токена з таблиці персонажа замість зі сцени
   const actualTokenImageUrl = resolveTokenImageUrlFromSheet(sheet);
@@ -2722,6 +2729,8 @@ async function recreateCharacterTokenWithOwner(characterToken, sheet, ownerUserI
   const newToken = tokenBuilder.build();
   await OBR.scene.items.addItems([newToken]);
 
+  const badgesVisibleToPlayers = areTokenBadgesVisibleForPlayers(newToken, tokenStatsVisibilityMode);
+
   const newBadges = shouldCreateBadges ? badgeItems.map((badge) => {
     let badgeBuilder = buildLabel()
       .position(badge.position)
@@ -2759,7 +2768,6 @@ async function applyTokenStatsVisibilityForCharacter(characterName, modeOrLegacy
     modeOrLegacyHidden,
     modeOrLegacyHidden === true
   );
-  const badgesVisibleToPlayers = isTokenStatsVisibleForPlayers(tokenStatsVisibilityMode);
   const badgesVisibleToGM = isTokenStatsVisibleForGM(tokenStatsVisibilityMode);
 
   const allItems = await OBR.scene.items.getItems();
@@ -2793,6 +2801,21 @@ async function applyTokenStatsVisibilityForCharacter(characterName, modeOrLegacy
     )
     .map((item) => item.id);
 
+  const tokenById = new Map(tokens.map((token) => [token.id, token]));
+  const badgeVisibleById = new Map(
+    allItems
+      .filter((item) =>
+        item.layer === 'ATTACHMENT' &&
+        tokenIds.includes(item.attachedTo) &&
+        (item.metadata?.healthBadge === true || item.metadata?.acBadge === true)
+      )
+      .map((item) => {
+        const token = tokenById.get(item.attachedTo);
+        const visible = token ? areTokenBadgesVisibleForPlayers(token, tokenStatsVisibilityMode) : false;
+        return [item.id, visible];
+      })
+  );
+
   if (badgeIds.length > 0 && !badgesVisibleToGM) {
     await OBR.scene.items.deleteItems(badgeIds);
     return;
@@ -2801,7 +2824,7 @@ async function applyTokenStatsVisibilityForCharacter(characterName, modeOrLegacy
   if (badgeIds.length > 0) {
     await OBR.scene.items.updateItems(badgeIds, (items) => {
       items.forEach((item) => {
-        item.visible = badgesVisibleToPlayers;
+        item.visible = badgeVisibleById.get(item.id) ?? false;
       });
     });
   }
@@ -2838,11 +2861,12 @@ async function applyTokenStatsVisibilityForCharacter(characterName, modeOrLegacy
     const healthText = tempHp > 0 ? `♥${hp}(${tempHp})` : `♥${hp}`;
 
     if (!existing.hasHealth) {
+      const visibleForPlayers = areTokenBadgesVisibleForPlayers(token, tokenStatsVisibilityMode);
       let healthBadgeBuilder = buildLabel()
         .position({ x: tokenBounds.max.x - 10, y: tokenBounds.min.y + 10 })
         .layer('ATTACHMENT')
         .attachedTo(token.id)
-        .visible(badgesVisibleToPlayers)
+        .visible(visibleForPlayers)
         .plainText(healthText)
         .locked(true)
         .metadata({
@@ -2858,11 +2882,12 @@ async function applyTokenStatsVisibilityForCharacter(characterName, modeOrLegacy
     }
 
     if (!existing.hasAc) {
+      const visibleForPlayers = areTokenBadgesVisibleForPlayers(token, tokenStatsVisibilityMode);
       let acBadgeBuilder = buildLabel()
         .position({ x: tokenBounds.min.x + 10, y: tokenBounds.min.y + 10 })
         .layer('ATTACHMENT')
         .attachedTo(token.id)
-        .visible(badgesVisibleToPlayers)
+        .visible(visibleForPlayers)
         .plainText(`🛡${ac}`)
         .locked(true)
         .metadata({
@@ -2893,6 +2918,41 @@ async function applyTokenStatsVisibilityForCharacter(characterName, modeOrLegacy
         item.zIndex = 1000;
       });
     });
+  }
+}
+
+function buildTokenStatsReconcileSignature() {
+  return characterSheets
+    .filter((sheet) => !!String(sheet?.characterName || '').trim())
+    .map((sheet) => `${sheet.characterName}:${getTokenStatsVisibilityModeForSheet(sheet)}`)
+    .sort()
+    .join('|');
+}
+
+async function reconcileTokenStatsVisibilityFromSheets(force = false) {
+  if (!isGM) return;
+  if (tokenStatsReconcileInFlight) return;
+
+  const now = Date.now();
+  const signature = buildTokenStatsReconcileSignature();
+  const recentlyReconciled = now - tokenStatsReconcileAt < TOKEN_STATS_RECONCILE_INTERVAL_MS;
+  if (!force && recentlyReconciled && signature === tokenStatsReconcileSignature) return;
+
+  tokenStatsReconcileInFlight = true;
+  try {
+    for (const sheet of characterSheets) {
+      const characterName = String(sheet?.characterName || '').trim();
+      if (!characterName) continue;
+      const mode = getTokenStatsVisibilityModeForSheet(sheet);
+      await applyTokenStatsVisibilityForCharacter(characterName, mode);
+    }
+
+    tokenStatsReconcileSignature = signature;
+    tokenStatsReconcileAt = Date.now();
+  } catch (error) {
+    console.error('Помилка при синхронізації видимості статів токенів:', error);
+  } finally {
+    tokenStatsReconcileInFlight = false;
   }
 }
 
@@ -3252,6 +3312,14 @@ function setupCharacterButtons() {
         currentSheet.hideTokenStats = getLegacyHideTokenStatsFromMode(nextMode);
 
         await applyTokenStatsVisibilityForCharacter(currentSheet.characterName, nextMode);
+        if (isGM) {
+          await reconcileTokenStatsVisibilityFromSheets(true);
+          await OBR.broadcast.sendMessage('token-stats-visibility', {
+            characterName: currentSheet.characterName || '',
+            mode: nextMode,
+            ts: Date.now(),
+          });
+        }
         await saveSheetData(activeSheetIndex);
         updateTokenStatsToggleButtonState(currentSheet);
       } catch (error) {
@@ -3426,7 +3494,7 @@ function setupCharacterButtons() {
         const imageUrl = resolveTokenImageUrlFromSheet(currentSheet);
         const tokenStatsVisibilityMode = getTokenStatsVisibilityModeForSheet(currentSheet);
         const createBadgesForGM = isTokenStatsVisibleForGM(tokenStatsVisibilityMode);
-        const badgesVisibleToPlayers = isTokenStatsVisibleForPlayers(tokenStatsVisibilityMode);
+        const badgesVisibleToPlayers = areTokenBadgesVisibleForPlayers(newToken, tokenStatsVisibilityMode);
 
         // Створюємо токен персонажа (займає 1 клітинку на карті)
         let tokenBuilder = buildImage(
@@ -4024,6 +4092,29 @@ function setupInterface() {
         await checkCharacterAndRedirect();
     });
 
+    OBR.broadcast.onMessage('token-stats-visibility', async (data) => {
+      const msg = data?.data || data;
+      const targetName = String(msg?.characterName || '').trim();
+      const nextMode = normalizeTokenStatsVisibilityMode(msg?.mode, msg?.mode === true);
+      if (!targetName) return;
+
+      const targetSheet = characterSheets.find(
+        (sheet) => String(sheet?.characterName || '').trim() === targetName
+      );
+      if (!targetSheet) return;
+
+      targetSheet.tokenStatsVisibilityMode = nextMode;
+      targetSheet.hideTokenStats = getLegacyHideTokenStatsFromMode(nextMode);
+
+      if (characterSheets[activeSheetIndex] && characterSheets[activeSheetIndex].characterName === targetName) {
+        updateTokenStatsToggleButtonState(characterSheets[activeSheetIndex]);
+      }
+
+      if (isGM) {
+        await reconcileTokenStatsVisibilityFromSheets(true);
+      }
+    });
+
     // Додаємо підписку на повідомлення про навички
     if (!window.__skillMessageHandler) {
       window.__skillMessageHandler = true;
@@ -4120,6 +4211,9 @@ OBR.onReady(async () => {
       if (isReady) {
         // Сцена змінилась — перезавантажуємо список персонажів із Supabase
         await updateCharacterDropdown();
+        if (isGM) {
+          await reconcileTokenStatsVisibilityFromSheets(true);
+        }
       }
     });
 
@@ -4136,6 +4230,10 @@ OBR.onReady(async () => {
         if (combatValues) {
           await updateTokenHealth(combatValues.hp, combatValues.tempHp);
           await updateTokenAC(combatValues.ac);
+        }
+
+        if (isGM) {
+          await reconcileTokenStatsVisibilityFromSheets(false);
         }
     }, 4000);
 
