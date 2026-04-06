@@ -148,7 +148,6 @@ function toSpotifyEmbedUrl(rawUrl) {
   }
 }
 
-function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0, muted = true) {
 function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0) {
   const videoId = extractYouTubeVideoId(rawUrl);
   if (!videoId) return '';
@@ -334,8 +333,7 @@ export function initPage({ root }) {
   const nowPlaying = root.querySelector('#gmMusicNowPlaying');
   const audioPlayer = root.querySelector('#gmMusicAudioPlayer');
 
-  if (!openAddModalButton || !addModal || !cancelAddButton || !urlInput || !nameInput || !addButton || !tableBody || !prevButton || !playPauseButton || !nextButton || !repeatButton || !youtubePlayerWrap || !youtubePlayerIframe || !globalVolumeSlider || !globalVolumeValue || !volumeSlider || !volumeValue || !seekSlider || !seekValue || !nowPlaying || !audioPlayer) {
-      if (!openAddModalButton || !addModal || !cancelAddButton || !urlInput || !nameInput || !addButton || !tableBody || !prevButton || !playPauseButton || !nextButton || !repeatButton || !globalVolumeSlider || !globalVolumeValue || !volumeSlider || !volumeValue || !seekSlider || !seekValue || !nowPlaying || !audioPlayer) {
+  if (!openAddModalButton || !addModal || !cancelAddButton || !urlInput || !nameInput || !addButton || !tableBody || !prevButton || !playPauseButton || !nextButton || !repeatButton || !globalVolumeSlider || !globalVolumeValue || !volumeSlider || !volumeValue || !seekSlider || !seekValue || !nowPlaying || !audioPlayer) {
     return;
   }
 
