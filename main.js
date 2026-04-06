@@ -1225,8 +1225,24 @@ function ensureSharedYoutubeWidget() {
       minBtn.textContent = minimized ? '▲' : '▼';
     });
 
+    const unmuteBtn = document.createElement('button');
+    unmuteBtn.id = 'darqie-yt-unmute-btn';
+    unmuteBtn.type = 'button';
+    unmuteBtn.textContent = '🔊 Увімкнути звук';
+    unmuteBtn.title = 'Увімкнути звук YouTube';
+    unmuteBtn.style.cssText = 'display:none;position:absolute;bottom:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.8);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:20px;padding:5px 12px;cursor:pointer;font-size:11px;white-space:nowrap;z-index:10;';
+    unmuteBtn.addEventListener('click', () => {
+      const ytIframe = document.getElementById('darqie-yt-iframe');
+      if (ytIframe?.contentWindow) {
+        ytIframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'unMute', args: [] }), '*');
+        ytIframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'setVolume', args: [100] }), '*');
+      }
+      unmuteBtn.style.display = 'none';
+    });
+
     widget.appendChild(iframe);
     widget.appendChild(minBtn);
+    widget.appendChild(unmuteBtn);
     document.body.appendChild(widget);
   }
   return {
@@ -3151,6 +3167,7 @@ function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0) {
   const origin = (typeof window !== 'undefined' && window.location?.origin) ? window.location.origin : '';
   const query = new URLSearchParams({
     autoplay: '1',
+    mute: '1',
     controls: '1',
     rel: '0',
     playsinline: '1',
@@ -3330,6 +3347,8 @@ async function applySharedMusicFromMetadata(metadata) {
       musicTrackRuntimeKey = runtimeKey;
       const iframeStartSec = getSharedMusicPositionSec(state, Date.now());
       iframe.src = toYouTubeEmbedUrl(track.url, repeat, iframeStartSec);
+      const btn = document.getElementById('darqie-yt-unmute-btn');
+      if (btn) btn.style.display = '';
     }
     widget.style.display = 'block';
     musicIframeElement = iframe;
@@ -3396,6 +3415,20 @@ async function refreshSharedMusicFromSupabaseIfNeeded(metadata) {
 async function initSharedMusicClient() {
   if (musicClientBound) return;
   musicClientBound = true;
+
+  window.addEventListener('message', (event) => {
+    const ytIframe = document.getElementById('darqie-yt-iframe');
+    if (!ytIframe || event.source !== ytIframe.contentWindow) return;
+    try {
+      const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      if (data?.event === 'onReady') {
+        ytIframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'unMute', args: [] }), '*');
+        ytIframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'setVolume', args: [100] }), '*');
+        const btn = document.getElementById('darqie-yt-unmute-btn');
+        if (btn) btn.style.display = 'none';
+      }
+    } catch (_) {}
+  });
 
   localMusicVolume = loadLocalMusicVolume();
 

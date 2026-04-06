@@ -155,6 +155,7 @@ function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0) {
   const origin = (typeof window !== 'undefined' && window.location?.origin) ? window.location.origin : '';
   const query = new URLSearchParams({
     autoplay: '1',
+    mute: '1',
     controls: '1',
     rel: '0',
     playsinline: '1',
@@ -326,6 +327,7 @@ export function initPage({ root }) {
   const repeatButton = root.querySelector('#gmMusicRepeatButton');
   const youtubePlayerWrap = root.querySelector('#gmMusicYoutubeWrap');
   const youtubePlayerIframe = root.querySelector('#gmMusicYoutubeIframe');
+  const youtubeUnlockButton = root.querySelector('#gmMusicYoutubeUnmuteBtn');
 
   const globalVolumeSlider = root.querySelector('#gmMusicGlobalVolumeSlider');
   const globalVolumeValue = root.querySelector('#gmMusicGlobalVolumeValue');
@@ -338,7 +340,7 @@ export function initPage({ root }) {
   const nowPlaying = root.querySelector('#gmMusicNowPlaying');
   const audioPlayer = root.querySelector('#gmMusicAudioPlayer');
 
-  if (!openAddModalButton || !addModal || !cancelAddButton || !urlInput || !nameInput || !addButton || !tableBody || !prevButton || !playPauseButton || !nextButton || !repeatButton || !youtubePlayerWrap || !youtubePlayerIframe || !globalVolumeSlider || !globalVolumeValue || !volumeSlider || !volumeValue || !seekSlider || !seekValue || !nowPlaying || !audioPlayer) {
+  if (!openAddModalButton || !addModal || !cancelAddButton || !urlInput || !nameInput || !addButton || !tableBody || !prevButton || !playPauseButton || !nextButton || !repeatButton || !youtubePlayerWrap || !youtubePlayerIframe || !youtubeUnlockButton || !globalVolumeSlider || !globalVolumeValue || !volumeSlider || !volumeValue || !seekSlider || !seekValue || !nowPlaying || !audioPlayer) {
     return;
   }
 
@@ -433,6 +435,23 @@ export function initPage({ root }) {
     } catch (_) {}
   }
 
+  let gmYoutubeMessageHandler = null;
+  function installGmYoutubeReadyListener() {
+    if (gmYoutubeMessageHandler) window.removeEventListener('message', gmYoutubeMessageHandler);
+    gmYoutubeMessageHandler = (event) => {
+      if (!youtubePlayerIframe || event.source !== youtubePlayerIframe.contentWindow) return;
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (data?.event === 'onReady') {
+          sendYouTubeCommand(youtubePlayerIframe, 'unMute', []);
+          sendYouTubeCommand(youtubePlayerIframe, 'setVolume', [Math.round(getEffectiveVolume() * 100)]);
+          youtubeUnlockButton.style.display = 'none';
+        }
+      } catch (_) {}
+    };
+    window.addEventListener('message', gmYoutubeMessageHandler);
+  }
+
   function getCurrentTrack() {
     if (!playbackState.currentTrackId) return null;
     return playlist.find((track) => track.id === playbackState.currentTrackId) || null;
@@ -445,6 +464,7 @@ export function initPage({ root }) {
     clearHiddenEmbed();
     youtubePlayerIframe.src = '';
     youtubePlayerWrap.style.display = 'none';
+    youtubeUnlockButton.style.display = 'none';
     currentRuntimeKey = '';
   }
 
@@ -551,6 +571,8 @@ export function initPage({ root }) {
         }
         currentRuntimeKey = nextKey;
         youtubePlayerIframe.src = embedUrl;
+        installGmYoutubeReadyListener();
+        youtubeUnlockButton.style.display = '';
       }
     } else if (track.type === TRACK_TYPE_SPOTIFY) {
       youtubePlayerWrap.style.display = 'none';
@@ -939,6 +961,12 @@ export function initPage({ root }) {
 
       const id = input.getAttribute('data-id') || '';
       await renameTrack(id, input.value);
+    });
+
+    youtubeUnlockButton.addEventListener('click', () => {
+      sendYouTubeCommand(youtubePlayerIframe, 'unMute', []);
+      sendYouTubeCommand(youtubePlayerIframe, 'setVolume', [Math.round(getEffectiveVolume() * 100)]);
+      youtubeUnlockButton.style.display = 'none';
     });
 
     audioPlayer.addEventListener('ended', async () => {
