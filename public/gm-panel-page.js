@@ -52,7 +52,7 @@
   const pageKeys = Object.keys(pages);
   let loadToken = 0;
   let suppressNextHashChange = false;
-  const MIN_LOADING_MS = 1000;
+  const MIN_LOADING_MS = 0;
   let openSheetSignalBound = false;
   let openSheetSignalRetryId = null;
   let skillShareSignalBound = false;

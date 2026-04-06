@@ -148,20 +148,20 @@ function toSpotifyEmbedUrl(rawUrl) {
   }
 }
 
-function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0) {
+function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0, muted = true) {
   const videoId = extractYouTubeVideoId(rawUrl);
   if (!videoId) return '';
 
   const origin = (typeof window !== 'undefined' && window.location?.origin) ? window.location.origin : '';
   const query = new URLSearchParams({
     autoplay: '1',
-    mute: '1',
-    controls: '1',
+    controls: '0',
     rel: '0',
     playsinline: '1',
     modestbranding: '1',
     enablejsapi: '1',
   });
+  if (muted) query.set('mute', '1');
   if (origin) query.set('origin', origin);
 
   const normalizedStart = Math.max(0, Math.floor(Number(startSec) || 0));
@@ -325,6 +325,7 @@ export function initPage({ root }) {
   const playPauseButton = root.querySelector('#gmMusicPlayPauseButton');
   const nextButton = root.querySelector('#gmMusicNextButton');
   const repeatButton = root.querySelector('#gmMusicRepeatButton');
+  const youtubeUnlockButton = root.querySelector('#gmMusicYoutubeUnlockButton');
 
   const globalVolumeSlider = root.querySelector('#gmMusicGlobalVolumeSlider');
   const globalVolumeValue = root.querySelector('#gmMusicGlobalVolumeValue');
@@ -337,7 +338,7 @@ export function initPage({ root }) {
   const nowPlaying = root.querySelector('#gmMusicNowPlaying');
   const audioPlayer = root.querySelector('#gmMusicAudioPlayer');
 
-  if (!openAddModalButton || !addModal || !cancelAddButton || !urlInput || !nameInput || !addButton || !tableBody || !prevButton || !playPauseButton || !nextButton || !repeatButton || !globalVolumeSlider || !globalVolumeValue || !volumeSlider || !volumeValue || !seekSlider || !seekValue || !nowPlaying || !audioPlayer) {
+  if (!openAddModalButton || !addModal || !cancelAddButton || !urlInput || !nameInput || !addButton || !tableBody || !prevButton || !playPauseButton || !nextButton || !repeatButton || !youtubeUnlockButton || !globalVolumeSlider || !globalVolumeValue || !volumeSlider || !volumeValue || !seekSlider || !seekValue || !nowPlaying || !audioPlayer) {
     return;
   }
 
@@ -350,6 +351,7 @@ export function initPage({ root }) {
   let metadataBound = false;
   let currentRuntimeKey = '';
   let hiddenEmbed = null;
+  let youtubeUnlocked = false;
   let gmVolume = 0.7;
   let seekDragActive = false;
   let seekTimerId = null;
@@ -403,14 +405,17 @@ export function initPage({ root }) {
   function ensureHiddenEmbed() {
     if (hiddenEmbed) return hiddenEmbed;
     const iframe = document.createElement('iframe');
+    // Position in-viewport but invisible (1x1px bottom-right).
+    // Off-screen (-9999px) causes Chrome to block audio in cross-origin iframes.
     iframe.style.position = 'fixed';
-    iframe.style.left = '-9999px';
-    iframe.style.top = '-9999px';
+    iframe.style.bottom = '0';
+    iframe.style.right = '0';
     iframe.style.width = '1px';
     iframe.style.height = '1px';
-    iframe.style.opacity = '0';
+    iframe.style.border = 'none';
     iframe.style.pointerEvents = 'none';
-    iframe.allow = 'autoplay; encrypted-media; fullscreen';
+    iframe.style.zIndex = '-1';
+    iframe.allow = 'autoplay *; encrypted-media *; fullscreen *';
     document.body.appendChild(iframe);
     hiddenEmbed = iframe;
     return hiddenEmbed;
@@ -500,6 +505,7 @@ export function initPage({ root }) {
     if (!isPlaying) {
       playPauseButton.innerHTML = '<i class="fas fa-play"></i>';
       nowPlaying.textContent = track ? `Пауза: ${track.name}` : 'Відтворення зупинено';
+      youtubeUnlockButton.style.display = 'none';
       stopAllPlayback();
       updateSeekUi();
       return;
@@ -513,6 +519,7 @@ export function initPage({ root }) {
     const directUrl = normalizeTrackUrlByType(track.url, track.type);
 
     if (track.type === TRACK_TYPE_AUDIO || track.type === TRACK_TYPE_DROPBOX) {
+      youtubeUnlockButton.style.display = 'none';
       clearHiddenEmbed();
 
       const nextKey = `${track.id}|${playbackState.repeat ? '1' : '0'}|audio`;
@@ -542,11 +549,12 @@ export function initPage({ root }) {
     audioPlayer.removeAttribute('src');
     audioPlayer.load();
 
-    const nextKey = `${track.id}|${playbackState.repeat ? '1' : '0'}|${track.type}|${playbackState.anchorTimestampMs}`;
+    const nextKey = `${track.id}|${playbackState.repeat ? '1' : '0'}|${track.type}|${playbackState.anchorTimestampMs}|${youtubeUnlocked ? '1' : '0'}`;
 
     if (track.type === TRACK_TYPE_YOUTUBE) {
+      youtubeUnlockButton.style.display = youtubeUnlocked ? 'none' : '';
       if (currentRuntimeKey !== nextKey) {
-        const embedUrl = toYouTubeEmbedUrl(track.url, playbackState.repeat, currentPos);
+        const embedUrl = toYouTubeEmbedUrl(track.url, playbackState.repeat, currentPos, !youtubeUnlocked);
         if (!embedUrl) {
           stopAllPlayback();
           nowPlaying.textContent = `Невідомий тип треку: ${track.name}`;
@@ -560,6 +568,7 @@ export function initPage({ root }) {
         sendYouTubeCommand(hiddenEmbed, 'setVolume', [Math.round(effectiveVolume * 100)]);
       }
     } else if (track.type === TRACK_TYPE_SPOTIFY) {
+      youtubeUnlockButton.style.display = 'none';
       if (currentRuntimeKey !== nextKey) {
         const embedUrl = toSpotifyEmbedUrl(track.url);
         if (!embedUrl) {
@@ -880,6 +889,27 @@ export function initPage({ root }) {
 
     repeatButton.addEventListener('click', async () => {
       await toggleRepeat();
+    });
+
+    // Unlock YouTube audio — must be synchronous click to preserve user gesture
+    youtubeUnlockButton.addEventListener('click', () => {
+      if (!playbackState.isPlaying) return;
+      const track = getCurrentTrack();
+      if (!track || track.type !== TRACK_TYPE_YOUTUBE) return;
+
+      youtubeUnlocked = true;
+      youtubeUnlockButton.style.display = 'none';
+      currentRuntimeKey = ''; // force runtimeKey mismatch so syncPlaybackUi recreates iframe
+
+      // Synchronously create iframe in user-gesture context (no mute) so browser allows audio
+      const currentPos = getStatePositionSec(playbackState);
+      const embedUrl = toYouTubeEmbedUrl(track.url, playbackState.repeat, currentPos, false);
+      if (embedUrl) {
+        clearHiddenEmbed();
+        const iframe = ensureHiddenEmbed();
+        iframe.src = embedUrl;
+        currentRuntimeKey = `${track.id}|${playbackState.repeat ? '1' : '0'}|${track.type}|${playbackState.anchorTimestampMs}|1`;
+      }
     });
 
     volumeSlider.addEventListener('input', () => {

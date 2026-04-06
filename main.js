@@ -1198,6 +1198,47 @@ let musicAudioElement = null;
 let musicIframeElement = null;
 let musicTrackRuntimeKey = '';
 let musicSyncTimerId = null;
+let sharedMusicYoutubeUnlocked = false;
+
+function showMusicUnlockToast(show) {
+  let toast = document.getElementById('darqie-music-unlock-toast');
+  if (!show) {
+    if (toast) toast.style.display = 'none';
+    return;
+  }
+  if (!toast) {
+    toast = document.createElement('button');
+    toast.id = 'darqie-music-unlock-toast';
+    toast.type = 'button';
+    toast.style.cssText = [
+      'position:fixed',
+      'bottom:12px',
+      'left:50%',
+      'transform:translateX(-50%)',
+      'z-index:99999',
+      'background:rgba(24,24,30,0.95)',
+      'color:#f0f0f0',
+      'border:1px solid rgba(255,180,60,0.7)',
+      'border-radius:8px',
+      'padding:8px 16px',
+      'font-family:inherit',
+      'font-size:0.9rem',
+      'cursor:pointer',
+      'display:block',
+    ].join(';');
+    toast.innerHTML = '<i class="fas fa-volume-up" style="margin-right:6px;"></i>\u041d\u0430\u0442\u0438\u0441\u043d\u0456\u0442\u044c \u0434\u043b\u044f \u0443\u0432\u0456\u043c\u043a\u043d\u0435\u043d\u043d\u044f \u0437\u0432\u0443\u043a\u0443 YouTube';
+    document.body.appendChild(toast);
+
+    toast.addEventListener('click', () => {
+      sharedMusicYoutubeUnlocked = true;
+      toast.style.display = 'none';
+      // Force iframe recreation in user gesture context
+      musicTrackRuntimeKey = '';
+      OBR.room.getMetadata().then((meta) => applySharedMusicFromMetadata(meta)).catch(() => {});
+    });
+  }
+  toast.style.display = 'block';
+}
 
 function isTokenForSheet(item, sheet) {
   if (!item || item.layer !== 'CHARACTER') return false;
@@ -3108,20 +3149,20 @@ function toSpotifyEmbedUrl(rawUrl) {
   }
 }
 
-function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0) {
+function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0, muted = true) {
   const videoId = extractYouTubeVideoId(rawUrl);
   if (!videoId) return '';
 
   const origin = (typeof window !== 'undefined' && window.location?.origin) ? window.location.origin : '';
   const query = new URLSearchParams({
     autoplay: '1',
-    mute: '1',
-    controls: '1',
+    controls: '0',
     rel: '0',
     playsinline: '1',
     modestbranding: '1',
     enablejsapi: '1',
   });
+  if (muted) query.set('mute', '1');
   if (origin) query.set('origin', origin);
 
   const start = Math.max(0, Math.floor(Number(startSec) || 0));
@@ -3284,7 +3325,8 @@ async function applySharedMusicFromMetadata(metadata) {
   }
 
   const anchorTimestampMs = normalizeMusicTimestampMs(state.anchorTimestampMs, 0);
-  const runtimeKey = `${track.id}|${repeat ? '1' : '0'}|${trackType}|${anchorTimestampMs}`;
+  const youtubeUnlockedFlag = sharedMusicYoutubeUnlocked ? '1' : '0';
+  const runtimeKey = `${track.id}|${repeat ? '1' : '0'}|${trackType}|${anchorTimestampMs}|${youtubeUnlockedFlag}`;
   if (musicTrackRuntimeKey === runtimeKey && musicIframeElement) {
     if (trackType === 'youtube') {
       sendSharedYouTubeCommand(musicIframeElement, 'setVolume', [Math.round(effectiveVolume * 100)]);
@@ -3293,10 +3335,12 @@ async function applySharedMusicFromMetadata(metadata) {
   }
   musicTrackRuntimeKey = runtimeKey;
 
+  const isMuted = trackType === 'youtube' && !sharedMusicYoutubeUnlocked;
+
   let embedUrl = '';
   if (trackType === 'youtube') {
     const iframeStartSec = getSharedMusicPositionSec(state, Date.now());
-    embedUrl = toYouTubeEmbedUrl(track.url, repeat, iframeStartSec);
+    embedUrl = toYouTubeEmbedUrl(track.url, repeat, iframeStartSec, isMuted);
   } else if (trackType === 'spotify') {
     embedUrl = toSpotifyEmbedUrl(track.url);
   }
@@ -3306,18 +3350,21 @@ async function applySharedMusicFromMetadata(metadata) {
     return;
   }
 
+  showMusicUnlockToast(trackType === 'youtube' && isMuted);
+
   if (musicIframeElement) musicIframeElement.remove();
   const iframe = document.createElement('iframe');
   iframe.id = 'darqie-shared-music-iframe';
   iframe.src = embedUrl;
-  iframe.allow = 'autoplay; encrypted-media; fullscreen';
+  iframe.allow = 'autoplay *; encrypted-media *; fullscreen *';
   iframe.style.position = 'fixed';
-  iframe.style.left = '-9999px';
-  iframe.style.top = '-9999px';
+  iframe.style.bottom = '0';
+  iframe.style.right = '0';
   iframe.style.width = '1px';
   iframe.style.height = '1px';
-  iframe.style.opacity = '0';
+  iframe.style.border = 'none';
   iframe.style.pointerEvents = 'none';
+  iframe.style.zIndex = '-1';
   document.body.appendChild(iframe);
   musicIframeElement = iframe;
 }
