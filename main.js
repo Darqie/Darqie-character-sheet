@@ -35,6 +35,7 @@ const TOKEN_STATS_HIDDEN_PLAYERS = 'hidden_players';
 const TOKEN_STATS_HIDDEN_ALL = 'hidden_all';
 const DARQIE_MUSIC_PLAYLIST_KEY = 'darqie.v2.musicPlaylist';
 const DARQIE_MUSIC_STATE_KEY = 'darqie.v2.musicState';
+const DARQIE_MUSIC_SUPABASE_TABLE = 'room_music_state';
 const MUSIC_LOCAL_VOLUME_DEFAULT = 0.7;
 
 /**
@@ -1196,6 +1197,7 @@ let localMusicVolume = MUSIC_LOCAL_VOLUME_DEFAULT;
 let musicAudioElement = null;
 let musicIframeElement = null;
 let musicTrackRuntimeKey = '';
+let musicSyncTimerId = null;
 
 function isTokenForSheet(item, sheet) {
   if (!item || item.layer !== 'CHARACTER') return false;
@@ -2998,6 +3000,64 @@ function saveLocalMusicVolume(value) {
   } catch (_) {}
 }
 
+function normalizeMusicVolumeValue(raw, fallback = 1) {
+  const value = Number(raw);
+  if (!Number.isFinite(value)) return fallback;
+  return Math.max(0, Math.min(1, value));
+}
+
+function normalizeMusicTimestampMs(raw, fallback = Date.now()) {
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) return fallback;
+  return Math.floor(value);
+}
+
+function normalizeSharedMusicState(raw) {
+  const updatedAt = normalizeMusicTimestampMs(raw?.updatedAt, Date.now());
+  const anchorPositionSec = Math.max(0, Number(raw?.anchorPositionSec ?? raw?.positionSec ?? 0) || 0);
+  const anchorTimestampMs = normalizeMusicTimestampMs(raw?.anchorTimestampMs, updatedAt);
+  return {
+    currentTrackId: String(raw?.currentTrackId || ''),
+    isPlaying: Boolean(raw?.isPlaying),
+    repeat: Boolean(raw?.repeat),
+    anchorPositionSec,
+    anchorTimestampMs,
+    globalVolume: normalizeMusicVolumeValue(raw?.globalVolume, 1),
+    updatedAt,
+  };
+}
+
+function getSharedMusicPositionSec(state, nowMs = Date.now()) {
+  const normalized = normalizeSharedMusicState(state);
+  if (!normalized.isPlaying) return normalized.anchorPositionSec;
+  const deltaSec = Math.max(0, (normalizeMusicTimestampMs(nowMs) - normalized.anchorTimestampMs) / 1000);
+  return normalized.anchorPositionSec + deltaSec;
+}
+
+async function loadSharedMusicSnapshotFromSupabase(roomId) {
+  if (!roomId) return null;
+  try {
+    const { data, error } = await supabase
+      .from(DARQIE_MUSIC_SUPABASE_TABLE)
+      .select('playlist_json,state_json,updated_at')
+      .eq('room_id', roomId)
+      .order('updated_at', { ascending: false, nullsFirst: false })
+      .limit(1);
+
+    if (error) return null;
+    const row = Array.isArray(data) ? data[0] : null;
+    if (!row) return null;
+
+    return {
+      playlist: Array.isArray(row.playlist_json) ? row.playlist_json : [],
+      state: normalizeSharedMusicState(row.state_json || {}),
+      updatedAtMs: normalizeMusicTimestampMs(Date.parse(row.updated_at || ''), normalizeMusicTimestampMs(row.state_json?.updatedAt, 0)),
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
 function extractYouTubeVideoId(rawUrl) {
   try {
     const url = new URL(String(rawUrl || '').trim());
@@ -3048,7 +3108,7 @@ function toSpotifyEmbedUrl(rawUrl) {
   }
 }
 
-function toYouTubeEmbedUrl(rawUrl, repeat = false, muted = false) {
+function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0) {
   const videoId = extractYouTubeVideoId(rawUrl);
   if (!videoId) return '';
 
@@ -3060,13 +3120,12 @@ function toYouTubeEmbedUrl(rawUrl, repeat = false, muted = false) {
     modestbranding: '1',
   });
 
+  const start = Math.max(0, Math.floor(Number(startSec) || 0));
+  if (start > 0) query.set('start', String(start));
+
   if (repeat) {
     query.set('loop', '1');
     query.set('playlist', videoId);
-  }
-
-  if (muted) {
-    query.set('mute', '1');
   }
 
   return `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?${query.toString()}`;
@@ -3130,7 +3189,6 @@ function ensureMusicVolumePopover(button) {
       localMusicVolume = percent / 100;
       value.textContent = `${percent}%`;
       saveLocalMusicVolume(localMusicVolume);
-      if (musicAudioElement) musicAudioElement.volume = localMusicVolume;
     });
 
     document.addEventListener('click', (event) => {
@@ -3161,23 +3219,26 @@ function openMusicVolumePopover(button) {
 
 async function applySharedMusicFromMetadata(metadata) {
   const playlist = Array.isArray(metadata?.[DARQIE_MUSIC_PLAYLIST_KEY]) ? metadata[DARQIE_MUSIC_PLAYLIST_KEY] : [];
-  const state = metadata?.[DARQIE_MUSIC_STATE_KEY] || {};
+  const state = normalizeSharedMusicState(metadata?.[DARQIE_MUSIC_STATE_KEY] || {});
 
-  const isPlaying = Boolean(state.isPlaying);
   const currentTrackId = String(state.currentTrackId || '');
-  if (!isPlaying || !currentTrackId) {
+  const track = playlist.find((entry) => String(entry?.id || '') === currentTrackId);
+
+  if (!track || !track.url) {
     stopSharedMusicPlayback();
     return;
   }
 
-  const track = playlist.find((entry) => String(entry?.id || '') === currentTrackId);
-  if (!track || !track.url) {
+  if (!state.isPlaying) {
     stopSharedMusicPlayback();
     return;
   }
 
   const trackType = track.type || detectMusicTrackType(track.url);
   const repeat = Boolean(state.repeat);
+  const startSec = getSharedMusicPositionSec(state, Date.now());
+  const globalVolume = normalizeMusicVolumeValue(state.globalVolume, 1);
+  const effectiveVolume = normalizeMusicVolumeValue(localMusicVolume, MUSIC_LOCAL_VOLUME_DEFAULT) * globalVolume;
 
   if (trackType === 'audio' || trackType === 'dropbox') {
     if (musicIframeElement) {
@@ -3193,12 +3254,14 @@ async function applySharedMusicFromMetadata(metadata) {
       musicTrackRuntimeKey = runtimeKey;
       audio.src = sourceUrl;
       audio.loop = repeat;
-      if (state.positionSec && Number.isFinite(Number(state.positionSec))) {
-        try { audio.currentTime = Number(state.positionSec); } catch (_) {}
-      }
     }
 
-    audio.volume = localMusicVolume;
+    const drift = Math.abs((audio.currentTime || 0) - startSec);
+    if (drift > 1.2) {
+      try { audio.currentTime = startSec; } catch (_) {}
+    }
+
+    audio.volume = effectiveVolume;
     try { await audio.play(); } catch (_) {}
     return;
   }
@@ -3211,7 +3274,7 @@ async function applySharedMusicFromMetadata(metadata) {
 
   let embedUrl = '';
   if (trackType === 'youtube') {
-    embedUrl = toYouTubeEmbedUrl(track.url, repeat, localMusicVolume <= 0);
+    embedUrl = toYouTubeEmbedUrl(track.url, repeat, startSec);
   } else if (trackType === 'spotify') {
     embedUrl = toSpotifyEmbedUrl(track.url);
   }
@@ -3221,7 +3284,7 @@ async function applySharedMusicFromMetadata(metadata) {
     return;
   }
 
-  const runtimeKey = `${track.id}|${repeat ? '1' : '0'}|${localMusicVolume <= 0 ? 'muted' : 'normal'}|${trackType}`;
+  const runtimeKey = `${track.id}|${repeat ? '1' : '0'}|${trackType}|${Math.floor(startSec)}`;
   if (musicTrackRuntimeKey === runtimeKey && musicIframeElement) return;
   musicTrackRuntimeKey = runtimeKey;
 
@@ -3241,6 +3304,26 @@ async function applySharedMusicFromMetadata(metadata) {
   musicIframeElement = iframe;
 }
 
+async function refreshSharedMusicFromSupabaseIfNeeded(metadata) {
+  const currentState = normalizeSharedMusicState(metadata?.[DARQIE_MUSIC_STATE_KEY] || {});
+  const localUpdatedAt = normalizeMusicTimestampMs(currentState.updatedAt, 0);
+  const snapshot = await loadSharedMusicSnapshotFromSupabase(OBR.room.id);
+  if (!snapshot) return;
+
+  if (snapshot.updatedAtMs > localUpdatedAt) {
+    const nextMetadata = {
+      ...metadata,
+      [DARQIE_MUSIC_PLAYLIST_KEY]: Array.isArray(snapshot.playlist) ? snapshot.playlist : [],
+      [DARQIE_MUSIC_STATE_KEY]: normalizeSharedMusicState(snapshot.state || {}),
+    };
+    await OBR.room.setMetadata(nextMetadata);
+    await applySharedMusicFromMetadata(nextMetadata);
+    return;
+  }
+
+  await applySharedMusicFromMetadata(metadata);
+}
+
 async function initSharedMusicClient() {
   if (musicClientBound) return;
   musicClientBound = true;
@@ -3249,12 +3332,20 @@ async function initSharedMusicClient() {
 
   try {
     const initialMetadata = await OBR.room.getMetadata();
-    await applySharedMusicFromMetadata(initialMetadata);
+    await refreshSharedMusicFromSupabaseIfNeeded(initialMetadata);
   } catch (_) {}
 
   OBR.room.onMetadataChange(async (metadata) => {
     await applySharedMusicFromMetadata(metadata);
   });
+
+  if (musicSyncTimerId) clearInterval(musicSyncTimerId);
+  musicSyncTimerId = setInterval(async () => {
+    try {
+      const metadata = await OBR.room.getMetadata();
+      await applySharedMusicFromMetadata(metadata);
+    } catch (_) {}
+  }, 2000);
 }
 
 function setupCharacterButtons() {
