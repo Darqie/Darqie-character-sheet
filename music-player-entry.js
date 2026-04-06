@@ -22,7 +22,7 @@ const SUPABASE_MUSIC_TABLE = 'room_music_state';
 
 const bgAudio       = document.getElementById('bgAudio');
 const ytClip        = document.getElementById('ytClip');
-const ytIframe      = document.getElementById('ytIframe');
+const ytContainer   = document.getElementById('ytContainer');
 const spotifyIframe = document.getElementById('spotifyIframe');
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -30,6 +30,7 @@ const spotifyIframe = document.getElementById('spotifyIframe');
 let volumeStorageKey  = `${MUSIC_VOLUME_PREFIX}.global.player`;
 let lastGlobalVolume  = 1;
 let currentRuntimeKey = '';
+let ytPlayer          = null;
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
@@ -97,37 +98,6 @@ function extractYtId(rawUrl) {
   return '';
 }
 
-function toYtUrl(rawUrl, repeat, startSec) {
-  const videoId = extractYtId(rawUrl);
-  if (!videoId) return '';
-  const origin = window.location?.origin || '';
-  const q = new URLSearchParams({ autoplay: '1', controls: '1', rel: '0', playsinline: '1', modestbranding: '1', enablejsapi: '1' });
-  if (origin) q.set('origin', origin);
-  const start = Math.max(0, Math.floor(Number(startSec) || 0));
-  if (start > 0) q.set('start', String(start));
-  if (repeat) { q.set('loop', '1'); q.set('playlist', videoId); }
-  return `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?${q.toString()}`;
-}
-
-function ytUnmute() {
-  // YouTube IFrame API — sends unMute and full volume after player loads
-  const send = (func, args = []) => {
-    try {
-      ytIframe.contentWindow?.postMessage(
-        JSON.stringify({ event: 'command', func, args }),
-        'https://www.youtube.com'
-      );
-    } catch (_) {}
-  };
-  // Retry a few times; player may not be ready immediately
-  let attempts = 0;
-  const iv = setInterval(() => {
-    send('unMute');
-    send('setVolume', [100]);
-    if (++attempts >= 5) clearInterval(iv);
-  }, 800);
-}
-
 function toSpotifyUrl(rawUrl) {
   try {
     const parts = new URL(String(rawUrl || '').trim()).pathname.split('/').filter(Boolean);
@@ -145,6 +115,57 @@ function localVol() {
 
 function effectiveVol() { return localVol() * lastGlobalVolume; }
 
+// ── YouTube IFrame API loader ─────────────────────────────────────────────────
+
+function loadYtApi() {
+  if (window._ytApiPromise) return window._ytApiPromise;
+  window._ytApiPromise = new Promise((resolve) => {
+    if (window.YT && window.YT.Player) { resolve(window.YT); return; }
+    window.onYouTubeIframeAPIReady = () => resolve(window.YT);
+    const s = document.createElement('script');
+    s.src = 'https://www.youtube.com/iframe_api';
+    document.head.appendChild(s);
+  });
+  return window._ytApiPromise;
+}
+
+function destroyYtPlayer() {
+  if (ytPlayer) {
+    try { ytPlayer.destroy(); } catch (_) {}
+    ytPlayer = null;
+  }
+  ytContainer.innerHTML = '';
+}
+
+async function startYouTube(videoId, startSec, repeat) {
+  destroyYtPlayer();
+  const YT = await loadYtApi();
+  // YT.Player needs a real DOM element, recreate inner div each time
+  const inner = document.createElement('div');
+  ytContainer.appendChild(inner);
+  ytPlayer = new YT.Player(inner, {
+    videoId,
+    width: 300,
+    height: 200,
+    playerVars: {
+      autoplay: 1,
+      controls: 1,
+      rel: 0,
+      playsinline: 1,
+      modestbranding: 1,
+      loop: repeat ? 1 : 0,
+      playlist: repeat ? videoId : '',
+      start: Math.max(0, Math.floor(startSec)),
+    },
+    events: {
+      onReady(e) {
+        e.target.unMute();
+        e.target.setVolume(100);
+      },
+    },
+  });
+}
+
 // ── Playback ──────────────────────────────────────────────────────────────────
 
 function stopAll() {
@@ -152,7 +173,7 @@ function stopAll() {
   bgAudio.pause();
   bgAudio.removeAttribute('src');
   bgAudio.load();
-  ytIframe.src         = '';
+  destroyYtPlayer();
   ytClip.style.display = 'none';
   spotifyIframe.src    = '';
 }
@@ -200,11 +221,10 @@ function applyMusic(metadata) {
     spotifyIframe.src = '';
     if (currentRuntimeKey !== rk) {
       currentRuntimeKey = rk;
-      const ytUrl = toYtUrl(track.url, repeat, posSec);
-      if (!ytUrl) { stopAll(); return; }
-      ytIframe.onload = ytUnmute;
-      ytIframe.src         = ytUrl;
+      const videoId = extractYtId(track.url);
+      if (!videoId) { stopAll(); return; }
       ytClip.style.display = 'block';
+      startYouTube(videoId, posSec, repeat);
     }
     return;
   }
