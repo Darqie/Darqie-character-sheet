@@ -4403,8 +4403,9 @@ OBR.onReady(async () => {
     currentPlayerName = await OBR.player.getName();
     isGM = (await OBR.player.getRole()) === 'GM';
 
-    // Підключаємо спільний музичний клієнт (відтворення + локальна гучність).
-    await initSharedMusicClient();
+    // Музичне відтворення тепер обробляється фоновою сторінкою (music-bg.html).
+    // Ініціалізуємо лише локальну гучність для слайдера.
+    localMusicVolume = loadLocalMusicVolume();
 
     // Для GM стартовим екраном має бути Панель GM.
     // Дозволяємо залишитися на сторінці персонажів лише при явному прапорці gmView=characters.
