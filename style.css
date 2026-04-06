@@ -444,6 +444,7 @@ textarea::placeholder {
 #deleteCharacterButton,
 #createTokenButton,
 #toggleTokenStatsButton,
+#musicVolumeButton,
 #openGmPanelButton {
   padding: 10px 16px;
   border-radius: 8px;
@@ -467,6 +468,7 @@ textarea::placeholder {
 #deleteCharacterButton,
 #createTokenButton,
 #toggleTokenStatsButton,
+#musicVolumeButton,
 #openGmPanelButton,
 #photoControls button {
   background: none;
@@ -479,6 +481,7 @@ textarea::placeholder {
 #deleteCharacterButton:hover,
 #createTokenButton:hover,
 #toggleTokenStatsButton:hover,
+#musicVolumeButton:hover,
 #openGmPanelButton:hover,
 #photoControls button:hover {
   color: #fff;
@@ -490,6 +493,7 @@ textarea::placeholder {
 #deleteCharacterButton:active,
 #createTokenButton:active,
 #toggleTokenStatsButton:active,
+#musicVolumeButton:active,
 #openGmPanelButton:active,
 #photoControls button:active {
   transform: translateY(0) scale(1.05);

@@ -1,0 +1,149 @@
+<section class="gm-characters-page gm-items-page gm-music-page">
+  <style>
+    .gm-music-page .gm-music-add-grid {
+      display: grid;
+      grid-template-columns: minmax(240px, 2fr) minmax(180px, 1fr) auto;
+      gap: 8px;
+      width: 100%;
+      align-items: center;
+    }
+
+    .gm-music-page .gm-music-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+      margin-bottom: 8px;
+    }
+
+    .gm-music-page .gm-music-controls-left,
+    .gm-music-page .gm-music-controls-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .gm-music-page .gm-music-btn {
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: rgba(255, 255, 255, 0.06);
+      color: #f0f0f0;
+      border-radius: 7px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-family: 'Cormorant Unicase', serif;
+      font-size: 0.95rem;
+    }
+
+    .gm-music-page .gm-music-btn.is-active {
+      border-color: rgba(130, 255, 182, 0.6);
+      background: rgba(54, 176, 98, 0.28);
+    }
+
+    .gm-music-page .gm-music-volume-wrap {
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+      font-size: 0.9rem;
+      opacity: 0.92;
+    }
+
+    .gm-music-page .gm-music-volume-wrap input[type="range"] {
+      width: 160px;
+    }
+
+    .gm-music-page .gm-music-now-playing {
+      margin: 6px 0 8px;
+      font-size: 0.92rem;
+      opacity: 0.92;
+      min-height: 20px;
+    }
+
+    .gm-music-page .gm-music-embed-host {
+      width: 100%;
+      min-height: 110px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.18);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .gm-music-page .gm-music-embed-host iframe {
+      border: 0;
+      width: 100%;
+      min-height: 110px;
+    }
+
+    .gm-music-page .gm-music-table input.gm-cell-input {
+      width: 100%;
+    }
+
+    .gm-music-page .gm-music-actions {
+      display: flex;
+      gap: 4px;
+      justify-content: center;
+      align-items: center;
+    }
+  </style>
+
+  <div class="gm-characters-toolbar">
+    <div class="gm-characters-toolbar-title">Музика</div>
+    <div class="gm-characters-toolbar-actions" style="width: min(740px, 100%);">
+      <div class="gm-music-add-grid">
+        <input id="gmMusicUrlInput" class="gm-cell-input" type="text" placeholder="Посилання (YouTube / Dropbox / Spotify / mp3 URL)" />
+        <input id="gmMusicNameInput" class="gm-cell-input" type="text" placeholder="Назва треку" />
+        <button id="gmMusicAddButton" class="gm-characters-create-btn" type="button">
+          <i class="fas fa-plus"></i>
+          <span>Додати</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="gm-music-controls">
+    <div class="gm-music-controls-left">
+      <button id="gmMusicPrevButton" class="gm-music-btn" type="button" title="Попередній"><i class="fas fa-backward"></i></button>
+      <button id="gmMusicPlayPauseButton" class="gm-music-btn" type="button" title="Пуск / Пауза"><i class="fas fa-play"></i></button>
+      <button id="gmMusicNextButton" class="gm-music-btn" type="button" title="Наступний"><i class="fas fa-forward"></i></button>
+      <button id="gmMusicRepeatButton" class="gm-music-btn" type="button" title="Повтор"><i class="fas fa-redo"></i></button>
+    </div>
+    <div class="gm-music-controls-right">
+      <label class="gm-music-volume-wrap">
+        <span>Гучність GM</span>
+        <input id="gmMusicVolumeSlider" type="range" min="0" max="100" step="1" />
+        <span id="gmMusicVolumeValue">70%</span>
+      </label>
+    </div>
+  </div>
+
+  <div id="gmMusicNowPlaying" class="gm-music-now-playing">Трек не вибрано</div>
+  <div id="gmMusicEmbedHost" class="gm-music-embed-host"></div>
+  <audio id="gmMusicAudioPlayer" preload="none"></audio>
+
+  <div class="gm-characters-table-wrap">
+    <table class="gm-characters-table gm-music-table">
+      <colgroup>
+        <col style="width: 34%" />
+        <col style="width: 44%" />
+        <col style="width: 10%" />
+        <col style="width: 12%" />
+      </colgroup>
+      <thead>
+        <tr>
+          <th>Назва</th>
+          <th>Посилання</th>
+          <th>Тип</th>
+          <th>Дії</th>
+        </tr>
+      </thead>
+      <tbody id="gmMusicTableBody"></tbody>
+    </table>
+  </div>
+</section>

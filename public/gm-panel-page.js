@@ -42,6 +42,11 @@
       htmlPath: './gm-pages/equipment.html',
       scriptPath: './gm-pages/equipment.js',
     },
+    music: {
+      buttonId: 'gmPanelMusicButton',
+      htmlPath: './gm-pages/music.html',
+      scriptPath: './gm-pages/music.js',
+    },
   };
 
   const pageKeys = Object.keys(pages);

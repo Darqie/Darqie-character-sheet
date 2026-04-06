@@ -33,6 +33,9 @@ const CHARACTER_TYPE_NPC = 'npc';
 const TOKEN_STATS_VISIBLE_ALL = 'visible_all';
 const TOKEN_STATS_HIDDEN_PLAYERS = 'hidden_players';
 const TOKEN_STATS_HIDDEN_ALL = 'hidden_all';
+const DARQIE_MUSIC_PLAYLIST_KEY = 'darqie.v2.musicPlaylist';
+const DARQIE_MUSIC_STATE_KEY = 'darqie.v2.musicState';
+const MUSIC_LOCAL_VOLUME_DEFAULT = 0.7;
 
 /**
  * Генерує простий хеш для імені персонажа (ASCII-сумісний шлях у Storage)
@@ -1179,6 +1182,12 @@ const TOKEN_AC_RECONCILE_INTERVAL_MS = 12000;
 let realtimeChannel = null;
 let fallbackSyncIntervalId = null;
 let modalOpenRequestId = 0;
+let musicClientBound = false;
+let musicUiBound = false;
+let localMusicVolume = MUSIC_LOCAL_VOLUME_DEFAULT;
+let musicAudioElement = null;
+let musicIframeElement = null;
+let musicTrackRuntimeKey = '';
 
 function isTokenForSheet(item, sheet) {
   if (!item || item.layer !== 'CHARACTER') return false;
@@ -2906,11 +2915,294 @@ function setupStatButtons() {
   });
 }
 
+function getMusicVolumeStorageKey() {
+  const roomPart = OBR?.room?.id || 'global';
+  const playerPart = currentPlayerName || 'player';
+  return `darqie.v2.musicVolume.${roomPart}.${playerPart}`;
+}
+
+function loadLocalMusicVolume() {
+  try {
+    const raw = localStorage.getItem(getMusicVolumeStorageKey());
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) return MUSIC_LOCAL_VOLUME_DEFAULT;
+    return Math.max(0, Math.min(1, parsed));
+  } catch (_) {
+    return MUSIC_LOCAL_VOLUME_DEFAULT;
+  }
+}
+
+function saveLocalMusicVolume(value) {
+  try {
+    localStorage.setItem(getMusicVolumeStorageKey(), String(value));
+  } catch (_) {}
+}
+
+function extractYouTubeVideoId(rawUrl) {
+  try {
+    const url = new URL(String(rawUrl || '').trim());
+    const host = url.hostname.toLowerCase();
+    if (host === 'youtu.be') return url.pathname.replace(/^\//, '').trim();
+
+    if (host.includes('youtube.com')) {
+      const fromSearch = url.searchParams.get('v');
+      if (fromSearch) return fromSearch.trim();
+
+      const pathMatch = url.pathname.match(/\/embed\/([^/?]+)/i) || url.pathname.match(/\/shorts\/([^/?]+)/i);
+      if (pathMatch?.[1]) return pathMatch[1].trim();
+    }
+  } catch (_) {}
+
+  return '';
+}
+
+function detectMusicTrackType(rawUrl) {
+  const clean = String(rawUrl || '').trim().toLowerCase();
+  if (clean.includes('youtube.com/') || clean.includes('youtu.be/')) return 'youtube';
+  if (clean.includes('open.spotify.com/')) return 'spotify';
+  if (clean.includes('dropbox.com/')) return 'dropbox';
+  return 'audio';
+}
+
+function normalizeDropboxMediaUrl(rawUrl) {
+  try {
+    const url = new URL(String(rawUrl || '').trim());
+    if (!url.hostname.toLowerCase().includes('dropbox.com')) return rawUrl;
+
+    url.searchParams.delete('dl');
+    url.searchParams.set('raw', '1');
+    return url.toString();
+  } catch (_) {
+    return rawUrl;
+  }
+}
+
+function toSpotifyEmbedUrl(rawUrl) {
+  try {
+    const url = new URL(String(rawUrl || '').trim());
+    const parts = (url.pathname || '').split('/').filter(Boolean);
+    if (parts.length < 2) return '';
+    return `https://open.spotify.com/embed/${parts[0]}/${parts[1]}`;
+  } catch (_) {
+    return '';
+  }
+}
+
+function toYouTubeEmbedUrl(rawUrl, repeat = false, muted = false) {
+  const videoId = extractYouTubeVideoId(rawUrl);
+  if (!videoId) return '';
+
+  const query = new URLSearchParams({
+    autoplay: '1',
+    controls: '1',
+    rel: '0',
+    playsinline: '1',
+    modestbranding: '1',
+  });
+
+  if (repeat) {
+    query.set('loop', '1');
+    query.set('playlist', videoId);
+  }
+
+  if (muted) {
+    query.set('mute', '1');
+  }
+
+  return `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?${query.toString()}`;
+}
+
+function ensureMusicAudioElement() {
+  if (musicAudioElement) return musicAudioElement;
+  const el = document.createElement('audio');
+  el.id = 'darqie-shared-music-audio';
+  el.preload = 'none';
+  el.style.display = 'none';
+  document.body.appendChild(el);
+  musicAudioElement = el;
+  return musicAudioElement;
+}
+
+function stopSharedMusicPlayback() {
+  if (musicAudioElement) {
+    musicAudioElement.pause();
+    musicAudioElement.removeAttribute('src');
+    musicAudioElement.load();
+  }
+
+  if (musicIframeElement) {
+    musicIframeElement.remove();
+    musicIframeElement = null;
+  }
+
+  musicTrackRuntimeKey = '';
+}
+
+function ensureMusicVolumePopover(button) {
+  let panel = document.getElementById('musicVolumePopover');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'musicVolumePopover';
+    panel.style.position = 'fixed';
+    panel.style.zIndex = '99999';
+    panel.style.display = 'none';
+    panel.style.background = 'rgba(24, 24, 30, 0.96)';
+    panel.style.border = '1px solid rgba(255,255,255,0.16)';
+    panel.style.borderRadius = '10px';
+    panel.style.padding = '10px 12px';
+    panel.style.boxShadow = '0 16px 30px rgba(0,0,0,0.35)';
+    panel.style.minWidth = '210px';
+
+    panel.innerHTML = `
+      <div style="font-size: 0.85rem; margin-bottom: 7px; opacity: 0.9;">Гучність музики</div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <input id="musicVolumeSlider" type="range" min="0" max="100" step="1" style="flex:1;" />
+        <span id="musicVolumeValue" style="font-size:0.85rem; min-width:42px; text-align:right;">70%</span>
+      </div>
+    `;
+
+    document.body.appendChild(panel);
+
+    const slider = panel.querySelector('#musicVolumeSlider');
+    const value = panel.querySelector('#musicVolumeValue');
+    slider.addEventListener('input', () => {
+      const percent = Math.max(0, Math.min(100, Number(slider.value) || 0));
+      localMusicVolume = percent / 100;
+      value.textContent = `${percent}%`;
+      saveLocalMusicVolume(localMusicVolume);
+      if (musicAudioElement) musicAudioElement.volume = localMusicVolume;
+    });
+
+    document.addEventListener('click', (event) => {
+      if (panel.style.display === 'none') return;
+      if (panel.contains(event.target)) return;
+      if (button && (button === event.target || button.contains(event.target))) return;
+      panel.style.display = 'none';
+    });
+  }
+
+  return panel;
+}
+
+function openMusicVolumePopover(button) {
+  if (!button) return;
+  const panel = ensureMusicVolumePopover(button);
+  const rect = button.getBoundingClientRect();
+  panel.style.left = `${Math.max(8, rect.left - 70)}px`;
+  panel.style.top = `${rect.bottom + 8}px`;
+
+  const slider = panel.querySelector('#musicVolumeSlider');
+  const value = panel.querySelector('#musicVolumeValue');
+  const percent = Math.round(localMusicVolume * 100);
+  slider.value = String(percent);
+  value.textContent = `${percent}%`;
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+async function applySharedMusicFromMetadata(metadata) {
+  const playlist = Array.isArray(metadata?.[DARQIE_MUSIC_PLAYLIST_KEY]) ? metadata[DARQIE_MUSIC_PLAYLIST_KEY] : [];
+  const state = metadata?.[DARQIE_MUSIC_STATE_KEY] || {};
+
+  const isPlaying = Boolean(state.isPlaying);
+  const currentTrackId = String(state.currentTrackId || '');
+  if (!isPlaying || !currentTrackId) {
+    stopSharedMusicPlayback();
+    return;
+  }
+
+  const track = playlist.find((entry) => String(entry?.id || '') === currentTrackId);
+  if (!track || !track.url) {
+    stopSharedMusicPlayback();
+    return;
+  }
+
+  const trackType = track.type || detectMusicTrackType(track.url);
+  const repeat = Boolean(state.repeat);
+
+  if (trackType === 'audio' || trackType === 'dropbox') {
+    if (musicIframeElement) {
+      musicIframeElement.remove();
+      musicIframeElement = null;
+    }
+
+    const audio = ensureMusicAudioElement();
+    const sourceUrl = trackType === 'dropbox' ? normalizeDropboxMediaUrl(track.url) : String(track.url || '').trim();
+    const runtimeKey = `${track.id}|${repeat ? '1' : '0'}|audio`;
+
+    if (musicTrackRuntimeKey !== runtimeKey || audio.src !== sourceUrl) {
+      musicTrackRuntimeKey = runtimeKey;
+      audio.src = sourceUrl;
+      audio.loop = repeat;
+      if (state.positionSec && Number.isFinite(Number(state.positionSec))) {
+        try { audio.currentTime = Number(state.positionSec); } catch (_) {}
+      }
+    }
+
+    audio.volume = localMusicVolume;
+    try { await audio.play(); } catch (_) {}
+    return;
+  }
+
+  if (musicAudioElement) {
+    musicAudioElement.pause();
+    musicAudioElement.removeAttribute('src');
+    musicAudioElement.load();
+  }
+
+  let embedUrl = '';
+  if (trackType === 'youtube') {
+    embedUrl = toYouTubeEmbedUrl(track.url, repeat, localMusicVolume <= 0);
+  } else if (trackType === 'spotify') {
+    embedUrl = toSpotifyEmbedUrl(track.url);
+  }
+
+  if (!embedUrl) {
+    stopSharedMusicPlayback();
+    return;
+  }
+
+  const runtimeKey = `${track.id}|${repeat ? '1' : '0'}|${localMusicVolume <= 0 ? 'muted' : 'normal'}|${trackType}`;
+  if (musicTrackRuntimeKey === runtimeKey && musicIframeElement) return;
+  musicTrackRuntimeKey = runtimeKey;
+
+  if (musicIframeElement) musicIframeElement.remove();
+  const iframe = document.createElement('iframe');
+  iframe.id = 'darqie-shared-music-iframe';
+  iframe.src = embedUrl;
+  iframe.allow = 'autoplay; encrypted-media; fullscreen';
+  iframe.style.position = 'fixed';
+  iframe.style.left = '-9999px';
+  iframe.style.top = '-9999px';
+  iframe.style.width = '1px';
+  iframe.style.height = '1px';
+  iframe.style.opacity = '0';
+  iframe.style.pointerEvents = 'none';
+  document.body.appendChild(iframe);
+  musicIframeElement = iframe;
+}
+
+async function initSharedMusicClient() {
+  if (musicClientBound) return;
+  musicClientBound = true;
+
+  localMusicVolume = loadLocalMusicVolume();
+
+  try {
+    const initialMetadata = await OBR.room.getMetadata();
+    await applySharedMusicFromMetadata(initialMetadata);
+  } catch (_) {}
+
+  OBR.room.onMetadataChange(async (metadata) => {
+    await applySharedMusicFromMetadata(metadata);
+  });
+}
+
 function setupCharacterButtons() {
   const addBtn = document.getElementById('addCharacterButton');
   const delBtn = document.getElementById('deleteCharacterButton');
   const createTokenBtn = document.getElementById('createTokenButton');
   const toggleTokenStatsBtn = document.getElementById('toggleTokenStatsButton');
+  const musicVolumeBtn = document.getElementById('musicVolumeButton');
   const gmPanelBtn = document.getElementById('openGmPanelButton');
 
   // Приховування кнопок для не-GM
@@ -2927,12 +3219,23 @@ function setupCharacterButtons() {
     if (toggleTokenStatsBtn) {
       toggleTokenStatsBtn.style.display = 'flex';
     }
+    if (musicVolumeBtn) {
+      musicVolumeBtn.style.display = 'flex';
+    }
   } else {
     // Показуємо всі кнопки для GM
-    [addBtn, delBtn, createTokenBtn, toggleTokenStatsBtn, gmPanelBtn].forEach(btn => {
+    [addBtn, delBtn, createTokenBtn, toggleTokenStatsBtn, musicVolumeBtn, gmPanelBtn].forEach(btn => {
       if (btn) {
         btn.style.display = 'flex';
       }
+    });
+  }
+
+  if (musicVolumeBtn && !musicUiBound) {
+    musicUiBound = true;
+    musicVolumeBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      openMusicVolumePopover(musicVolumeBtn);
     });
   }
 
@@ -3777,6 +4080,9 @@ OBR.onReady(async () => {
     // Отримання інформації про гравця
     currentPlayerName = await OBR.player.getName();
     isGM = (await OBR.player.getRole()) === 'GM';
+
+    // Підключаємо спільний музичний клієнт (відтворення + локальна гучність).
+    await initSharedMusicClient();
 
     // Для GM стартовим екраном має бути Панель GM.
     // Дозволяємо залишитися на сторінці персонажів лише при явному прапорці gmView=characters.
