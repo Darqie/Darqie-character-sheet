@@ -145,14 +145,15 @@ function destroyYtPlayer() {
 async function startYouTube(videoId, startSec, repeat) {
   destroyYtPlayer();
   const YT = await loadYtApi();
-  // Pass element ID — YT.Player reuses the static iframe, keeping its allow=autoplay
+  // Pass element ID — YT.Player reuses the static iframe, keeping its allow=autoplay.
+  // Do NOT use autoplay:1 in playerVars — YouTube forces mute when it sees autoplay=1.
+  // Instead we call unMute() + playVideo() in onReady (page already has autoplay permission
+  // from OBR popover's allow="autoplay" attribute).
   ytPlayer = new YT.Player('ytIframe', {
     videoId,
     width: 300,
     height: 200,
     playerVars: {
-      autoplay: 1,   // YouTube starts loading; onReady will unMute before first frame
-      mute: 0,       // request unmuted — permission granted by allow="autoplay" on iframe
       controls: 1,
       rel: 0,
       playsinline: 1,
@@ -165,6 +166,7 @@ async function startYouTube(videoId, startSec, repeat) {
       onReady(e) {
         e.target.unMute();
         e.target.setVolume(100);
+        e.target.playVideo();
       },
       onStateChange(e) {
         if (e.data === 1 /* PLAYING */) {

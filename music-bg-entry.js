@@ -8,20 +8,19 @@ import OBR from '@owlbear-rodeo/sdk';
  */
 
 OBR.onReady(async () => {
-  try {
-    await OBR.popover.open({
-      id: 'darqie.music.player',
-      url: '/audio-player.html',
-      // 300×60px — large enough for YouTube control bar and Chrome autoplay grants
-      width: 300,
-      height: 60,
-      anchorOrigin:    { horizontal: 'RIGHT', vertical: 'BOTTOM' },
-      transformOrigin: { horizontal: 'RIGHT', vertical: 'BOTTOM' },
-      disableClickAway: true,
-      hidePaper: true,
-      marginThreshold: 0,
-    });
-  } catch (_) {
-    // popover already open — ignore
-  }
+  // Always close first so stale popovers (loaded from old URLs) don't persist
+  try { await OBR.popover.close('darqie.music.player'); } catch (_) {}
+
+  await OBR.popover.open({
+    id: 'darqie.music.player',
+    url: '/audio-player.html',
+    // 300×60px — large enough for YouTube control bar and Chrome autoplay grants
+    width: 300,
+    height: 60,
+    anchorOrigin:    { horizontal: 'RIGHT', vertical: 'BOTTOM' },
+    transformOrigin: { horizontal: 'RIGHT', vertical: 'BOTTOM' },
+    disableClickAway: true,
+    hidePaper: true,
+    marginThreshold: 0,
+  });
 });

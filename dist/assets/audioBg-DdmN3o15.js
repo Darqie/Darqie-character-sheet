@@ -1,0 +1,1 @@
+import{O as r}from"./index-Cfa9MU8H.js";r.onReady(async()=>{try{await r.popover.close("darqie.music.player")}catch{}await r.popover.open({id:"darqie.music.player",url:"/audio-player.html",width:300,height:60,anchorOrigin:{horizontal:"RIGHT",vertical:"BOTTOM"},transformOrigin:{horizontal:"RIGHT",vertical:"BOTTOM"},disableClickAway:!0,hidePaper:!0,marginThreshold:0})});
