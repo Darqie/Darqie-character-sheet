@@ -3112,6 +3112,7 @@ function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0) {
   const videoId = extractYouTubeVideoId(rawUrl);
   if (!videoId) return '';
 
+  const origin = (typeof window !== 'undefined' && window.location?.origin) ? window.location.origin : '';
   const query = new URLSearchParams({
     autoplay: '1',
     mute: '1',
@@ -3121,6 +3122,7 @@ function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0) {
     modestbranding: '1',
     enablejsapi: '1',
   });
+  if (origin) query.set('origin', origin);
 
   const start = Math.max(0, Math.floor(Number(startSec) || 0));
   if (start > 0) query.set('start', String(start));
@@ -3318,20 +3320,16 @@ async function applySharedMusicFromMetadata(metadata) {
   iframe.style.pointerEvents = 'none';
   document.body.appendChild(iframe);
   musicIframeElement = iframe;
-
-  if (trackType === 'youtube') {
-    setTimeout(() => {
-      sendSharedYouTubeCommand(iframe, 'unMute', []);
-      sendSharedYouTubeCommand(iframe, 'setVolume', [Math.round(effectiveVolume * 100)]);
-    }, 3000);
-  }
 }
 
 async function refreshSharedMusicFromSupabaseIfNeeded(metadata) {
   const currentState = normalizeSharedMusicState(metadata?.[DARQIE_MUSIC_STATE_KEY] || {});
   const localUpdatedAt = normalizeMusicTimestampMs(currentState.updatedAt, 0);
   const snapshot = await loadSharedMusicSnapshotFromSupabase(OBR.room.id);
-  if (!snapshot) return;
+  if (!snapshot) {
+    await applySharedMusicFromMetadata(metadata);
+    return;
+  }
 
   if (snapshot.updatedAtMs > localUpdatedAt) {
     const nextMetadata = {
@@ -3352,6 +3350,20 @@ async function initSharedMusicClient() {
   musicClientBound = true;
 
   localMusicVolume = loadLocalMusicVolume();
+
+  window.addEventListener('message', (event) => {
+    if (!musicIframeElement) return;
+    if (event.source !== musicIframeElement.contentWindow) return;
+    try {
+      const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      if (data?.event === 'onReady') {
+        sendSharedYouTubeCommand(musicIframeElement, 'unMute', []);
+        // Re-read effective volume from the last stored state
+        const vol = normalizeMusicVolumeValue(localMusicVolume, MUSIC_LOCAL_VOLUME_DEFAULT);
+        sendSharedYouTubeCommand(musicIframeElement, 'setVolume', [Math.round(vol * 100)]);
+      }
+    } catch (_) {}
+  });
 
   try {
     const initialMetadata = await OBR.room.getMetadata();

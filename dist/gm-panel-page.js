@@ -56,6 +56,7 @@
   let openSheetSignalBound = false;
   let openSheetSignalRetryId = null;
   let skillShareSignalBound = false;
+  const pageContainers = {};
 
   function showInlineSkillPopover(skillName, skillDescription, initiatorName) {
     const existing = document.getElementById('darqie-gm-inline-skill-popover-overlay');
@@ -238,18 +239,31 @@
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  function renderLoadingScreen() {
-    content.classList.add('is-loading');
-    content.innerHTML = `
-      <div class="gm-waiting-block" aria-hidden="true">
+  function showLoadingScreen() {
+    let loader = content.querySelector('#gm-panel-loader');
+    if (!loader) {
+      loader = document.createElement('div');
+      loader.id = 'gm-panel-loader';
+      loader.setAttribute('aria-hidden', 'true');
+      loader.innerHTML = `
         <div class="gm-waiting-container">
           <div class="gm-dice-spinner">
             <i class="fas fa-dice-d20"></i>
           </div>
           <h2 class="gm-waiting-title">Завантаження</h2>
         </div>
-      </div>
-    `;
+      `;
+      content.appendChild(loader);
+    }
+    Object.values(pageContainers).forEach((c) => { c.hidden = true; });
+    loader.hidden = false;
+    content.classList.add('is-loading');
+  }
+
+  function hideLoadingScreen() {
+    const loader = content.querySelector('#gm-panel-loader');
+    if (loader) loader.hidden = true;
+    content.classList.remove('is-loading');
   }
 
   function setActiveButton(activeKey) {
@@ -264,10 +278,22 @@
     const page = pages[key];
     if (!page) return;
 
+    setActiveButton(key);
+
+    // If already loaded, just show/hide without re-fetching
+    if (pageContainers[key]) {
+      hideLoadingScreen();
+      Object.entries(pageContainers).forEach(([k, c]) => { c.hidden = (k !== key); });
+      if (updateHash && window.location.hash !== `#${key}`) {
+        suppressNextHashChange = true;
+        window.location.hash = key;
+      }
+      return;
+    }
+
     const currentToken = ++loadToken;
     const startedAt = Date.now();
-    setActiveButton(key);
-    renderLoadingScreen();
+    showLoadingScreen();
 
     try {
       const htmlResponse = await fetch(page.htmlPath, { cache: 'no-store' });
@@ -279,13 +305,20 @@
       if (remaining > 0) await waitMs(remaining);
 
       if (currentToken !== loadToken) return;
-      content.classList.remove('is-loading');
-      content.innerHTML = html;
+
+      const pageContainer = document.createElement('div');
+      pageContainer.dataset.pageKey = key;
+      pageContainer.innerHTML = html;
+      content.appendChild(pageContainer);
+      pageContainers[key] = pageContainer;
+
+      hideLoadingScreen();
+      Object.entries(pageContainers).forEach(([k, c]) => { c.hidden = (k !== key); });
 
       const module = await import(page.scriptPath);
       if (currentToken !== loadToken) return;
       if (module && typeof module.initPage === 'function') {
-        module.initPage({ root: content, pageKey: key });
+        module.initPage({ root: pageContainer, pageKey: key });
       }
 
       if (updateHash && window.location.hash !== `#${key}`) {
@@ -298,8 +331,14 @@
       if (remaining > 0) await waitMs(remaining);
 
       if (currentToken !== loadToken) return;
-      content.classList.remove('is-loading');
-      content.innerHTML = `<div class="gm-page"><h3>Помилка</h3><p>Не вдалося завантажити сторінку: ${key}</p></div>`;
+      hideLoadingScreen();
+
+      const errContainer = document.createElement('div');
+      errContainer.className = 'gm-page';
+      errContainer.innerHTML = `<h3>Помилка</h3><p>Не вдалося завантажити сторінку: ${key}</p>`;
+      content.appendChild(errContainer);
+      pageContainers[key] = errContainer;
+      Object.entries(pageContainers).forEach(([k, c]) => { c.hidden = (k !== key); });
       console.error('[GM Panel] Помилка завантаження сторінки:', key, error);
     }
   }

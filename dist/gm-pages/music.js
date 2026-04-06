@@ -152,6 +152,7 @@ function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0) {
   const videoId = extractYouTubeVideoId(rawUrl);
   if (!videoId) return '';
 
+  const origin = (typeof window !== 'undefined' && window.location?.origin) ? window.location.origin : '';
   const query = new URLSearchParams({
     autoplay: '1',
     mute: '1',
@@ -161,6 +162,7 @@ function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0) {
     modestbranding: '1',
     enablejsapi: '1',
   });
+  if (origin) query.set('origin', origin);
 
   const normalizedStart = Math.max(0, Math.floor(Number(startSec) || 0));
   if (normalizedStart > 0) query.set('start', String(normalizedStart));
@@ -427,12 +429,19 @@ export function initPage({ root }) {
     } catch (_) {}
   }
 
-  function scheduleYouTubeUnmute(iframe, volume) {
-    setTimeout(() => {
-      sendYouTubeCommand(iframe, 'unMute', []);
-      sendYouTubeCommand(iframe, 'setVolume', [Math.round(clamp01(volume, 1) * 100)]);
-    }, 3000);
+  function handleYouTubeMessage(event) {
+    if (!hiddenEmbed) return;
+    if (event.source !== hiddenEmbed.contentWindow) return;
+    try {
+      const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      if (data?.event === 'onReady') {
+        sendYouTubeCommand(hiddenEmbed, 'unMute', []);
+        sendYouTubeCommand(hiddenEmbed, 'setVolume', [Math.round(getEffectiveVolume() * 100)]);
+      }
+    } catch (_) {}
   }
+
+  window.addEventListener('message', handleYouTubeMessage);
 
   function getCurrentTrack() {
     if (!playbackState.currentTrackId) return null;
@@ -547,7 +556,6 @@ export function initPage({ root }) {
         currentRuntimeKey = nextKey;
         const iframe = ensureHiddenEmbed();
         iframe.src = embedUrl;
-        scheduleYouTubeUnmute(iframe, effectiveVolume);
       } else if (hiddenEmbed) {
         sendYouTubeCommand(hiddenEmbed, 'setVolume', [Math.round(effectiveVolume * 100)]);
       }
