@@ -154,10 +154,12 @@ function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0) {
 
   const query = new URLSearchParams({
     autoplay: '1',
+    mute: '1',
     controls: '1',
     rel: '0',
     playsinline: '1',
     modestbranding: '1',
+    enablejsapi: '1',
   });
 
   const normalizedStart = Math.max(0, Math.floor(Number(startSec) || 0));
@@ -418,6 +420,20 @@ export function initPage({ root }) {
     hiddenEmbed = null;
   }
 
+  function sendYouTubeCommand(iframe, func, args = []) {
+    try {
+      if (!iframe?.contentWindow) return;
+      iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func, args }), '*');
+    } catch (_) {}
+  }
+
+  function scheduleYouTubeUnmute(iframe, volume) {
+    setTimeout(() => {
+      sendYouTubeCommand(iframe, 'unMute', []);
+      sendYouTubeCommand(iframe, 'setVolume', [Math.round(clamp01(volume, 1) * 100)]);
+    }, 3000);
+  }
+
   function getCurrentTrack() {
     if (!playbackState.currentTrackId) return null;
     return playlist.find((track) => track.id === playbackState.currentTrackId) || null;
@@ -517,25 +533,42 @@ export function initPage({ root }) {
     audioPlayer.removeAttribute('src');
     audioPlayer.load();
 
-    let embedUrl = '';
-    if (track.type === TRACK_TYPE_YOUTUBE) {
-      embedUrl = toYouTubeEmbedUrl(track.url, playbackState.repeat, currentPos);
-    } else if (track.type === TRACK_TYPE_SPOTIFY) {
-      embedUrl = toSpotifyEmbedUrl(track.url);
-    }
+    const nextKey = `${track.id}|${playbackState.repeat ? '1' : '0'}|${track.type}|${playbackState.anchorTimestampMs}`;
 
-    if (!embedUrl) {
+    if (track.type === TRACK_TYPE_YOUTUBE) {
+      if (currentRuntimeKey !== nextKey) {
+        const embedUrl = toYouTubeEmbedUrl(track.url, playbackState.repeat, currentPos);
+        if (!embedUrl) {
+          stopAllPlayback();
+          nowPlaying.textContent = `Невідомий тип треку: ${track.name}`;
+          updateSeekUi();
+          return;
+        }
+        currentRuntimeKey = nextKey;
+        const iframe = ensureHiddenEmbed();
+        iframe.src = embedUrl;
+        scheduleYouTubeUnmute(iframe, effectiveVolume);
+      } else if (hiddenEmbed) {
+        sendYouTubeCommand(hiddenEmbed, 'setVolume', [Math.round(effectiveVolume * 100)]);
+      }
+    } else if (track.type === TRACK_TYPE_SPOTIFY) {
+      if (currentRuntimeKey !== nextKey) {
+        const embedUrl = toSpotifyEmbedUrl(track.url);
+        if (!embedUrl) {
+          stopAllPlayback();
+          nowPlaying.textContent = `Невідомий тип треку: ${track.name}`;
+          updateSeekUi();
+          return;
+        }
+        currentRuntimeKey = nextKey;
+        const iframe = ensureHiddenEmbed();
+        iframe.src = embedUrl;
+      }
+    } else {
       stopAllPlayback();
       nowPlaying.textContent = `Невідомий тип треку: ${track.name}`;
       updateSeekUi();
       return;
-    }
-
-    const nextKey = `${track.id}|${playbackState.repeat ? '1' : '0'}|${track.type}|${Math.floor(currentPos)}`;
-    if (currentRuntimeKey !== nextKey) {
-      currentRuntimeKey = nextKey;
-      const iframe = ensureHiddenEmbed();
-      iframe.src = embedUrl;
     }
 
     updateSeekUi();

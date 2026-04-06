@@ -3114,10 +3114,12 @@ function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0) {
 
   const query = new URLSearchParams({
     autoplay: '1',
+    mute: '1',
     controls: '1',
     rel: '0',
     playsinline: '1',
     modestbranding: '1',
+    enablejsapi: '1',
   });
 
   const start = Math.max(0, Math.floor(Number(startSec) || 0));
@@ -3155,6 +3157,13 @@ function stopSharedMusicPlayback() {
   }
 
   musicTrackRuntimeKey = '';
+}
+
+function sendSharedYouTubeCommand(iframe, func, args = []) {
+  try {
+    if (!iframe?.contentWindow) return;
+    iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func, args }), '*');
+  } catch (_) {}
 }
 
 function ensureMusicVolumePopover(button) {
@@ -3272,9 +3281,20 @@ async function applySharedMusicFromMetadata(metadata) {
     musicAudioElement.load();
   }
 
+  const anchorTimestampMs = normalizeMusicTimestampMs(state.anchorTimestampMs, 0);
+  const runtimeKey = `${track.id}|${repeat ? '1' : '0'}|${trackType}|${anchorTimestampMs}`;
+  if (musicTrackRuntimeKey === runtimeKey && musicIframeElement) {
+    if (trackType === 'youtube') {
+      sendSharedYouTubeCommand(musicIframeElement, 'setVolume', [Math.round(effectiveVolume * 100)]);
+    }
+    return;
+  }
+  musicTrackRuntimeKey = runtimeKey;
+
   let embedUrl = '';
   if (trackType === 'youtube') {
-    embedUrl = toYouTubeEmbedUrl(track.url, repeat, startSec);
+    const iframeStartSec = getSharedMusicPositionSec(state, Date.now());
+    embedUrl = toYouTubeEmbedUrl(track.url, repeat, iframeStartSec);
   } else if (trackType === 'spotify') {
     embedUrl = toSpotifyEmbedUrl(track.url);
   }
@@ -3283,10 +3303,6 @@ async function applySharedMusicFromMetadata(metadata) {
     stopSharedMusicPlayback();
     return;
   }
-
-  const runtimeKey = `${track.id}|${repeat ? '1' : '0'}|${trackType}|${Math.floor(startSec)}`;
-  if (musicTrackRuntimeKey === runtimeKey && musicIframeElement) return;
-  musicTrackRuntimeKey = runtimeKey;
 
   if (musicIframeElement) musicIframeElement.remove();
   const iframe = document.createElement('iframe');
@@ -3302,6 +3318,13 @@ async function applySharedMusicFromMetadata(metadata) {
   iframe.style.pointerEvents = 'none';
   document.body.appendChild(iframe);
   musicIframeElement = iframe;
+
+  if (trackType === 'youtube') {
+    setTimeout(() => {
+      sendSharedYouTubeCommand(iframe, 'unMute', []);
+      sendSharedYouTubeCommand(iframe, 'setVolume', [Math.round(effectiveVolume * 100)]);
+    }, 3000);
+  }
 }
 
 async function refreshSharedMusicFromSupabaseIfNeeded(metadata) {
