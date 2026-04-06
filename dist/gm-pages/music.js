@@ -463,7 +463,6 @@ export function initPage({ root }) {
     audioPlayer.load();
     clearHiddenEmbed();
     youtubePlayerIframe.src = '';
-    youtubePlayerWrap.style.display = 'none';
     youtubeUnlockButton.style.display = 'none';
     currentRuntimeKey = '';
   }
@@ -526,8 +525,8 @@ export function initPage({ root }) {
     const directUrl = normalizeTrackUrlByType(track.url, track.type);
 
     if (track.type === TRACK_TYPE_AUDIO || track.type === TRACK_TYPE_DROPBOX) {
-      youtubePlayerWrap.style.display = 'none';
       youtubePlayerIframe.src = '';
+      youtubeUnlockButton.style.display = 'none';
       clearHiddenEmbed();
 
       const nextKey = `${track.id}|${playbackState.repeat ? '1' : '0'}|audio`;
@@ -560,7 +559,6 @@ export function initPage({ root }) {
     const nextKey = `${track.id}|${playbackState.repeat ? '1' : '0'}|${track.type}|${playbackState.anchorTimestampMs}`;
 
     if (track.type === TRACK_TYPE_YOUTUBE) {
-      youtubePlayerWrap.style.display = '';
       if (currentRuntimeKey !== nextKey) {
         const embedUrl = toYouTubeEmbedUrl(track.url, playbackState.repeat, currentPos);
         if (!embedUrl) {
@@ -575,8 +573,8 @@ export function initPage({ root }) {
         youtubeUnlockButton.style.display = '';
       }
     } else if (track.type === TRACK_TYPE_SPOTIFY) {
-      youtubePlayerWrap.style.display = 'none';
       youtubePlayerIframe.src = '';
+      youtubeUnlockButton.style.display = 'none';
       if (currentRuntimeKey !== nextKey) {
         const embedUrl = toSpotifyEmbedUrl(track.url);
         if (!embedUrl) {

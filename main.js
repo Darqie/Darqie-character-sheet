@@ -3198,6 +3198,25 @@ function ensureMusicAudioElement() {
   return musicAudioElement;
 }
 
+function ensurePlayerUnmuteButton() {
+  let btn = document.getElementById('darqie-yt-unmute-btn');
+  if (btn) return btn;
+  btn = document.createElement('button');
+  btn.id = 'darqie-yt-unmute-btn';
+  btn.type = 'button';
+  btn.textContent = '🔊 Увімкнути звук';
+  btn.style.cssText = 'display:none;position:fixed;bottom:8px;right:8px;background:rgba(0,0,0,0.8);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:20px;padding:6px 14px;cursor:pointer;font-size:12px;z-index:99999;white-space:nowrap;';
+  btn.addEventListener('click', () => {
+    if (musicIframeElement?.contentWindow) {
+      musicIframeElement.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'unMute', args: [] }), '*');
+      musicIframeElement.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'setVolume', args: [100] }), '*');
+    }
+    btn.style.display = 'none';
+  });
+  document.body.appendChild(btn);
+  return btn;
+}
+
 function stopSharedMusicPlayback() {
   if (musicAudioElement) {
     musicAudioElement.pause();
@@ -3205,17 +3224,13 @@ function stopSharedMusicPlayback() {
     musicAudioElement.load();
   }
 
-  const ytWidget = document.getElementById('darqie-yt-widget');
-  if (ytWidget) {
-    ytWidget.style.display = 'none';
-    const ytIframe = document.getElementById('darqie-yt-iframe');
-    if (ytIframe) ytIframe.src = '';
-  }
-
   if (musicIframeElement) {
     musicIframeElement.remove();
     musicIframeElement = null;
   }
+
+  const btn = document.getElementById('darqie-yt-unmute-btn');
+  if (btn) btn.style.display = 'none';
 
   musicTrackRuntimeKey = '';
 }
@@ -3281,6 +3296,7 @@ function openMusicVolumePopover(button) {
 }
 
 async function applySharedMusicFromMetadata(metadata) {
+  if (isGM) return; // GM panel handles music playback
   const playlist = Array.isArray(metadata?.[DARQIE_MUSIC_PLAYLIST_KEY]) ? metadata[DARQIE_MUSIC_PLAYLIST_KEY] : [];
   const state = normalizeSharedMusicState(metadata?.[DARQIE_MUSIC_STATE_KEY] || {});
 
@@ -3342,16 +3358,21 @@ async function applySharedMusicFromMetadata(metadata) {
   const runtimeKey = `${track.id}|${repeat ? '1' : '0'}|${trackType}|${anchorTimestampMs}`;
 
   if (trackType === 'youtube') {
-    const { widget, iframe } = ensureSharedYoutubeWidget();
-    if (musicTrackRuntimeKey !== runtimeKey) {
-      musicTrackRuntimeKey = runtimeKey;
-      const iframeStartSec = getSharedMusicPositionSec(state, Date.now());
-      iframe.src = toYouTubeEmbedUrl(track.url, repeat, iframeStartSec);
-      const btn = document.getElementById('darqie-yt-unmute-btn');
-      if (btn) btn.style.display = '';
-    }
-    widget.style.display = 'block';
-    musicIframeElement = iframe;
+    if (musicTrackRuntimeKey === runtimeKey && musicIframeElement) return;
+    musicTrackRuntimeKey = runtimeKey;
+    const iframeStartSec = getSharedMusicPositionSec(state, Date.now());
+    const ytEmbedUrl = toYouTubeEmbedUrl(track.url, repeat, iframeStartSec);
+    if (!ytEmbedUrl) { stopSharedMusicPlayback(); return; }
+    if (musicIframeElement) musicIframeElement.remove();
+    const ytHiddenIframe = document.createElement('iframe');
+    ytHiddenIframe.id = 'darqie-shared-music-iframe';
+    ytHiddenIframe.src = ytEmbedUrl;
+    ytHiddenIframe.allow = 'autoplay; encrypted-media; fullscreen';
+    ytHiddenIframe.setAttribute('allowfullscreen', '');
+    ytHiddenIframe.style.cssText = 'position:fixed;bottom:0;left:0;width:1px;height:1px;border:none;pointer-events:none;z-index:-1;';
+    document.body.appendChild(ytHiddenIframe);
+    musicIframeElement = ytHiddenIframe;
+    ensurePlayerUnmuteButton().style.display = '';
     return;
   }
 
@@ -3417,13 +3438,12 @@ async function initSharedMusicClient() {
   musicClientBound = true;
 
   window.addEventListener('message', (event) => {
-    const ytIframe = document.getElementById('darqie-yt-iframe');
-    if (!ytIframe || event.source !== ytIframe.contentWindow) return;
+    if (!musicIframeElement || event.source !== musicIframeElement.contentWindow) return;
     try {
       const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
       if (data?.event === 'onReady') {
-        ytIframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'unMute', args: [] }), '*');
-        ytIframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'setVolume', args: [100] }), '*');
+        musicIframeElement.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'unMute', args: [] }), '*');
+        musicIframeElement.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'setVolume', args: [100] }), '*');
         const btn = document.getElementById('darqie-yt-unmute-btn');
         if (btn) btn.style.display = 'none';
       }

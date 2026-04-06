@@ -170,15 +170,16 @@
   </div>
 
   <div id="gmMusicNowPlaying" class="gm-music-now-playing">Трек не вибрано</div>
-  <div id="gmMusicYoutubeWrap" style="display:none; margin-bottom:8px; border-radius:6px; overflow:hidden; line-height:0; position:relative;">
+  <button id="gmMusicYoutubeUnmuteBtn" type="button" style="display:none; margin-bottom:6px; width:100%; background:rgba(30,40,50,0.9); color:#7bffad; border:1px solid rgba(120,255,165,0.3); border-radius:20px; padding:5px 0; cursor:pointer; font-size:12px;">🔊 Натисніть, щоб увімкнути звук YouTube</button>
+  <!-- Hidden 1×1px corner iframe for YouTube audio — not display:none so Chrome allows audio -->
+  <div id="gmMusicYoutubeWrap" style="position:fixed; bottom:0; right:0; width:1px; height:1px; overflow:hidden; border:0; z-index:-1; line-height:0;">
     <iframe id="gmMusicYoutubeIframe"
-      style="display:block; width:100%; aspect-ratio:16/9; max-height:160px; border:0;"
+      style="width:1px; height:1px; border:0; display:block;"
       allow="autoplay; encrypted-media; fullscreen"
       allowfullscreen
     ></iframe>
-    <button id="gmMusicYoutubeUnmuteBtn" type="button" style="display:none; position:absolute; bottom:8px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.8); color:#fff; border:1px solid rgba(255,255,255,0.3); border-radius:20px; padding:6px 16px; cursor:pointer; font-size:13px; z-index:10; white-space:nowrap;">🔊 Увімкнути звук</button>
   </div>
-  <div class="gm-music-hint">YouTube відтворюється у вбудованому плеєрі. Якщо звуку немає — натисніть «🔊 Увімкнути звук».</div>
+  <div class="gm-music-hint">Підтримується YouTube (лише аудіо), Dropbox, Spotify та mp3-посилання.</div>
   <audio id="gmMusicAudioPlayer" preload="none" style="display:none;"></audio>
 
   <div class="gm-characters-table-wrap">
