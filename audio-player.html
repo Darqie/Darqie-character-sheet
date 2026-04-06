@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <title>Darqie Audio Player</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 300px; height: 60px; overflow: hidden; background: transparent; }
+    /* YouTube clip — shows only the bottom control bar of the player */
+    #ytClip {
+      position: absolute; bottom: 0; left: 0;
+      width: 300px; height: 60px;
+      overflow: hidden; display: none;
+    }
+    #ytIframe {
+      position: absolute; bottom: 0; left: 0;
+      width: 300px; height: 200px;
+      border: none;
+    }
+    /* Spotify hidden off-screen so it can autoplay without being visible */
+    #spotifyIframe {
+      position: absolute; left: -9999px; top: 0;
+      width: 1px; height: 1px; border: none;
+    }
+  </style>
+</head>
+<body>
+  <audio id="bgAudio" preload="none" style="display:none;"></audio>
+
+  <div id="ytClip">
+    <iframe
+      id="ytIframe"
+      src=""
+      allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+      allowfullscreen
+    ></iframe>
+  </div>
+
+  <iframe
+    id="spotifyIframe"
+    src=""
+    allow="autoplay; encrypted-media"
+  ></iframe>
+
+  <script type="module" src="/music-player-entry.js"></script>
+</body>
+</html>

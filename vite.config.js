@@ -7,8 +7,10 @@ export default defineConfig({
   build: {
     rollupOptions: {
       input: {
-        main: resolve(__dirname, 'index.html'),
-        gmPanel: resolve(__dirname, 'gm-panel.html'),
+        main:        resolve(__dirname, 'index.html'),
+        gmPanel:     resolve(__dirname, 'gm-panel.html'),
+        audioBg:     resolve(__dirname, 'audio-bg.html'),
+        audioPlayer: resolve(__dirname, 'audio-player.html'),
       },
     },
   },
