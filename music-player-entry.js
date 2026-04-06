@@ -194,7 +194,7 @@ function applyMusic(metadata) {
 
   // ── Audio / Dropbox ───────────────────────────────────────────────────────
   if (type === 'audio' || type === 'dropbox') {
-    ytIframe.src         = '';
+    destroyYtPlayer();
     ytClip.style.display = 'none';
     spotifyIframe.src    = '';
 
@@ -231,7 +231,7 @@ function applyMusic(metadata) {
 
   // ── Spotify ───────────────────────────────────────────────────────────────
   if (type === 'spotify') {
-    ytIframe.src         = '';
+    destroyYtPlayer();
     ytClip.style.display = 'none';
     if (currentRuntimeKey !== rk) {
       currentRuntimeKey = rk;
