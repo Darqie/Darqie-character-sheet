@@ -4407,17 +4407,12 @@ OBR.onReady(async () => {
     // Ініціалізуємо лише локальну гучність для слайдера.
     localMusicVolume = loadLocalMusicVolume();
 
-    // Запасне відкриття музичного поповера — на випадок, якщо background_url не відкрив його.
-    // GM отримує маленький (1×1) поповер — YouTube грає у вкладці музики.
-    // Гравці отримують повний (320×197) поповер з YouTube у куті.
+    // Запасне відкриття музичного поповера (1×1 невидимий) — на випадок, якщо background_url не відкрив його.
     try {
-      const _musicRole = await OBR.player.getRole().catch(() => 'PLAYER');
-      const _isGmMusic = _musicRole === 'GM';
       await OBR.popover.open({
         id: 'darqie.music.player',
         url: '/audio-player.html',
-        width:  _isGmMusic ? 1   : 320,
-        height: _isGmMusic ? 1   : 197,
+        width: 1, height: 1,
         anchorOrigin:    { horizontal: 'RIGHT', vertical: 'BOTTOM' },
         transformOrigin: { horizontal: 'RIGHT', vertical: 'BOTTOM' },
         disableClickAway: true,

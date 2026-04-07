@@ -6,39 +6,27 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {
-      width: 320px; height: 197px;
-      overflow: hidden; background: #000;
+      width: 1px; height: 1px;
+      overflow: hidden; background: transparent;
     }
-    /* YouTube iframe fills the whole popover */
+    /* All media elements are invisible — audio plays in background */
     #ytIframe {
-      position: absolute; inset: 0;
-      width: 320px; height: 197px;
+      position: absolute; left: 0; top: 0;
+      width: 1px; height: 1px;
       border: none; display: none;
     }
-    /* Audio track — nothing visible, just plays */
-    #audioLabel {
-      position: absolute; inset: 0;
-      display: none; align-items: center; justify-content: center;
-      color: #ccc; font-size: 12px; font-family: sans-serif;
-      background: transparent;
-    }
-    /* Spotify hidden off-screen */
     #spotifyIframe {
-      position: absolute; left: -9999px; top: 0;
+      position: absolute; left: 0; top: 0;
       width: 1px; height: 1px; border: none;
     }
   </style>
 </head>
 <body>
-  <!-- Static iframe with allow="autoplay" — Chrome delegates the permission down.
-       YT postMessage API (enablejsapi=1) is used so we can unMute after load. -->
+  <!-- YouTube iframe: allow="autoplay" from OBR grants unmuted playback even at 1×1 -->
   <iframe
     id="ytIframe"
-    allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
-    allowfullscreen
+    allow="autoplay; encrypted-media"
   ></iframe>
-
-  <div id="audioLabel">▶ Грає музика…</div>
 
   <audio id="bgAudio" preload="none" style="display:none;"></audio>
 
@@ -47,6 +35,11 @@
     src=""
     allow="autoplay; encrypted-media"
   ></iframe>
+
+  <script type="module" src="/music-player-entry.js"></script>
+</body>
+</html>
+
 
   <script type="module" src="/music-player-entry.js"></script>
 </body>

@@ -24,7 +24,6 @@ const SUPABASE_TABLE = 'room_music_state';
 // ── DOM ───────────────────────────────────────────────────────────────────────
 
 const ytIframe      = document.getElementById('ytIframe');
-const audioLabel    = document.getElementById('audioLabel');
 const bgAudio       = document.getElementById('bgAudio');
 const spotifyIframe = document.getElementById('spotifyIframe');
 
@@ -152,7 +151,6 @@ function stopAudio() {
   bgAudio.pause();
   bgAudio.removeAttribute('src');
   bgAudio.load();
-  audioLabel.style.display = 'none';
 }
 
 function stopSpotify() { spotifyIframe.src = ''; }
@@ -163,7 +161,6 @@ function stopAll() {
   stopYt();
   stopAudio();
   stopSpotify();
-  document.body.style.background = 'transparent';
 }
 
 // ── Apply Music ───────────────────────────────────────────────────────────────
@@ -211,7 +208,6 @@ function applyMusic(metadata) {
 
       ytIframe.src           = `https://www.youtube.com/embed/${encodeURIComponent(id)}?${q}`;
       ytIframe.style.display = 'block';
-      document.body.style.background = '#000';
       // Start retry timer in case onReady postMessage is delayed or blocked
       if (ytUnmuteTimer) clearInterval(ytUnmuteTimer);
       let _retryCount = 0;
@@ -241,7 +237,6 @@ function applyMusic(metadata) {
         if (drift > 2) { try { bgAudio.currentTime = posSec; } catch (_) {} }
         console.log('[Music] Audio playing ✓');
       }).catch((err) => { console.warn('[Music] Audio play() rejected:', err?.message || err); });
-      audioLabel.style.display = 'flex';
     } else {
       bgAudio.volume = effectiveVol();
     }

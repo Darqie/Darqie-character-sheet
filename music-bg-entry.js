@@ -8,47 +8,33 @@ import OBR from '@owlbear-rodeo/sdk';
  */
 
 OBR.onReady(async () => {
-  console.log('[MusicBG] OBR ready — opening music popover');
+  console.log('[MusicBG] OBR ready — opening 1×1 background music popover');
   // Always close first so stale popovers (loaded from old URLs) don't persist
   try { await OBR.popover.close('darqie.music.player'); } catch (_) {}
 
-  // GM hears YouTube through the embedded player in the music tab, so the popover
-  // only needs to handle audio/Dropbox/Spotify — keep it tiny and invisible.
-  // Non-GM players see a 320×197 popover with YouTube video in the corner.
-  const role = await OBR.player.getRole().catch(() => 'PLAYER');
-  const isGM = role === 'GM';
-  const popoverWidth  = isGM ? 1   : 320;
-  const popoverHeight = isGM ? 1   : 197;
-  console.log('[MusicBG] role:', role, '| popover size:', popoverWidth, '×', popoverHeight);
+  // The popover is 1×1 invisible for everyone.
+  // — GM:      hears YouTube via the iframe in the music tab; popover plays audio/dropbox/spotify only.
+  // — Players: popover plays everything (incl. YouTube audio in 1×1 iframe via allow="autoplay").
+  const openArgs = {
+    id: 'darqie.music.player',
+    url: '/audio-player.html',
+    width:  1,
+    height: 1,
+    anchorOrigin:    { horizontal: 'RIGHT', vertical: 'BOTTOM' },
+    transformOrigin: { horizontal: 'RIGHT', vertical: 'BOTTOM' },
+    disableClickAway: true,
+    hidePaper: true,
+    marginThreshold: 0,
+  };
 
   try {
-    await OBR.popover.open({
-      id: 'darqie.music.player',
-      url: '/audio-player.html',
-      width:  popoverWidth,
-      height: popoverHeight,
-      anchorOrigin:    { horizontal: 'RIGHT', vertical: 'BOTTOM' },
-      transformOrigin: { horizontal: 'RIGHT', vertical: 'BOTTOM' },
-      disableClickAway: true,
-      hidePaper: true,
-      marginThreshold: 0,
-    });
+    await OBR.popover.open(openArgs);
     console.log('[MusicBG] Popover opened successfully');
   } catch (err) {
     console.error('[MusicBG] Popover open FAILED:', err?.message || err);
     setTimeout(async () => {
       try {
-        await OBR.popover.open({
-          id: 'darqie.music.player',
-          url: '/audio-player.html',
-          width:  popoverWidth,
-          height: popoverHeight,
-          anchorOrigin:    { horizontal: 'RIGHT', vertical: 'BOTTOM' },
-          transformOrigin: { horizontal: 'RIGHT', vertical: 'BOTTOM' },
-          disableClickAway: true,
-          hidePaper: true,
-          marginThreshold: 0,
-        });
+        await OBR.popover.open(openArgs);
         console.log('[MusicBG] Popover opened on retry');
       } catch (e) { console.error('[MusicBG] Retry failed:', e?.message || e); }
     }, 2000);

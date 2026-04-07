@@ -72,7 +72,7 @@
     .gm-music-page .gm-music-yt-wrap {
       display: none;
       width: 100%;
-      aspect-ratio: 16 / 9;
+      max-width: 480px;
       border-radius: 8px;
       overflow: hidden;
       margin-bottom: 10px;
@@ -81,7 +81,7 @@
 
     .gm-music-page .gm-music-yt-wrap iframe {
       width: 100%;
-      height: 100%;
+      aspect-ratio: 16 / 9;
       border: none;
       display: block;
     }
@@ -169,7 +169,7 @@
   </div>
 
   <div id="gmMusicNowPlaying" class="gm-music-now-playing">Трек не вибрано</div>
-  <div class="gm-music-hint">Dropbox, Spotify та mp3 грають через фоновий плеєр. YouTube вбудований нижче.</div>
+  <div class="gm-music-hint">Dropbox, Spotify та mp3 — фонове відтворення. YouTube вбудовується нижче при активному треку.</div>
 
   <div id="gmMusicYoutubeWrap" class="gm-music-yt-wrap">
     <iframe
