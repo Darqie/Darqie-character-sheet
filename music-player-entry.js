@@ -1,7 +1,8 @@
+// This file is no longer used — all audio playback moved to music-bg-entry.js (audio-bg.html background_url)
 import OBR from '@owlbear-rodeo/sdk';
 
 /**
- * Music Player — persistent OBR popover (320×197px)
+ * Music Player — persistent OBR popover (320×197px) — DEPRECATED
  * - YouTube: full native YouTube iframe, plain src + postMessage API for unmute/volume
  * - Dropbox / audio: hidden <audio> element, plays in background
  * - Spotify: hidden off-screen iframe

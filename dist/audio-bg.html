@@ -3,9 +3,21 @@
 <head>
   <meta charset="UTF-8" />
   <title>Darqie Audio BG</title>
-  <script type="module" crossorigin src="/assets/audioBg-BbxIAofR.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 1px; height: 1px; overflow: hidden; background: transparent; }
+    #ytIframe, #spotifyIframe {
+      position: absolute; left: 0; top: 0;
+      width: 1px; height: 1px; border: none; display: none;
+    }
+  </style>
+  <script type="module" crossorigin src="/assets/audioBg-C3ibrZSP.js"></script>
   <link rel="modulepreload" crossorigin href="/assets/index-Cfa9MU8H.js">
 </head>
-<body>
+<body>
+  <!-- All media is invisible — audio plays in background via OBR background_url allow="autoplay" -->
+  <iframe id="ytIframe" allow="autoplay; encrypted-media"></iframe>
+  <audio id="bgAudio" preload="none" style="display:none;"></audio>
+  <iframe id="spotifyIframe" src="" allow="autoplay; encrypted-media"></iframe>
 </body>
 </html>
