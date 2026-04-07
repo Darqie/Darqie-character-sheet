@@ -124,10 +124,12 @@ window.addEventListener('message', (e) => {
   try {
     const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
     if (data?.event === 'onReady') {
+      console.log('[Music] YouTube onReady — unmuting, volume:', effectiveVolPct());
       ytCmd('unMute');
       ytCmd('setVolume', [effectiveVolPct()]);
     }
     if (data?.event === 'infoDelivery' && data?.info?.muted) {
+      console.log('[Music] YouTube reported muted — forcing unmute');
       ytCmd('unMute');
       ytCmd('setVolume', [effectiveVolPct()]);
     }
@@ -151,6 +153,7 @@ function stopAudio() {
 function stopSpotify() { spotifyIframe.src = ''; }
 
 function stopAll() {
+  console.log('[Music] stopAll — clearing playback');
   runtimeKey = '';
   stopYt();
   stopAudio();
@@ -164,6 +167,8 @@ function applyMusic(metadata) {
   const playlist = Array.isArray(metadata?.[PLAYLIST_KEY]) ? metadata[PLAYLIST_KEY] : [];
   const state    = normalizeState(metadata?.[STATE_KEY]);
   const track    = playlist.find((t) => String(t?.id || '') === state.currentTrackId);
+
+  console.log('[Music] applyMusic — isPlaying:', state.isPlaying, '| track:', track?.name || 'none', '| runtimeKey:', runtimeKey);
 
   if (!track?.url || !state.isPlaying) { stopAll(); return; }
 
@@ -181,6 +186,8 @@ function applyMusic(metadata) {
       runtimeKey = rk;
       const id = extractYtId(track.url);
       if (!id) { stopAll(); return; }
+
+      console.log('[Music] Loading YouTube ID:', id, '| startSec:', Math.floor(posSec));
 
       // enablejsapi=1 — enables postMessage commands (unMute, setVolume)
       // autoplay=1    — YouTube starts; we unmute in the onReady postMessage handler
@@ -215,10 +222,12 @@ function applyMusic(metadata) {
       bgAudio.loop   = repeat;
       bgAudio.volume = effectiveVol();
       bgAudio.src    = url;
+      console.log('[Music] Loading audio:', url, '| startSec:', Math.floor(posSec), '| vol:', effectiveVol().toFixed(2));
       bgAudio.play().then(() => {
         const drift = Math.abs((bgAudio.currentTime || 0) - posSec);
         if (drift > 2) { try { bgAudio.currentTime = posSec; } catch (_) {} }
-      }).catch(() => {});
+        console.log('[Music] Audio playing ✓');
+      }).catch((err) => { console.warn('[Music] Audio play() rejected:', err?.message || err); });
       audioLabel.style.display = 'flex';
     } else {
       bgAudio.volume = effectiveVol();
@@ -274,8 +283,10 @@ window.addEventListener('storage', (e) => {
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 OBR.onReady(async () => {
+  console.log('[Music] OBR ready — booting music player');
   const roomId     = OBR.room?.id || '';
   const playerName = await OBR.player.getName().catch(() => 'player');
+  console.log('[Music] roomId:', roomId, '| player:', playerName);
   volKey    = `${VOL_PREFIX}.${roomId}.${playerName}`;
   globalVol = 1;
 
@@ -286,7 +297,9 @@ OBR.onReady(async () => {
   if (roomId) {
     const snap   = await loadFromSupabase(roomId);
     const metaTs = tsMs(metadata?.[STATE_KEY]?.updatedAt, 0);
+    console.log('[Music] Supabase snap:', snap ? `updatedAt=${snap.updatedAtMs}` : 'null', '| OBR metaTs:', metaTs);
     if (snap && snap.updatedAtMs > metaTs) {
+      console.log('[Music] Using Supabase snapshot (newer)');
       metadata = { ...metadata, [PLAYLIST_KEY]: snap.playlist, [STATE_KEY]: snap.state };
     }
   }
