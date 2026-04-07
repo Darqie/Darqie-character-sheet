@@ -329,6 +329,8 @@ export function initPage({ root }) {
 
   const nowPlaying = root.querySelector('#gmMusicNowPlaying');
   const audioPlayer = root.querySelector('#gmMusicAudioPlayer');
+  const gmYoutubeWrap   = root.querySelector('#gmMusicYoutubeWrap');
+  const gmYoutubeIframe = root.querySelector('#gmMusicYoutubeIframe');
 
   if (!openAddModalButton || !addModal || !cancelAddButton || !urlInput || !nameInput || !addButton || !tableBody || !prevButton || !playPauseButton || !nextButton || !repeatButton || !globalVolumeSlider || !globalVolumeValue || !volumeSlider || !volumeValue || !nowPlaying || !audioPlayer) {
     return;
@@ -345,6 +347,44 @@ export function initPage({ root }) {
   let hiddenEmbed = null;
   let gmVolume = 0.7;
   let seekTimerId = null;
+  let ytUnmuteRetryId = null; // retry interval for YT unmute in tab
+
+  // ── YouTube postMessage handler (for the in-tab iframe) ──────────────────
+  function ytTabCmd(func, args = []) {
+    try {
+      gmYoutubeIframe?.contentWindow?.postMessage(
+        JSON.stringify({ event: 'command', func, args }),
+        'https://www.youtube.com'
+      );
+    } catch (_) {}
+  }
+
+  function startYtUnmuteRetry() {
+    if (ytUnmuteRetryId) clearInterval(ytUnmuteRetryId);
+    let attempts = 0;
+    ytUnmuteRetryId = setInterval(() => {
+      if (++attempts > 30) { clearInterval(ytUnmuteRetryId); ytUnmuteRetryId = null; return; }
+      ytTabCmd('unMute');
+      ytTabCmd('setVolume', [Math.round(clamp01(gmVolume, 0.7) * clamp01(playbackState.globalVolume, 1) * 100)]);
+    }, 500);
+  }
+
+  function stopYtUnmuteRetry() {
+    if (ytUnmuteRetryId) { clearInterval(ytUnmuteRetryId); ytUnmuteRetryId = null; }
+  }
+
+  window.addEventListener('message', (e) => {
+    if (e.origin !== 'https://www.youtube.com') return;
+    try {
+      const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+      if (data?.event === 'onReady' || (data?.event === 'infoDelivery' && data?.info?.muted)) {
+        console.log('[Music Tab] YouTube', data.event, '— unmuting');
+        ytTabCmd('unMute');
+        ytTabCmd('setVolume', [Math.round(clamp01(gmVolume, 0.7) * clamp01(playbackState.globalVolume, 1) * 100)]);
+        if (data?.event === 'onReady') stopYtUnmuteRetry();
+      }
+    } catch (_) {}
+  });
 
   function ensureActive() {
     const stillActive = root.isConnected && document.body.contains(root);
@@ -448,6 +488,9 @@ export function initPage({ root }) {
       playPauseButton.innerHTML = '<i class="fas fa-play"></i>';
       nowPlaying.textContent = track ? `Пауза: ${track.name}` : 'Відтворення зупинено';
       stopAllPlayback();
+      // Hide YouTube embed when stopped
+      if (gmYoutubeWrap) { gmYoutubeWrap.style.display = 'none'; if (gmYoutubeIframe) gmYoutubeIframe.src = ''; }
+      stopYtUnmuteRetry();
       return;
     }
 
@@ -484,12 +527,43 @@ export function initPage({ root }) {
     }
 
     // For YouTube / Spotify / unknown — background page handles playback.
-    // GM panel just updates its UI.
+    // GM panel drives its own YouTube embed for visual control.
     audioPlayer.pause();
     audioPlayer.removeAttribute('src');
     audioPlayer.load();
 
     const nextKey = `${track.id}|${playbackState.repeat ? '1' : '0'}|${track.type}|${playbackState.anchorTimestampMs}`;
+
+    if (track.type === TRACK_TYPE_YOUTUBE && gmYoutubeWrap && gmYoutubeIframe) {
+      if (currentRuntimeKey !== nextKey) {
+        // Load a new YouTube video in the tab iframe
+        const ytId = extractYouTubeVideoId(track.url);
+        if (ytId) {
+          const q = new URLSearchParams({
+            enablejsapi:    '1',
+            autoplay:       '1',
+            controls:       '1',
+            rel:            '0',
+            playsinline:    '1',
+            modestbranding: '1',
+            origin: (window.location?.origin || ''),
+          });
+          if (currentPos > 1) q.set('start', String(Math.floor(currentPos)));
+          if (playbackState.repeat) { q.set('loop', '1'); q.set('playlist', ytId); }
+          console.log('[Music Tab] Loading YouTube iframe:', ytId, 'startSec:', Math.floor(currentPos));
+          gmYoutubeIframe.src = `https://www.youtube.com/embed/${encodeURIComponent(ytId)}?${q}`;
+          startYtUnmuteRetry();
+        } else {
+          gmYoutubeWrap.style.display = 'none';
+          gmYoutubeIframe.src = '';
+        }
+      }
+      gmYoutubeWrap.style.display = 'block';
+    } else {
+      // Non-YouTube: hide the embed
+      if (gmYoutubeWrap) { gmYoutubeWrap.style.display = 'none'; if (gmYoutubeIframe) gmYoutubeIframe.src = ''; stopYtUnmuteRetry(); }
+    }
+
     currentRuntimeKey = nextKey;
   }
 

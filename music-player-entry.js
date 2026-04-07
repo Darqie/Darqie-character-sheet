@@ -33,6 +33,8 @@ const spotifyIframe = document.getElementById('spotifyIframe');
 let volKey     = `${VOL_PREFIX}.global.player`;
 let globalVol  = 1;
 let runtimeKey = '';
+let isGM       = false;  // set on OBR.onReady; GM hears YouTube via the music tab, not the popover
+let ytUnmuteTimer = null; // retry timer to ensure YouTube unmutes
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
@@ -127,6 +129,8 @@ window.addEventListener('message', (e) => {
       console.log('[Music] YouTube onReady — unmuting, volume:', effectiveVolPct());
       ytCmd('unMute');
       ytCmd('setVolume', [effectiveVolPct()]);
+      // Stop the retry timer — onReady confirms the API channel is open
+      if (ytUnmuteTimer) { clearInterval(ytUnmuteTimer); ytUnmuteTimer = null; }
     }
     if (data?.event === 'infoDelivery' && data?.info?.muted) {
       console.log('[Music] YouTube reported muted — forcing unmute');
@@ -139,6 +143,7 @@ window.addEventListener('message', (e) => {
 // ── Stop helpers ──────────────────────────────────────────────────────────────
 
 function stopYt() {
+  if (ytUnmuteTimer) { clearInterval(ytUnmuteTimer); ytUnmuteTimer = null; }
   ytIframe.src           = '';
   ytIframe.style.display = 'none';
 }
@@ -181,8 +186,8 @@ function applyMusic(metadata) {
   // ── YouTube ───────────────────────────────────────────────────────────────
   if (type === 'youtube') {
     stopAudio();
-    stopSpotify();
-    if (runtimeKey !== rk) {
+    stopSpotify();    // GM hears YouTube through the embedded player in the music tab
+    if (isGM) { stopYt(); return; }    if (runtimeKey !== rk) {
       runtimeKey = rk;
       const id = extractYtId(track.url);
       if (!id) { stopAll(); return; }
@@ -207,6 +212,14 @@ function applyMusic(metadata) {
       ytIframe.src           = `https://www.youtube.com/embed/${encodeURIComponent(id)}?${q}`;
       ytIframe.style.display = 'block';
       document.body.style.background = '#000';
+      // Start retry timer in case onReady postMessage is delayed or blocked
+      if (ytUnmuteTimer) clearInterval(ytUnmuteTimer);
+      let _retryCount = 0;
+      ytUnmuteTimer = setInterval(() => {
+        if (++_retryCount > 30) { clearInterval(ytUnmuteTimer); ytUnmuteTimer = null; return; }
+        ytCmd('unMute');
+        ytCmd('setVolume', [effectiveVolPct()]);
+      }, 500);
     }
     return;
   }
@@ -286,7 +299,9 @@ OBR.onReady(async () => {
   console.log('[Music] OBR ready — booting music player');
   const roomId     = OBR.room?.id || '';
   const playerName = await OBR.player.getName().catch(() => 'player');
-  console.log('[Music] roomId:', roomId, '| player:', playerName);
+  const role       = await OBR.player.getRole().catch(() => 'PLAYER');
+  isGM = role === 'GM';
+  console.log('[Music] roomId:', roomId, '| player:', playerName, '| isGM:', isGM);
   volKey    = `${VOL_PREFIX}.${roomId}.${playerName}`;
   globalVol = 1;
 

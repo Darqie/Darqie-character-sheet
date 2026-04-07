@@ -12,12 +12,21 @@ OBR.onReady(async () => {
   // Always close first so stale popovers (loaded from old URLs) don't persist
   try { await OBR.popover.close('darqie.music.player'); } catch (_) {}
 
+  // GM hears YouTube through the embedded player in the music tab, so the popover
+  // only needs to handle audio/Dropbox/Spotify — keep it tiny and invisible.
+  // Non-GM players see a 320×197 popover with YouTube video in the corner.
+  const role = await OBR.player.getRole().catch(() => 'PLAYER');
+  const isGM = role === 'GM';
+  const popoverWidth  = isGM ? 1   : 320;
+  const popoverHeight = isGM ? 1   : 197;
+  console.log('[MusicBG] role:', role, '| popover size:', popoverWidth, '×', popoverHeight);
+
   try {
     await OBR.popover.open({
       id: 'darqie.music.player',
       url: '/audio-player.html',
-      width: 320,
-      height: 197,
+      width:  popoverWidth,
+      height: popoverHeight,
       anchorOrigin:    { horizontal: 'RIGHT', vertical: 'BOTTOM' },
       transformOrigin: { horizontal: 'RIGHT', vertical: 'BOTTOM' },
       disableClickAway: true,
@@ -32,8 +41,8 @@ OBR.onReady(async () => {
         await OBR.popover.open({
           id: 'darqie.music.player',
           url: '/audio-player.html',
-          width: 320,
-          height: 197,
+          width:  popoverWidth,
+          height: popoverHeight,
           anchorOrigin:    { horizontal: 'RIGHT', vertical: 'BOTTOM' },
           transformOrigin: { horizontal: 'RIGHT', vertical: 'BOTTOM' },
           disableClickAway: true,

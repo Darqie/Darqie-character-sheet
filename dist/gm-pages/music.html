@@ -69,6 +69,23 @@
       font-size: 0.84rem;
     }
 
+    .gm-music-page .gm-music-yt-wrap {
+      display: none;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 10px;
+      background: #000;
+    }
+
+    .gm-music-page .gm-music-yt-wrap iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+    }
+
     .gm-music-page .gm-music-table input.gm-cell-input {
       width: 100%;
     }
@@ -152,7 +169,15 @@
   </div>
 
   <div id="gmMusicNowPlaying" class="gm-music-now-playing">Трек не вибрано</div>
-  <div class="gm-music-hint">YouTube грає через плаваючий плеєр (праворуч внизу). Dropbox, Spotify та mp3 — підтримуються.</div>
+  <div class="gm-music-hint">Dropbox, Spotify та mp3 грають через фоновий плеєр. YouTube вбудований нижче.</div>
+
+  <div id="gmMusicYoutubeWrap" class="gm-music-yt-wrap">
+    <iframe
+      id="gmMusicYoutubeIframe"
+      allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+      allowfullscreen
+    ></iframe>
+  </div>
   <audio id="gmMusicAudioPlayer" preload="none" style="display:none;"></audio>
 
   <div class="gm-characters-table-wrap">
