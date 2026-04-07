@@ -2,22 +2,27 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8" />
-  <title>Darqie Audio Player</title>
+  <title>Darqie Music</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 300px; height: 60px; overflow: hidden; background: transparent; }
-    /* YouTube clip — shows only the bottom control bar of the player */
-    #ytClip {
-      position: absolute; bottom: 0; left: 0;
-      width: 300px; height: 60px;
-      overflow: hidden; display: none;
+    html, body {
+      width: 320px; height: 197px;
+      overflow: hidden; background: #000;
     }
+    /* YouTube iframe fills the whole popover */
     #ytIframe {
-      position: absolute; bottom: 0; left: 0;
-      width: 300px; height: 200px;
-      border: none;
+      position: absolute; inset: 0;
+      width: 320px; height: 197px;
+      border: none; display: none;
     }
-    /* Spotify hidden off-screen so it can autoplay without being visible */
+    /* Audio track — nothing visible, just plays */
+    #audioLabel {
+      position: absolute; inset: 0;
+      display: none; align-items: center; justify-content: center;
+      color: #ccc; font-size: 12px; font-family: sans-serif;
+      background: transparent;
+    }
+    /* Spotify hidden off-screen */
     #spotifyIframe {
       position: absolute; left: -9999px; top: 0;
       width: 1px; height: 1px; border: none;
@@ -25,16 +30,17 @@
   </style>
 </head>
 <body>
-  <audio id="bgAudio" preload="none" style="display:none;"></audio>
+  <!-- Static iframe with allow="autoplay" — Chrome delegates the permission down.
+       YT postMessage API (enablejsapi=1) is used so we can unMute after load. -->
+  <iframe
+    id="ytIframe"
+    allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+    allowfullscreen
+  ></iframe>
 
-  <div id="ytClip">
-    <!-- Static iframe with allow="autoplay" so Chrome delegates the permission
-         to YouTube content. YT.Player will reuse this element. -->
-    <iframe
-      id="ytIframe"
-      allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
-    ></iframe>
-  </div>
+  <div id="audioLabel">▶ Грає музика…</div>
+
+  <audio id="bgAudio" preload="none" style="display:none;"></audio>
 
   <iframe
     id="spotifyIframe"
@@ -45,3 +51,4 @@
   <script type="module" src="/music-player-entry.js"></script>
 </body>
 </html>
+

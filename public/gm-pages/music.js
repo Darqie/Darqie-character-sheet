@@ -327,13 +327,10 @@ export function initPage({ root }) {
   const volumeSlider = root.querySelector('#gmMusicVolumeSlider');
   const volumeValue = root.querySelector('#gmMusicVolumeValue');
 
-  const seekSlider = root.querySelector('#gmMusicSeekSlider');
-  const seekValue = root.querySelector('#gmMusicSeekValue');
-
   const nowPlaying = root.querySelector('#gmMusicNowPlaying');
   const audioPlayer = root.querySelector('#gmMusicAudioPlayer');
 
-  if (!openAddModalButton || !addModal || !cancelAddButton || !urlInput || !nameInput || !addButton || !tableBody || !prevButton || !playPauseButton || !nextButton || !repeatButton || !globalVolumeSlider || !globalVolumeValue || !volumeSlider || !volumeValue || !seekSlider || !seekValue || !nowPlaying || !audioPlayer) {
+  if (!openAddModalButton || !addModal || !cancelAddButton || !urlInput || !nameInput || !addButton || !tableBody || !prevButton || !playPauseButton || !nextButton || !repeatButton || !globalVolumeSlider || !globalVolumeValue || !volumeSlider || !volumeValue || !nowPlaying || !audioPlayer) {
     return;
   }
 
@@ -347,7 +344,6 @@ export function initPage({ root }) {
   let currentRuntimeKey = '';
   let hiddenEmbed = null;
   let gmVolume = 0.7;
-  let seekDragActive = false;
   let seekTimerId = null;
 
   function ensureActive() {
@@ -442,34 +438,6 @@ export function initPage({ root }) {
     return null;
   }
 
-  function updateSeekUi() {
-    if (!ensureActive()) return;
-    if (seekDragActive) return;
-
-    const track = getCurrentTrack();
-    if (!track || !playbackState.currentTrackId) {
-      seekSlider.disabled = true;
-      seekSlider.max = '100';
-      seekSlider.value = '0';
-      seekValue.textContent = '0:00';
-      return;
-    }
-
-    const currentPos = getStatePositionSec(playbackState);
-    const durationSec = getKnownDurationSec();
-    const maxSec = durationSec || SEEK_FALLBACK_MAX_SEC;
-
-    seekSlider.disabled = false;
-    seekSlider.max = String(Math.max(1, Math.floor(maxSec)));
-    seekSlider.value = String(Math.max(0, Math.min(maxSec, currentPos)));
-
-    if (durationSec) {
-      seekValue.textContent = `${formatTime(currentPos)} / ${formatTime(durationSec)}`;
-    } else {
-      seekValue.textContent = formatTime(currentPos);
-    }
-  }
-
   async function syncPlaybackUi() {
     if (!ensureActive()) return;
 
@@ -480,7 +448,6 @@ export function initPage({ root }) {
       playPauseButton.innerHTML = '<i class="fas fa-play"></i>';
       nowPlaying.textContent = track ? `Пауза: ${track.name}` : 'Відтворення зупинено';
       stopAllPlayback();
-      updateSeekUi();
       return;
     }
 
@@ -508,13 +475,11 @@ export function initPage({ root }) {
       }
 
       // NOTE: Actual playback is handled by music-bg.js (background_url).
-      // Here we only load metadata so the seek slider can show track duration.
+      // Here we only load metadata so the GM panel can show track info.
       audioPlayer.preload = 'metadata';
       if (!audioPlayer.src || audioPlayer.src !== directUrl) {
         audioPlayer.load();
       }
-
-      updateSeekUi();
       return;
     }
 
@@ -526,7 +491,6 @@ export function initPage({ root }) {
 
     const nextKey = `${track.id}|${playbackState.repeat ? '1' : '0'}|${track.type}|${playbackState.anchorTimestampMs}`;
     currentRuntimeKey = nextKey;
-    updateSeekUi();
   }
 
   function getNextTrackId(currentId, direction) {
@@ -844,31 +808,6 @@ export function initPage({ root }) {
       audioPlayer.volume = getEffectiveVolume();
     });
 
-    seekSlider.addEventListener('pointerdown', () => {
-      seekDragActive = true;
-    });
-
-    seekSlider.addEventListener('input', () => {
-      const sec = Number(seekSlider.value) || 0;
-      const durationSec = getKnownDurationSec();
-      if (durationSec) {
-        seekValue.textContent = `${formatTime(sec)} / ${formatTime(durationSec)}`;
-      } else {
-        seekValue.textContent = formatTime(sec);
-      }
-    });
-
-    seekSlider.addEventListener('change', async () => {
-      seekDragActive = false;
-      await seekTo(Number(seekSlider.value) || 0);
-    });
-
-    seekSlider.addEventListener('pointerup', async () => {
-      if (!seekDragActive) return;
-      seekDragActive = false;
-      await seekTo(Number(seekSlider.value) || 0);
-    });
-
     tableBody.addEventListener('click', async (e) => {
       const target = e.target.closest('[data-action]');
       if (!target) return;
@@ -899,10 +838,6 @@ export function initPage({ root }) {
       if (playbackState.repeat) return;
 
       await goRelative(1);
-    });
-
-    audioPlayer.addEventListener('loadedmetadata', () => {
-      updateSeekUi();
     });
 
     document.addEventListener('keydown', (e) => {
@@ -956,7 +891,6 @@ export function initPage({ root }) {
 
     seekTimerId = setInterval(() => {
       if (!ensureActive()) return;
-      updateSeekUi();
       if (playbackState.isPlaying) {
         const track = getCurrentTrack();
         if (track && (track.type === TRACK_TYPE_AUDIO || track.type === TRACK_TYPE_DROPBOX)) {

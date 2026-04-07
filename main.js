@@ -4407,6 +4407,22 @@ OBR.onReady(async () => {
     // Ініціалізуємо лише локальну гучність для слайдера.
     localMusicVolume = loadLocalMusicVolume();
 
+    // Запасне відкриття музичного поповера — на випадок, якщо background_url не відкрив його.
+    // Уже відкритий поповер просто залишиться незмінним.
+    try {
+      await OBR.popover.open({
+        id: 'darqie.music.player',
+        url: '/audio-player.html',
+        width: 320,
+        height: 197,
+        anchorOrigin:    { horizontal: 'RIGHT', vertical: 'BOTTOM' },
+        transformOrigin: { horizontal: 'RIGHT', vertical: 'BOTTOM' },
+        disableClickAway: true,
+        hidePaper: true,
+        marginThreshold: 0,
+      });
+    } catch (_) {}
+
     // Для GM стартовим екраном має бути Панель GM.
     // Дозволяємо залишитися на сторінці персонажів лише при явному прапорці gmView=characters.
     const currentUrl = new URL(window.location.href);

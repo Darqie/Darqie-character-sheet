@@ -15,8 +15,8 @@ OBR.onReady(async () => {
     id: 'darqie.music.player',
     url: '/audio-player.html',
     // 300×60px — large enough for YouTube control bar and Chrome autoplay grants
-    width: 300,
-    height: 60,
+    width: 320,
+    height: 197,
     anchorOrigin:    { horizontal: 'RIGHT', vertical: 'BOTTOM' },
     transformOrigin: { horizontal: 'RIGHT', vertical: 'BOTTOM' },
     disableClickAway: true,
