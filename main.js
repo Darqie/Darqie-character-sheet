@@ -4403,23 +4403,9 @@ OBR.onReady(async () => {
     currentPlayerName = await OBR.player.getName();
     isGM = (await OBR.player.getRole()) === 'GM';
 
-    // Музичне відтворення тепер обробляється фоновою сторінкою (music-bg.html).
+    // Музичне відтворення тепер обробляється фоновою сторінкою (audio-bg.html → background_url).
     // Ініціалізуємо лише локальну гучність для слайдера.
     localMusicVolume = loadLocalMusicVolume();
-
-    // Запасне відкриття музичного поповера (1×1 невидимий) — на випадок, якщо background_url не відкрив його.
-    try {
-      await OBR.popover.open({
-        id: 'darqie.music.player',
-        url: '/audio-player.html',
-        width: 1, height: 1,
-        anchorOrigin:    { horizontal: 'RIGHT', vertical: 'BOTTOM' },
-        transformOrigin: { horizontal: 'RIGHT', vertical: 'BOTTOM' },
-        disableClickAway: true,
-        hidePaper: true,
-        marginThreshold: 0,
-      });
-    } catch (_) {}
 
     // Для GM стартовим екраном має бути Панель GM.
     // Дозволяємо залишитися на сторінці персонажів лише при явному прапорці gmView=characters.
