@@ -1,6 +1,7 @@
 /manifest.json
   Content-Type: application/json
   Access-Control-Allow-Origin: *
+  Cache-Control: no-cache
 
 /icon.svg
   Content-Type: image/svg+xml
@@ -13,3 +14,16 @@
 /character-token-placeholder.png
   Content-Type: image/png
   Access-Control-Allow-Origin: *
+
+# Non-hashed HTML and JS files — must never be cached stale
+/*.html
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/gm-pages/*
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/audio-bg.html
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/audio-player.html
+  Cache-Control: no-cache, no-store, must-revalidate
