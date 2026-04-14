@@ -148,6 +148,8 @@ function stopAll() {
   runtimeKey = '';
   currentYtTrackId = '';
   _wantPlay = false;
+  _seekTarget = null;
+  _lastAnchorTs = 0;
   stopAudio();
   stopSpotify();
 }
@@ -180,9 +182,9 @@ bgAudio.addEventListener('loadedmetadata', () => {
 });
 
 let _wantPlay = false;
-let _pendingPos = 0;
+let _seekTarget = null; // target position in seconds, or null if no pending seek
 let _retryTimer = null;
-let _lastAnchorTs = 0; // track anchorTimestampMs to detect deliberate seeks
+let _lastAnchorTs = 0; // last anchorTimestampMs we processed — detects GM seeks
 
 function _doPlay() {
   if (!_wantPlay || !bgAudio.src) return;
@@ -209,52 +211,25 @@ function _clearRetry() {
   if (_retryTimer) { clearInterval(_retryTimer); _retryTimer = null; }
 }
 
+// Single place to apply a pending seek — fires when audio has enough data
 bgAudio.addEventListener('canplay', () => {
-  if (_pendingPos > 1) {
-    const target = _pendingPos;
-    _pendingPos = 0;
+  if (_seekTarget !== null && _seekTarget > 0) {
+    const target = _seekTarget;
+    _seekTarget = null;
     try { bgAudio.currentTime = target; } catch (_) {}
-  } else {
-    _pendingPos = 0;
   }
   if (_wantPlay) _doPlay();
 });
 
-// For large files: if seek failed because data wasn't buffered yet, retry on progress
-bgAudio.addEventListener('progress', () => {
-  if (_pendingPos > 1 && bgAudio.readyState >= 1) {
-    const target = _pendingPos;
-    try {
-      bgAudio.currentTime = target;
-      _pendingPos = 0;
-    } catch (_) {}
-  }
+// After a seek completes, ensure playback continues
+bgAudio.addEventListener('seeked', () => {
+  if (_wantPlay) _doPlay();
 });
 
-function tryPlay(posSec) {
+function startTrack(posSec) {
   _wantPlay = true;
-  _pendingPos = posSec;
+  _seekTarget = posSec > 1 ? posSec : null;
   _doPlay();
-}
-
-function syncPosition(posSec, anchorTimestampMs) {
-  if (!bgAudio.src || bgAudio.paused) return;
-  if (currentYtTrackId) {
-    // For YT streams: only seek when the GM explicitly seeked (anchor timestamp changed)
-    if (anchorTimestampMs && anchorTimestampMs !== _lastAnchorTs) {
-      _lastAnchorTs = anchorTimestampMs;
-      const drift = Math.abs((bgAudio.currentTime || 0) - posSec);
-      if (drift > 2) {
-        _pendingPos = posSec;
-        try { bgAudio.currentTime = posSec; } catch (_) {}
-      }
-    }
-    return;
-  }
-  const drift = Math.abs((bgAudio.currentTime || 0) - posSec);
-  if (drift > 5) {
-    try { bgAudio.currentTime = posSec; } catch (_) {}
-  }
 }
 
 function applyMusic(metadata) {
@@ -278,21 +253,31 @@ function applyMusic(metadata) {
 
     const rk = `${track.id}|yt`;
     if (runtimeKey !== rk) {
+      // New track — load and seek to calculated position
       runtimeKey = rk;
       currentYtTrackId = track.id;
       _lastAnchorTs = state.anchorTimestampMs;
       bgAudio.loop = state.repeat;
       setVol();
-      // Stream through Edge Function to avoid ERR_CONTENT_DECODING_FAILED
       bgAudio.src = `${YT_AUDIO_ENDPOINT}?v=${encodeURIComponent(videoId)}&stream=1`;
-      tryPlay(posSec);
+      startTrack(posSec);
     } else {
+      // Same track — only react to GM seek or resume from pause
       bgAudio.loop = state.repeat;
       setVol();
-      if (bgAudio.src && bgAudio.paused) {
-        tryPlay(posSec);
-      } else {
-        syncPosition(posSec, state.anchorTimestampMs);
+      if (state.anchorTimestampMs !== _lastAnchorTs) {
+        // GM explicitly seeked or paused/resumed — sync to new position
+        _lastAnchorTs = state.anchorTimestampMs;
+        const drift = Math.abs((bgAudio.currentTime || 0) - posSec);
+        if (drift > 2) {
+          _seekTarget = posSec;
+          try { bgAudio.currentTime = posSec; } catch (_) {}
+        }
+      }
+      // If paused but should be playing, resume
+      if (bgAudio.paused && !_wantPlay) {
+        _wantPlay = true;
+        _doPlay();
       }
     }
     return;
@@ -304,18 +289,28 @@ function applyMusic(metadata) {
     const url = type === 'dropbox' ? normalizeDropbox(track.url) : String(track.url).trim();
     const rk = `${track.id}|${type}`;
     if (runtimeKey !== rk) {
+      // New track — load and seek to calculated position
       runtimeKey = rk;
+      _lastAnchorTs = state.anchorTimestampMs;
       bgAudio.loop = state.repeat;
       setVol();
       bgAudio.src = url;
-      tryPlay(posSec);
+      startTrack(posSec);
     } else {
+      // Same track
       bgAudio.loop = state.repeat;
       setVol();
-      if (bgAudio.src && bgAudio.paused) {
-        tryPlay(posSec);
-      } else {
-        syncPosition(posSec);
+      if (state.anchorTimestampMs !== _lastAnchorTs) {
+        // GM explicitly seeked — sync to new position
+        _lastAnchorTs = state.anchorTimestampMs;
+        const drift = Math.abs((bgAudio.currentTime || 0) - posSec);
+        if (drift > 2) {
+          try { bgAudio.currentTime = posSec; } catch (_) {}
+        }
+      }
+      if (bgAudio.paused && !_wantPlay) {
+        _wantPlay = true;
+        _doPlay();
       }
     }
     return;
