@@ -186,6 +186,29 @@ bgAudio.addEventListener('loadedmetadata', () => {
   if (currentYtTrackId) writeYtRuntime(bgAudio.currentTime, bgAudio.duration);
 });
 
+function tryPlay(posSec) {
+  // First attempt: play muted then unmute (bypasses some autoplay policies)
+  const vol = bgAudio.volume;
+  bgAudio.muted = true;
+  bgAudio.play().then(() => {
+    bgAudio.muted = false;
+    bgAudio.volume = vol;
+    const drift = Math.abs((bgAudio.currentTime || 0) - posSec);
+    if (drift > 2) {
+      try { bgAudio.currentTime = posSec; } catch (_) {}
+    }
+  }).catch(() => {
+    bgAudio.muted = false;
+    // Unmuted retry
+    bgAudio.play().then(() => {
+      const drift = Math.abs((bgAudio.currentTime || 0) - posSec);
+      if (drift > 2) {
+        try { bgAudio.currentTime = posSec; } catch (_) {}
+      }
+    }).catch(e => console.warn('[MusicPlayer] play() blocked:', e?.message || e));
+  });
+}
+
 function applyMusic(metadata) {
   const playlist = Array.isArray(metadata?.[PLAYLIST_KEY]) ? metadata[PLAYLIST_KEY] : [];
   const state = normalizeState(metadata?.[STATE_KEY]);
@@ -223,15 +246,12 @@ function applyMusic(metadata) {
         bgAudio.loop = repeat;
         bgAudio.volume = effectiveVol();
         bgAudio.src = audioUrl;
-        bgAudio.play().then(() => {
-          const drift = Math.abs((bgAudio.currentTime || 0) - posSec);
-          if (drift > 2) {
-            try { bgAudio.currentTime = posSec; } catch (_) {}
-          }
-        }).catch(e => console.warn('[MusicPlayer][YT] play() blocked:', e?.message || e));
+        tryPlay(posSec);
       });
     } else {
       bgAudio.volume = effectiveVol();
+      // Retry play if autoplay was previously blocked
+      if (bgAudio.src && bgAudio.paused) tryPlay(posSec);
     }
     return;
   }
@@ -246,16 +266,11 @@ function applyMusic(metadata) {
       bgAudio.loop = repeat;
       bgAudio.volume = effectiveVol();
       bgAudio.src = url;
-      bgAudio.play().then(() => {
-        const drift = Math.abs((bgAudio.currentTime || 0) - posSec);
-        if (drift > 2) {
-          try { bgAudio.currentTime = posSec; } catch (_) {}
-        }
-      }).catch((e) => {
-        console.warn('[MusicPlayer] play() blocked:', e?.message || e);
-      });
+      tryPlay(posSec);
     } else {
       bgAudio.volume = effectiveVol();
+      // Retry play if autoplay was previously blocked
+      if (bgAudio.src && bgAudio.paused) tryPlay(posSec);
     }
     return;
   }
