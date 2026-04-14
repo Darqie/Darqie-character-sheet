@@ -99,45 +99,29 @@ function extractYtId(rawUrl) {
   return '';
 }
 
-const PIPED_INSTANCES = [
-  'https://pipedapi.kavin.rocks',
-  'https://pipedapi.adminforge.de',
-  'https://api.piped.projectsegfau.lt',
-];
-
-const CORS_PROXIES = [
-  (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
-  (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-];
+const YT_AUDIO_ENDPOINT = `${SUPABASE_URL}/functions/v1/yt-audio`;
 
 async function fetchYouTubeAudioUrl(videoId) {
   const cached = ytAudioCache.get(videoId);
   if (cached && cached.expiresAt > Date.now()) return cached.url;
 
-  for (const instance of PIPED_INSTANCES) {
-    const directUrl = `${instance}/streams/${encodeURIComponent(videoId)}`;
-
-    // Try each CORS proxy for this Piped instance
-    for (const proxyFn of CORS_PROXIES) {
-      try {
-        const r = await fetch(proxyFn(directUrl));
-        if (!r.ok) continue;
-        const json = await r.json();
-        const streams = Array.isArray(json.audioStreams) ? json.audioStreams : [];
-        const best = streams
-          .filter(s => s.url && s.mimeType?.startsWith('audio/'))
-          .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0];
-        if (best?.url) {
-          ytAudioCache.set(videoId, { url: best.url, expiresAt: Date.now() + 5 * 3600_000 });
-          console.info('[MusicPlayer][YT] Got direct audio via proxy', { instance, bitrate: best.bitrate, codec: best.codec });
-          return best.url;
-        }
-      } catch (e) {
-        console.warn('[MusicPlayer][YT] Proxy failed:', instance, e?.message || e);
-      }
+  try {
+    const r = await fetch(`${YT_AUDIO_ENDPOINT}?v=${encodeURIComponent(videoId)}`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+    });
+    if (!r.ok) {
+      console.error('[MusicPlayer][YT] Edge function returned', r.status);
+      return null;
     }
+    const json = await r.json();
+    if (json?.url) {
+      ytAudioCache.set(videoId, { url: json.url, expiresAt: Date.now() + 5 * 3600_000 });
+      console.info('[MusicPlayer][YT] Got direct audio', { bitrate: json.bitrate, codec: json.codec });
+      return json.url;
+    }
+  } catch (e) {
+    console.error('[MusicPlayer][YT] Edge function failed:', e?.message || e);
   }
-  console.error('[MusicPlayer][YT] All Piped instances + proxies failed for videoId:', videoId);
   return null;
 }
 
