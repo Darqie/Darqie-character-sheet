@@ -69,21 +69,24 @@
       font-size: 0.84rem;
     }
 
-    .gm-music-page .gm-music-yt-wrap {
-      display: none;
-      width: 100%;
-      max-width: 480px;
-      border-radius: 8px;
-      overflow: hidden;
-      margin-bottom: 10px;
-      background: #000;
+    .gm-music-page .gm-music-seek-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 4px 0 10px;
     }
 
-    .gm-music-page .gm-music-yt-wrap iframe {
-      width: 100%;
-      aspect-ratio: 16 / 9;
-      border: none;
-      display: block;
+    .gm-music-page .gm-music-seek-wrap input[type="range"] {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .gm-music-page .gm-music-time {
+      font-size: 0.82rem;
+      opacity: 0.8;
+      min-width: 38px;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
     }
 
     .gm-music-page .gm-music-table input.gm-cell-input {
@@ -169,14 +172,11 @@
   </div>
 
   <div id="gmMusicNowPlaying" class="gm-music-now-playing">Трек не вибрано</div>
-  <div class="gm-music-hint">Dropbox, Spotify та mp3 — фонове відтворення. YouTube вбудовується нижче при активному треку.</div>
 
-  <div id="gmMusicYoutubeWrap" class="gm-music-yt-wrap">
-    <iframe
-      id="gmMusicYoutubeIframe"
-      allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
-      allowfullscreen
-    ></iframe>
+  <div id="gmMusicSeekWrap" class="gm-music-seek-wrap">
+    <span id="gmMusicCurrentTime" class="gm-music-time">0:00</span>
+    <input id="gmMusicSeekBar" type="range" min="0" max="100" step="1" value="0" />
+    <span id="gmMusicDuration" class="gm-music-time">—</span>
   </div>
   <audio id="gmMusicAudioPlayer" preload="none" style="display:none;"></audio>
 

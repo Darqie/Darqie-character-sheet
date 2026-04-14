@@ -307,6 +307,36 @@ async function loadMusicFromSupabase(roomId) {
   };
 }
 
+// ── Cobalt API — resolves YouTube URL to a direct audio stream ────────────────
+const cobaltYtCache = new Map(); // ytUrl → { url, ts }
+const COBALT_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+async function resolveYouTubeAsAudio(ytUrl) {
+  const cached = cobaltYtCache.get(ytUrl);
+  if (cached && Date.now() - cached.ts < COBALT_TTL_MS) return cached.url;
+
+  const endpoints = ['https://api.cobalt.tools/'];
+  for (const base of endpoints) {
+    try {
+      const res = await fetch(base, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ url: ytUrl, downloadMode: 'audio' }),
+      });
+      if (!res.ok) continue;
+      const data = await res.json().catch(() => null);
+      if (!data) continue;
+      if ((data.status === 'tunnel' || data.status === 'redirect') && data.url) {
+        cobaltYtCache.set(ytUrl, { url: data.url, ts: Date.now() });
+        console.log('[Music] Cobalt resolved:', ytUrl.slice(-20), '→', data.url.slice(0, 60));
+        return data.url;
+      }
+    } catch (_) {}
+  }
+  console.warn('[Music] Cobalt could not resolve:', ytUrl);
+  return null;
+}
+
 export function initPage({ root }) {
   if (!root) return;
 
@@ -329,8 +359,9 @@ export function initPage({ root }) {
 
   const nowPlaying = root.querySelector('#gmMusicNowPlaying');
   const audioPlayer = root.querySelector('#gmMusicAudioPlayer');
-  const gmYoutubeWrap   = root.querySelector('#gmMusicYoutubeWrap');
-  const gmYoutubeIframe = root.querySelector('#gmMusicYoutubeIframe');
+  const seekBar       = root.querySelector('#gmMusicSeekBar');
+  const currentTimeEl = root.querySelector('#gmMusicCurrentTime');
+  const durationEl    = root.querySelector('#gmMusicDuration');
 
   if (!openAddModalButton || !addModal || !cancelAddButton || !urlInput || !nameInput || !addButton || !tableBody || !prevButton || !playPauseButton || !nextButton || !repeatButton || !globalVolumeSlider || !globalVolumeValue || !volumeSlider || !volumeValue || !nowPlaying || !audioPlayer) {
     return;
@@ -347,43 +378,39 @@ export function initPage({ root }) {
   let hiddenEmbed = null;
   let gmVolume = 0.7;
   let seekTimerId = null;
-  let ytUnmuteRetryId = null; // retry interval for YT unmute in tab
+  let isSeeking = false;
+  let knownDuration = null;
 
-  // ── YouTube postMessage handler (for the in-tab iframe) ──────────────────
-  function ytTabCmd(func, args = []) {
-    try {
-      gmYoutubeIframe?.contentWindow?.postMessage(
-        JSON.stringify({ event: 'command', func, args }),
-        'https://www.youtube.com'
-      );
-    } catch (_) {}
+  // ── Seek bar ─────────────────────────────────────────────────────────────
+  function updateSeekBar() {
+    if (isSeeking || !seekBar) return;
+    const track = getCurrentTrack();
+    if (!track || !playbackState.isPlaying) {
+      seekBar.value = '0';
+      if (currentTimeEl) currentTimeEl.textContent = '0:00';
+      if (durationEl) durationEl.textContent = '—';
+      return;
+    }
+    const currentPos = getStatePositionSec(playbackState);
+    if (knownDuration) {
+      seekBar.max = String(Math.ceil(knownDuration));
+      if (durationEl) durationEl.textContent = formatTime(knownDuration);
+    } else {
+      // Expand max as needed so the thumb never hits the right edge
+      const curMax = Number(seekBar.max) || 100;
+      if (currentPos > curMax - 10) seekBar.max = String(Math.ceil(currentPos + 60));
+      if (durationEl) durationEl.textContent = '—';
+    }
+    seekBar.value = String(Math.floor(currentPos));
+    if (currentTimeEl) currentTimeEl.textContent = formatTime(currentPos);
   }
 
-  function startYtUnmuteRetry() {
-    if (ytUnmuteRetryId) clearInterval(ytUnmuteRetryId);
-    let attempts = 0;
-    ytUnmuteRetryId = setInterval(() => {
-      if (++attempts > 30) { clearInterval(ytUnmuteRetryId); ytUnmuteRetryId = null; return; }
-      ytTabCmd('unMute');
-      ytTabCmd('setVolume', [Math.round(clamp01(gmVolume, 0.7) * clamp01(playbackState.globalVolume, 1) * 100)]);
-    }, 500);
-  }
-
-  function stopYtUnmuteRetry() {
-    if (ytUnmuteRetryId) { clearInterval(ytUnmuteRetryId); ytUnmuteRetryId = null; }
-  }
-
-  window.addEventListener('message', (e) => {
-    if (e.origin !== 'https://www.youtube.com') return;
-    try {
-      const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-      if (data?.event === 'onReady' || (data?.event === 'infoDelivery' && data?.info?.muted)) {
-        console.log('[Music Tab] YouTube', data.event, '— unmuting');
-        ytTabCmd('unMute');
-        ytTabCmd('setVolume', [Math.round(clamp01(gmVolume, 0.7) * clamp01(playbackState.globalVolume, 1) * 100)]);
-        if (data?.event === 'onReady') stopYtUnmuteRetry();
-      }
-    } catch (_) {}
+  audioPlayer.addEventListener('loadedmetadata', () => {
+    if (Number.isFinite(audioPlayer.duration) && audioPlayer.duration > 0) {
+      knownDuration = audioPlayer.duration;
+      if (durationEl) durationEl.textContent = formatTime(knownDuration);
+      if (seekBar) seekBar.max = String(Math.ceil(knownDuration));
+    }
   });
 
   function ensureActive() {
@@ -469,6 +496,10 @@ export function initPage({ root }) {
     audioPlayer.load();
     clearHiddenEmbed();
     currentRuntimeKey = '';
+    knownDuration = null;
+    if (seekBar) { seekBar.value = '0'; seekBar.max = '100'; }
+    if (currentTimeEl) currentTimeEl.textContent = '0:00';
+    if (durationEl) durationEl.textContent = '—';
   }
 
   function getKnownDurationSec() {
@@ -526,45 +557,30 @@ export function initPage({ root }) {
       return;
     }
 
-    // For YouTube / Spotify / unknown — background page handles playback.
-    // GM panel drives its own YouTube embed for visual control.
+    // YouTube: resolve via Cobalt API → background page plays; tab loads metadata for duration
+    if (track.type === TRACK_TYPE_YOUTUBE) {
+      const cobaltKey = `cobalt|${track.id}`;
+      if (currentRuntimeKey !== cobaltKey) {
+        currentRuntimeKey = cobaltKey;
+        knownDuration = null;
+        audioPlayer.pause();
+        audioPlayer.removeAttribute('src');
+        audioPlayer.load();
+        resolveYouTubeAsAudio(track.url).then((audioUrl) => {
+          if (!audioUrl || !ensureActive() || currentRuntimeKey !== cobaltKey) return;
+          audioPlayer.preload = 'metadata';
+          audioPlayer.src = audioUrl;
+          audioPlayer.load();
+        }).catch(() => {});
+      }
+      return;
+    }
+
+    // Spotify / other — background page handles playback entirely
     audioPlayer.pause();
     audioPlayer.removeAttribute('src');
     audioPlayer.load();
-
-    const nextKey = `${track.id}|${playbackState.repeat ? '1' : '0'}|${track.type}|${playbackState.anchorTimestampMs}`;
-
-    if (track.type === TRACK_TYPE_YOUTUBE && gmYoutubeWrap && gmYoutubeIframe) {
-      if (currentRuntimeKey !== nextKey) {
-        // Load a new YouTube video in the tab iframe
-        const ytId = extractYouTubeVideoId(track.url);
-        if (ytId) {
-          const q = new URLSearchParams({
-            enablejsapi:    '1',
-            autoplay:       '1',
-            controls:       '1',
-            rel:            '0',
-            playsinline:    '1',
-            modestbranding: '1',
-            origin: (window.location?.origin || ''),
-          });
-          if (currentPos > 1) q.set('start', String(Math.floor(currentPos)));
-          if (playbackState.repeat) { q.set('loop', '1'); q.set('playlist', ytId); }
-          console.log('[Music Tab] Loading YouTube iframe:', ytId, 'startSec:', Math.floor(currentPos));
-          gmYoutubeIframe.src = `https://www.youtube.com/embed/${encodeURIComponent(ytId)}?${q}`;
-          startYtUnmuteRetry();
-        } else {
-          gmYoutubeWrap.style.display = 'none';
-          gmYoutubeIframe.src = '';
-        }
-      }
-      gmYoutubeWrap.style.display = 'block';
-    } else {
-      // Non-YouTube: hide the embed
-      if (gmYoutubeWrap) { gmYoutubeWrap.style.display = 'none'; if (gmYoutubeIframe) gmYoutubeIframe.src = ''; stopYtUnmuteRetry(); }
-    }
-
-    currentRuntimeKey = nextKey;
+    currentRuntimeKey = `${track.id}|${track.type}`;
   }
 
   function getNextTrackId(currentId, direction) {
@@ -867,6 +883,17 @@ export function initPage({ root }) {
       await toggleRepeat();
     });
 
+    if (seekBar) {
+      seekBar.addEventListener('pointerdown', () => { isSeeking = true; });
+      seekBar.addEventListener('input', () => {
+        if (currentTimeEl) currentTimeEl.textContent = formatTime(Number(seekBar.value));
+      });
+      seekBar.addEventListener('change', async () => {
+        isSeeking = false;
+        await seekTo(Number(seekBar.value));
+      });
+    }
+
     volumeSlider.addEventListener('input', () => {
       gmVolume = clamp01(Number(volumeSlider.value) / 100, 0.7);
       setLocalVolumeUi(gmVolume);
@@ -965,6 +992,7 @@ export function initPage({ root }) {
 
     seekTimerId = setInterval(() => {
       if (!ensureActive()) return;
+      updateSeekBar();
       if (playbackState.isPlaying) {
         const track = getCurrentTrack();
         if (track && (track.type === TRACK_TYPE_AUDIO || track.type === TRACK_TYPE_DROPBOX)) {

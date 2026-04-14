@@ -17,9 +17,34 @@ const SUPABASE_URL   = 'https://yoaazfbttqfanxackrvv.supabase.co';
 const SUPABASE_KEY   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlvYWF6ZmJ0dHFmYW54YWNrcnZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwOTYwMDIsImV4cCI6MjA4OTY3MjAwMn0.NnU7pE9CsVKduI6ZPUmoTql1Vxxw4YFcbXRvJiOUu8E';
 const SUPABASE_TABLE = 'room_music_state';
 
+// ── Cobalt API — YouTube → direct audio stream ────────────────────────────────
+
+const cobaltCache = new Map(); // ytUrl → { url, ts }
+const COBALT_TTL = 60 * 60 * 1000; // 1 hour
+
+async function resolveYouTubeAsAudio(ytUrl) {
+  const cached = cobaltCache.get(ytUrl);
+  if (cached && Date.now() - cached.ts < COBALT_TTL) return cached.url;
+  try {
+    const res = await fetch('https://api.cobalt.tools/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ url: ytUrl, downloadMode: 'audio' }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json().catch(() => null);
+    if ((data?.status === 'tunnel' || data?.status === 'redirect') && data.url) {
+      cobaltCache.set(ytUrl, { url: data.url, ts: Date.now() });
+      console.log('[MusicBG] Cobalt resolved:', ytUrl.slice(-20), '→', data.url.slice(0, 60));
+      return data.url;
+    }
+  } catch (_) {}
+  console.warn('[MusicBG] Cobalt failed for:', ytUrl);
+  return null;
+}
+
 // ── DOM ───────────────────────────────────────────────────────────────────────
 
-const ytIframe      = document.getElementById('ytIframe');
 const bgAudio       = document.getElementById('bgAudio');
 const spotifyIframe = document.getElementById('spotifyIframe');
 
@@ -29,7 +54,7 @@ let volKey     = `${VOL_PREFIX}.global.player`;
 let globalVol  = 1;
 let runtimeKey = '';
 let isGM       = false;
-let ytUnmuteTimer = null;
+let pendingYtResolve = false; // prevent concurrent Cobalt calls
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
@@ -104,41 +129,7 @@ function localVol() {
 function effectiveVol()    { return localVol() * globalVol; }
 function effectiveVolPct() { return Math.round(effectiveVol() * 100); }
 
-// ── YouTube postMessage API ───────────────────────────────────────────────────
-
-function ytCmd(func, args = []) {
-  try {
-    ytIframe.contentWindow?.postMessage(
-      JSON.stringify({ event: 'command', func, args }),
-      'https://www.youtube.com'
-    );
-  } catch (_) {}
-}
-
-window.addEventListener('message', (e) => {
-  if (e.origin !== 'https://www.youtube.com') return;
-  try {
-    const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-    if (data?.event === 'onReady') {
-      console.log('[MusicBG] YouTube onReady — unmuting, volume:', effectiveVolPct());
-      ytCmd('unMute');
-      ytCmd('setVolume', [effectiveVolPct()]);
-      if (ytUnmuteTimer) { clearInterval(ytUnmuteTimer); ytUnmuteTimer = null; }
-    }
-    if (data?.event === 'infoDelivery' && data?.info?.muted) {
-      ytCmd('unMute');
-      ytCmd('setVolume', [effectiveVolPct()]);
-    }
-  } catch (_) {}
-});
-
 // ── Stop helpers ──────────────────────────────────────────────────────────────
-
-function stopYt() {
-  if (ytUnmuteTimer) { clearInterval(ytUnmuteTimer); ytUnmuteTimer = null; }
-  ytIframe.src           = '';
-  ytIframe.style.display = 'none';
-}
 
 function stopAudio() {
   bgAudio.pause();
@@ -151,7 +142,7 @@ function stopSpotify() { spotifyIframe.src = ''; }
 function stopAll() {
   console.log('[MusicBG] stopAll');
   runtimeKey = '';
-  stopYt(); stopAudio(); stopSpotify();
+  stopAudio(); stopSpotify();
 }
 
 // ── Apply Music ───────────────────────────────────────────────────────────────
@@ -171,35 +162,27 @@ function applyMusic(metadata) {
   const repeat = state.repeat;
   const rk     = `${track.id}|${type}|${state.anchorTimestampMs}`;
 
-  // ── YouTube ───────────────────────────────────────────────────────────────
+  // ── YouTube → Cobalt → bgAudio ────────────────────────────────────────────
   if (type === 'youtube') {
-    stopAudio(); stopSpotify();
-    // GM hears YouTube through the embedded player in the music tab
-    if (isGM) { stopYt(); return; }
+    stopSpotify();
+    const rk = `${track.id}|yt|${state.anchorTimestampMs}`;
     if (runtimeKey !== rk) {
       runtimeKey = rk;
-      const id = extractYtId(track.url);
-      if (!id) { stopAll(); return; }
-
-      console.log('[MusicBG] Loading YouTube ID:', id, '| startSec:', Math.floor(posSec));
-
-      const q = new URLSearchParams({
-        enablejsapi: '1', autoplay: '1', controls: '0',
-        rel: '0', playsinline: '1', modestbranding: '1',
-        origin: (window.location?.origin || ''),
-      });
-      if (Number(posSec) > 1) q.set('start', String(Math.floor(posSec)));
-      if (repeat) { q.set('loop', '1'); q.set('playlist', id); }
-
-      ytIframe.src           = `https://www.youtube.com/embed/${encodeURIComponent(id)}?${q}`;
-      ytIframe.style.display = 'block';
-      if (ytUnmuteTimer) clearInterval(ytUnmuteTimer);
-      let _retryCount = 0;
-      ytUnmuteTimer = setInterval(() => {
-        if (++_retryCount > 30) { clearInterval(ytUnmuteTimer); ytUnmuteTimer = null; return; }
-        ytCmd('unMute');
-        ytCmd('setVolume', [effectiveVolPct()]);
-      }, 500);
+      stopAudio();
+      console.log('[MusicBG] Resolving YouTube via Cobalt:', track.url.slice(-30));
+      resolveYouTubeAsAudio(track.url).then((audioUrl) => {
+        if (!audioUrl || runtimeKey !== rk) return;
+        bgAudio.loop   = repeat;
+        bgAudio.volume = effectiveVol();
+        bgAudio.src    = audioUrl;
+        bgAudio.play().then(() => {
+          const drift = Math.abs((bgAudio.currentTime || 0) - posSec);
+          if (drift > 2) { try { bgAudio.currentTime = posSec; } catch (_) {} }
+          console.log('[MusicBG] YouTube audio playing ✓ (via Cobalt)');
+        }).catch((err) => { console.warn('[MusicBG] YouTube audio play() rejected:', err?.message || err); });
+      }).catch(() => {});
+    } else {
+      bgAudio.volume = effectiveVol();
     }
     return;
   }
