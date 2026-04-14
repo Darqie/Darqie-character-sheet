@@ -147,12 +147,10 @@ function stopSpotify() {
 function stopAll() {
   runtimeKey = '';
   currentYtTrackId = '';
-  _currentYtVideoId = '';
   _wantPlay = false;
   _seekOnLoad = null;
   _lastAnchorPos = -1;
   _lastAnchorTs = 0;
-  if (_unmuteTimer) { clearInterval(_unmuteTimer); _unmuteTimer = null; }
   stopAudio();
   stopSpotify();
 }
@@ -190,59 +188,18 @@ let _retryTimer = null;
 // Track last anchor to detect GM-initiated seeks
 let _lastAnchorPos = -1;
 let _lastAnchorTs = 0;
-let _currentYtVideoId = ''; // current YT video ID for re-requesting stream on seek
 
 function _doPlay() {
   if (!_wantPlay || !bgAudio.src) return;
   bgAudio.volume = effectiveVol();
+  bgAudio.muted = false;
 
-  // Try muted first — browsers allow muted autoplay even without user interaction.
-  // Once play() succeeds, immediately unmute so audio is heard.
-  const tryUnmuted = () => {
-    bgAudio.muted = false;
-    bgAudio.play().then(() => {
-      _wantPlay = false;
-      _clearRetry();
-    }).catch(() => {
-      // Unmuted play failed — try muted (autoplay policy)
-      bgAudio.muted = true;
-      bgAudio.play().then(() => {
-        // Playing muted — schedule unmute attempts
-        _wantPlay = false;
-        _clearRetry();
-        _scheduleUnmute();
-      }).catch(() => {
-        _scheduleRetry();
-      });
-    });
-  };
-  tryUnmuted();
-}
-
-let _unmuteTimer = null;
-
-function _scheduleUnmute() {
-  if (_unmuteTimer) return;
-  _unmuteTimer = setInterval(() => {
-    if (bgAudio.paused || !bgAudio.src) {
-      clearInterval(_unmuteTimer);
-      _unmuteTimer = null;
-      return;
-    }
-    // Try to unmute — if browser blocks, it just stays muted
-    bgAudio.muted = false;
-    bgAudio.volume = effectiveVol();
-    // Some browsers re-pause when unmuting without gesture; check and re-play
-    if (bgAudio.paused) {
-      bgAudio.play().catch(() => {
-        bgAudio.muted = true; // failed, go back to muted
-      });
-    } else {
-      // Successfully unmuted and playing
-      clearInterval(_unmuteTimer);
-      _unmuteTimer = null;
-    }
-  }, 2000);
+  bgAudio.play().then(() => {
+    _wantPlay = false;
+    _clearRetry();
+  }).catch(() => {
+    _scheduleRetry();
+  });
 }
 
 function _scheduleRetry() {
@@ -256,6 +213,18 @@ function _scheduleRetry() {
 function _clearRetry() {
   if (_retryTimer) { clearInterval(_retryTimer); _retryTimer = null; }
 }
+
+// Listen for user interaction in the main page (cross-iframe via localStorage)
+window.addEventListener('storage', (e) => {
+  if (e.key === 'darqie.userInteracted' && _wantPlay) {
+    _doPlay();
+  }
+});
+
+// Also fire a synthetic click on our own document to help unlock autoplay
+document.addEventListener('DOMContentLoaded', () => {
+  document.body.click();
+});
 
 // Apply pending seek when audio first loads (new track only)
 bgAudio.addEventListener('canplay', () => {
@@ -282,20 +251,10 @@ function saveAnchor(state) {
   _lastAnchorPos = state.anchorPositionSec;
 }
 
-// Seek: for YT streams, reload the src (Range seeking through proxy is unreliable).
-// For direct audio/dropbox, use currentTime directly.
-function seekTrack(posSec, isYt) {
+// Seek an already-playing audio element to a new position
+function seekTo(posSec) {
   const drift = Math.abs((bgAudio.currentTime || 0) - posSec);
-  if (drift <= 2) return;
-
-  if (isYt && _currentYtVideoId) {
-    // Reload the stream src — the only reliable way to seek YT through the proxy.
-    // canplay handler will apply _seekOnLoad.
-    _seekOnLoad = posSec;
-    bgAudio.src = `${YT_AUDIO_ENDPOINT}?v=${encodeURIComponent(_currentYtVideoId)}&stream=1&_t=${Date.now()}`;
-    _wantPlay = true;
-    _doPlay();
-  } else {
+  if (drift > 2) {
     try { bgAudio.currentTime = posSec; } catch (_) {}
   }
 }
@@ -329,7 +288,6 @@ function applyMusic(metadata) {
     if (runtimeKey !== rk) {
       runtimeKey = rk;
       currentYtTrackId = track.id;
-      _currentYtVideoId = videoId;
       saveAnchor(state);
       bgAudio.loop = state.repeat;
       setVol();
@@ -340,7 +298,7 @@ function applyMusic(metadata) {
       setVol();
       if (anchorChanged(state)) {
         saveAnchor(state);
-        seekTrack(posSec, true);
+        seekTo(posSec);
       }
       if (bgAudio.paused && !_wantPlay) {
         _wantPlay = true;
@@ -353,7 +311,6 @@ function applyMusic(metadata) {
   if (type === 'audio' || type === 'dropbox') {
     stopSpotify();
     currentYtTrackId = '';
-    _currentYtVideoId = '';
     const url = type === 'dropbox' ? normalizeDropbox(track.url) : String(track.url).trim();
     const rk = `${track.id}|${type}`;
     if (runtimeKey !== rk) {
@@ -368,7 +325,7 @@ function applyMusic(metadata) {
       setVol();
       if (anchorChanged(state)) {
         saveAnchor(state);
-        seekTrack(posSec, false);
+        seekTo(posSec);
       }
       if (bgAudio.paused && !_wantPlay) {
         _wantPlay = true;
