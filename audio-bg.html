@@ -5,6 +5,8 @@
   <title>Darqie Audio BG</title>
 </head>
 <body>
-  <script type="module" src="/music-bg-entry.js"></script>
+  <audio id="bgAudio" preload="auto" style="display:none;"></audio>
+  <iframe id="spotifyIframe" src="" allow="autoplay; encrypted-media" style="position:absolute;left:0;top:0;width:1px;height:1px;border:none;pointer-events:none;"></iframe>
+  <script type="module" src="/music-player-entry.js"></script>
 </body>
 </html>
