@@ -35,6 +35,9 @@ let ytLastRuntimeAt = 0;
 let ytLastRuntimeLogAt = 0;
 let ytLastNoRuntimeWarnAt = 0;
 let ytLastState = null;
+let ytLastProgressAt = 0;
+let ytLastProgressSec = null;
+let ytUserInteracted = false;
 
 const clamp = (v, fb = 1) => {
   const n = Number(v);
@@ -130,6 +133,7 @@ function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0) {
   const origin = window.location?.origin || '';
   const query = new URLSearchParams({
     autoplay: '1',
+    mute: '1',
     controls: '0',
     rel: '0',
     playsinline: '1',
@@ -206,9 +210,12 @@ function clearYtRuntime() {
 
 function kickYouTubePlayback() {
   if (!ytIframe?.src) return;
+  sendYouTubeCommand('mute');
   sendYouTubeCommand('playVideo');
-  sendYouTubeCommand('unMute');
   sendYouTubeCommand('setVolume', [100]);
+  if (ytUserInteracted) {
+    sendYouTubeCommand('unMute');
+  }
 }
 
 function localVol() {
@@ -239,6 +246,8 @@ function stopYouTube() {
   pendingYouTube = null;
   ytPlayerReady = false;
   ytLastRuntimeAt = 0;
+  ytLastProgressAt = 0;
+  ytLastProgressSec = null;
   ytLastNoRuntimeWarnAt = 0;
   ytLastState = null;
   clearYtRuntime();
@@ -280,6 +289,7 @@ window.addEventListener('storage', (e) => {
   }
 
   if (e.key === 'darqie.userInteracted' && pendingYouTube && ytIframe.src) {
+    ytUserInteracted = true;
     // On first real user interaction, ask YT player to unmute/play.
     logYt('user interaction received, retrying play/unmute');
     kickYouTubePlayback();
@@ -296,6 +306,11 @@ window.addEventListener('storage', (e) => {
       }, 30);
     }
     return;
+  }
+
+  if (e.key === 'darqie.userInteracted') {
+    ytUserInteracted = true;
+    if (ytIframe.src) kickYouTubePlayback();
   }
 
   if (e.key === volKey && bgAudio.src) {
@@ -339,6 +354,12 @@ window.addEventListener('message', (event) => {
     }
     const currentTime = Number(info.currentTime);
     const duration = Number(info.duration);
+    if (Number.isFinite(currentTime)) {
+      if (!Number.isFinite(ytLastProgressSec) || currentTime > (ytLastProgressSec + 0.15)) {
+        ytLastProgressSec = currentTime;
+        ytLastProgressAt = Date.now();
+      }
+    }
     if (Number.isFinite(currentTime) || (Number.isFinite(duration) && duration > 0)) {
       writeYtRuntime(currentTime, duration);
     }
@@ -382,6 +403,8 @@ function applyMusic(metadata) {
         repeat,
       });
       pendingYouTube = { embedUrl, retryCount: 0 };
+      ytLastProgressAt = 0;
+      ytLastProgressSec = null;
       ytIframe.src = embedUrl;
       console.log('[MusicBG] YouTube iframe started ✓');
 
@@ -391,6 +414,7 @@ function applyMusic(metadata) {
       setTimeout(() => {
         if (runtimeKey !== rk) return;
         const noRuntimeYet = !ytLastRuntimeAt || (Date.now() - ytLastRuntimeAt > 3000);
+        const noProgressYet = !ytLastProgressAt || (Date.now() - ytLastProgressAt > 3000);
         if (noRuntimeYet && Date.now() - ytLastNoRuntimeWarnAt > 3000) {
           ytLastNoRuntimeWarnAt = Date.now();
           console.warn('[MusicBG][YT] No runtime telemetry after start. Track may be blocked/silent.', {
@@ -399,6 +423,21 @@ function applyMusic(metadata) {
             iframeHasSrc: Boolean(ytIframe.src),
             pendingRetry: pendingYouTube?.retryCount ?? 0,
           });
+        }
+
+        if ((noRuntimeYet || noProgressYet) && pendingYouTube && pendingYouTube.retryCount < 2) {
+          pendingYouTube.retryCount += 1;
+          const retryUrl = `${pendingYouTube.embedUrl}${pendingYouTube.embedUrl.includes('?') ? '&' : '?'}r=${Date.now()}`;
+          logYt('runtime/progress missing, forcing iframe retry', {
+            retry: pendingYouTube.retryCount,
+            noRuntimeYet,
+            noProgressYet,
+          });
+          ytIframe.src = '';
+          setTimeout(() => {
+            ytIframe.src = retryUrl;
+            setTimeout(kickYouTubePlayback, 800);
+          }, 80);
         }
       }, 3500);
     } else if (ytPlayerReady) {
@@ -463,6 +502,8 @@ async function loadFromSupabase(roomId) {
 
 OBR.onReady(async () => {
   console.log('[MusicBG] OBR ready — starting music player (no popover)');
+
+  try { ytUserInteracted = Boolean(localStorage.getItem('darqie.userInteracted')); } catch (_) {}
 
   const roomId = OBR.room?.id || '';
   currentRoomId = roomId;
