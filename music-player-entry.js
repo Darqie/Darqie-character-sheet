@@ -19,14 +19,7 @@ let runtimeKey = '';
 let currentRoomId = '';
 let currentYtTrackId = '';
 let ytAudioCache = new Map();
-let _currentBlobUrl = null;
 
-function _revokeBlobUrl() {
-  if (_currentBlobUrl) {
-    URL.revokeObjectURL(_currentBlobUrl);
-    _currentBlobUrl = null;
-  }
-}
 
 const clamp = (v, fb = 1) => {
   const n = Number(v);
@@ -151,7 +144,6 @@ function stopAudio() {
   bgAudio.pause();
   bgAudio.removeAttribute('src');
   bgAudio.load();
-  _revokeBlobUrl();
 }
 
 function stopSpotify() {
@@ -279,34 +271,14 @@ function applyMusic(metadata) {
     if (runtimeKey !== rk) {
       runtimeKey = rk;
       currentYtTrackId = track.id;
-      console.log('[BgAudio] new YT track, fetching audio URL for', videoId);
-      fetchYouTubeAudioUrl(videoId).then(async (audioUrl) => {
-        if (runtimeKey !== rk) return;
-        if (!audioUrl) { console.error('[BgAudio] fetchYouTubeAudioUrl returned null'); stopAll(); return; }
-        console.log('[BgAudio] got audioUrl:', audioUrl.substring(0, 100));
-        // Fetch audio as blob to bypass Content-Encoding issues with Invidious proxy
-        try {
-          console.log('[BgAudio] fetching audio blob...');
-          const resp = await fetch(audioUrl);
-          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-          const blob = await resp.blob();
-          if (runtimeKey !== rk) return;
-          _revokeBlobUrl();
-          _currentBlobUrl = URL.createObjectURL(blob);
-          console.log('[BgAudio] blob ready, size=', blob.size, 'type=', blob.type);
-          bgAudio.loop = state.repeat;
-          setVol();
-          bgAudio.src = _currentBlobUrl;
-          tryPlay(posSec);
-        } catch (e) {
-          console.error('[BgAudio] blob fetch failed:', e.message);
-          // Fallback: try direct URL
-          bgAudio.loop = state.repeat;
-          setVol();
-          bgAudio.src = audioUrl;
-          tryPlay(posSec);
-        }
-      });
+      console.log('[BgAudio] new YT track, streaming via Edge Function for', videoId);
+      // Use Edge Function as audio proxy to bypass CORS
+      const streamUrl = `${YT_AUDIO_ENDPOINT}?v=${encodeURIComponent(videoId)}&stream=1`;
+      console.log('[BgAudio] stream URL:', streamUrl);
+      bgAudio.loop = state.repeat;
+      setVol();
+      bgAudio.src = streamUrl;
+      tryPlay(posSec);
     } else {
       bgAudio.loop = state.repeat;
       setVol();

@@ -49,6 +49,29 @@ async function fetchFromInstance(instance: string, videoId: string): Promise<{ u
   }
 }
 
+async function resolveAudioUrl(videoId: string): Promise<{ url: string; bitrate: number; codec: string }> {
+  const errors: string[] = [];
+
+  const results = await Promise.allSettled(
+    INVIDIOUS_INSTANCES.map((inst) => fetchFromInstance(inst, videoId))
+  );
+  for (const r of results) {
+    if (r.status === "fulfilled") return r.value;
+    errors.push(r.reason?.message || "unknown");
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  const retryResults = await Promise.allSettled(
+    INVIDIOUS_INSTANCES.map((inst) => fetchFromInstance(inst, videoId))
+  );
+  for (const r of retryResults) {
+    if (r.status === "fulfilled") return r.value;
+    errors.push(`retry: ${r.reason?.message || "unknown"}`);
+  }
+
+  throw new Error(`All instances failed: ${errors.join("; ")}`);
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -56,6 +79,7 @@ serve(async (req) => {
 
   const url = new URL(req.url);
   const videoId = url.searchParams.get("v");
+  const stream = url.searchParams.get("stream") === "1";
 
   if (!videoId || !/^[\w-]{6,20}$/.test(videoId)) {
     return new Response(JSON.stringify({ error: "Invalid video ID" }), {
@@ -64,41 +88,39 @@ serve(async (req) => {
     });
   }
 
-  const errors: string[] = [];
+  try {
+    const result = await resolveAudioUrl(videoId);
 
-  // Try all instances in parallel
-  const results = await Promise.allSettled(
-    INVIDIOUS_INSTANCES.map((inst) => fetchFromInstance(inst, videoId))
-  );
-
-  for (const r of results) {
-    if (r.status === "fulfilled") {
+    if (!stream) {
       return new Response(
-        JSON.stringify(r.value),
+        JSON.stringify(result),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    errors.push(r.reason?.message || "unknown");
-  }
 
-  // Retry once after 1s delay (transient failures)
-  await new Promise((resolve) => setTimeout(resolve, 1000));
-  const retryResults = await Promise.allSettled(
-    INVIDIOUS_INSTANCES.map((inst) => fetchFromInstance(inst, videoId))
-  );
-
-  for (const r of retryResults) {
-    if (r.status === "fulfilled") {
+    // Stream mode: proxy the audio bytes back to the client
+    const audioResp = await fetch(result.url);
+    if (!audioResp.ok || !audioResp.body) {
       return new Response(
-        JSON.stringify(r.value),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: `Audio fetch failed: HTTP ${audioResp.status}` }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    errors.push(`retry: ${r.reason?.message || "unknown"}`);
-  }
 
-  return new Response(
-    JSON.stringify({ error: "All instances failed", details: errors }),
-    { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-  );
+    const contentType = audioResp.headers.get("content-type") || "audio/webm";
+    const contentLength = audioResp.headers.get("content-length");
+    const headers: Record<string, string> = {
+      ...corsHeaders,
+      "Content-Type": contentType,
+      "Cache-Control": "public, max-age=3600",
+    };
+    if (contentLength) headers["Content-Length"] = contentLength;
+
+    return new Response(audioResp.body, { headers });
+  } catch (e: any) {
+    return new Response(
+      JSON.stringify({ error: e?.message || "unknown" }),
+      { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
 });
