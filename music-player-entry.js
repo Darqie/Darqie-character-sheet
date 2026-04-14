@@ -255,11 +255,9 @@ function applyMusic(metadata) {
       currentYtTrackId = track.id;
       bgAudio.loop = state.repeat;
       setVol();
-      fetchYouTubeAudioUrl(videoId).then((audioUrl) => {
-        if (!audioUrl || runtimeKey !== rk) return;
-        bgAudio.src = audioUrl;
-        tryPlay(posSec);
-      });
+      // Stream through Edge Function to avoid ERR_CONTENT_DECODING_FAILED
+      bgAudio.src = `${YT_AUDIO_ENDPOINT}?v=${encodeURIComponent(videoId)}&stream=1`;
+      tryPlay(posSec);
     } else {
       bgAudio.loop = state.repeat;
       setVol();
