@@ -99,17 +99,26 @@ function extractYtId(rawUrl) {
 async function fetchYouTubeAudioUrl(videoId) {
   const cached = ytAudioCache.get(videoId);
   if (cached && cached.expiresAt > Date.now()) return cached.url;
-  try {
-    const r = await fetch(`${YT_AUDIO_ENDPOINT}?v=${encodeURIComponent(videoId)}`, {
-      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
-    });
-    if (!r.ok) return null;
-    const json = await r.json();
-    if (json?.url) {
-      ytAudioCache.set(videoId, { url: json.url, expiresAt: Date.now() + 5 * 3600_000 });
-      return json.url;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      if (attempt > 0) await new Promise(r => setTimeout(r, 1500 * attempt));
+      console.log(`[BgAudio] fetchYT attempt ${attempt + 1} for ${videoId}`);
+      const r = await fetch(`${YT_AUDIO_ENDPOINT}?v=${encodeURIComponent(videoId)}`, {
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+      });
+      if (!r.ok) {
+        console.warn(`[BgAudio] fetchYT attempt ${attempt + 1} failed: HTTP ${r.status}`);
+        continue;
+      }
+      const json = await r.json();
+      if (json?.url) {
+        ytAudioCache.set(videoId, { url: json.url, expiresAt: Date.now() + 5 * 3600_000 });
+        return json.url;
+      }
+    } catch (e) {
+      console.warn(`[BgAudio] fetchYT attempt ${attempt + 1} error:`, e.message);
     }
-  } catch (_) {}
+  }
   return null;
 }
 
