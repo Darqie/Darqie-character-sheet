@@ -24,6 +24,7 @@
 
 /audio-bg.html
   Cache-Control: no-cache, no-store, must-revalidate
+  Permissions-Policy: autoplay=(self "https://www.youtube.com" "https://www.youtube-nocookie.com"), encrypted-media=(self "https://www.youtube.com" "https://www.youtube-nocookie.com"), fullscreen=(self "https://www.youtube.com" "https://www.youtube-nocookie.com"), compute-pressure=(self "https://www.youtube.com" "https://www.youtube-nocookie.com")
 
 /audio-player.html
   Cache-Control: no-cache, no-store, must-revalidate
