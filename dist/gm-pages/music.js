@@ -317,6 +317,12 @@ export function initPage({ root }) {
   const nameInput = root.querySelector('#gmMusicNameInput');
   const addButton = root.querySelector('#gmMusicAddButton');
 
+  const editModal = root.querySelector('#gmMusicEditModal');
+  const editUrlInput = root.querySelector('#gmMusicEditUrlInput');
+  const editNameInput = root.querySelector('#gmMusicEditNameInput');
+  const cancelEditButton = root.querySelector('#gmMusicCancelEditButton');
+  const saveEditButton = root.querySelector('#gmMusicSaveEditButton');
+
   const tableBody = root.querySelector('#gmMusicTableBody');
   const prevButton = root.querySelector('#gmMusicPrevButton');
   const playPauseButton = root.querySelector('#gmMusicPlayPauseButton');
@@ -676,6 +682,7 @@ export function initPage({ root }) {
         <td>
           <div class="gm-music-actions">
             <button class="gm-music-btn" type="button" data-action="play" data-id="${escapeHtml(track.id)}" title="Відтворити"><i class="fas fa-play"></i></button>
+            <button class="gm-music-btn" type="button" data-action="edit" data-id="${escapeHtml(track.id)}" title="Редагувати"><i class="fas fa-pencil-alt"></i></button>
             <button class="gm-music-btn" type="button" data-action="delete" data-id="${escapeHtml(track.id)}" title="Видалити"><i class="fas fa-trash"></i></button>
           </div>
         </td>
@@ -836,6 +843,40 @@ export function initPage({ root }) {
     addModal.setAttribute('aria-hidden', 'true');
   }
 
+  let editingTrackId = null;
+
+  function openEditModal(trackId) {
+    const track = playlist.find(t => t.id === trackId);
+    if (!track) return;
+    editingTrackId = trackId;
+    editNameInput.value = track.name || '';
+    editUrlInput.value = track.url || '';
+    editModal.classList.add('is-open');
+    editModal.setAttribute('aria-hidden', 'false');
+    setTimeout(() => { editNameInput.focus(); editNameInput.select(); }, 0);
+  }
+
+  function closeEditModal() {
+    editModal.classList.remove('is-open');
+    editModal.setAttribute('aria-hidden', 'true');
+    editingTrackId = null;
+  }
+
+  async function saveEdit() {
+    if (!editingTrackId) return;
+    const newUrl = String(editUrlInput.value || '').trim();
+    const newName = String(editNameInput.value || '').trim();
+    if (!newUrl) return;
+    const newType = detectTrackType(newUrl);
+    const normalizedUrl = normalizeTrackUrlByType(newUrl, newType);
+    const nextPlaylist = normalizePlaylist(playlist.map(t => {
+      if (t.id !== editingTrackId) return t;
+      return { ...t, name: newName || t.name, url: normalizedUrl, type: newType };
+    }));
+    await persistMusicData({ nextPlaylist });
+    closeEditModal();
+  }
+
   const persistGlobalVolumeDebounced = debounce(async (value) => {
     const nextState = buildTimelineState(playbackState, {
       globalVolume: clamp01(value, 1),
@@ -938,6 +979,10 @@ export function initPage({ root }) {
       if (action === 'delete') {
         await deleteTrack(id);
       }
+
+      if (action === 'edit') {
+        openEditModal(id);
+      }
     });
 
     tableBody.addEventListener('change', async (e) => {
@@ -957,10 +1002,25 @@ export function initPage({ root }) {
     });
 
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && addModal.classList.contains('is-open')) {
-        closeAddModal();
+      if (e.key === 'Escape') {
+        if (addModal.classList.contains('is-open')) closeAddModal();
+        if (editModal && editModal.classList.contains('is-open')) closeEditModal();
       }
     });
+
+    if (editModal && cancelEditButton && saveEditButton) {
+      cancelEditButton.addEventListener('click', () => closeEditModal());
+      editModal.addEventListener('click', (e) => { if (e.target === editModal) closeEditModal(); });
+      saveEditButton.addEventListener('click', async () => await saveEdit());
+      editNameInput.addEventListener('keydown', async (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); await saveEdit(); }
+        if (e.key === 'Escape') { e.preventDefault(); closeEditModal(); }
+      });
+      editUrlInput.addEventListener('keydown', async (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); await saveEdit(); }
+        if (e.key === 'Escape') { e.preventDefault(); closeEditModal(); }
+      });
+    }
   }
 
   function bindMetadataListener() {
