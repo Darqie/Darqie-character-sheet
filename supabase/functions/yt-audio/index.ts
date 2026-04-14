@@ -150,20 +150,33 @@ serve(async (req: Request) => {
     }
 
     const contentType = audioResp.headers.get("content-type") || "audio/webm";
-    const contentLength = audioResp.headers.get("content-length");
     const contentRange = audioResp.headers.get("content-range");
-    const headers: Record<string, string> = {
+    const respHeaders: Record<string, string> = {
       ...corsHeaders,
       "Content-Type": contentType,
       "Accept-Ranges": "bytes",
       "Cache-Control": "public, max-age=3600",
     };
-    if (contentLength) headers["Content-Length"] = contentLength;
-    if (contentRange) headers["Content-Range"] = contentRange;
 
-    return new Response(audioResp.body, {
-      status: audioResp.status, // 200 or 206
-      headers,
+    if (rangeHeader) {
+      // Range request — stream through with proper headers
+      const contentLength = audioResp.headers.get("content-length");
+      if (contentLength) respHeaders["Content-Length"] = contentLength;
+      if (contentRange) respHeaders["Content-Range"] = contentRange;
+      return new Response(audioResp.body, {
+        status: audioResp.status,
+        headers: respHeaders,
+      });
+    }
+
+    // Initial (non-Range) request — buffer fully so Content-Length is accurate.
+    // Without Content-Length the browser treats it as a stream and cannot seek.
+    const body = await audioResp.arrayBuffer();
+    respHeaders["Content-Length"] = String(body.byteLength);
+
+    return new Response(body, {
+      status: 200,
+      headers: respHeaders,
     });
   } catch (e: any) {
     return new Response(
