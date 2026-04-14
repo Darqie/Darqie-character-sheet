@@ -1,6 +1,11 @@
 import OBR, { buildImage, buildLabel } from '@owlbear-rodeo/sdk';
 import { createClient } from '@supabase/supabase-js';
 
+// Signal user interaction to audio-bg.html (background_url) so it can retry play() if blocked by autoplay policy.
+document.addEventListener('click', () => {
+  try { localStorage.setItem('darqie.userInteracted', String(Date.now())); } catch (_) {}
+}, { capture: true, once: true });
+
 // === SUPABASE ===
 const SUPABASE_URL =
   (import.meta.env?.VITE_SUPABASE_URL || 'https://yoaazfbttqfanxackrvv.supabase.co').trim();

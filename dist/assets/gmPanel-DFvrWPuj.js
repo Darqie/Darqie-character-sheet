@@ -1,0 +1,1 @@
+import{O as e,a,b as t}from"./index-Cfa9MU8H.js";window.OBR=e;window.OBR.buildImage=a;window.OBR.buildLabel=t;document.addEventListener("click",()=>{try{localStorage.setItem("darqie.userInteracted",String(Date.now()))}catch{}},{capture:!0,once:!0});

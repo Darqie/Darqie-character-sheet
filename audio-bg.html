@@ -3,8 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <title>Darqie Audio BG</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 1px; height: 1px; overflow: hidden; background: transparent; }
+    #spotifyIframe { position: absolute; left: 0; top: 0; width: 1px; height: 1px; border: none; }
+  </style>
 </head>
 <body>
+  <audio id="bgAudio" preload="none" style="display:none;"></audio>
+  <iframe id="spotifyIframe" src="" allow="autoplay; encrypted-media"></iframe>
   <script type="module" src="/music-bg-entry.js"></script>
 </body>
 </html>
