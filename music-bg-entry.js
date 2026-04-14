@@ -23,6 +23,13 @@ const bgAudio = document.getElementById('bgAudio');
 const spotifyIframe = document.getElementById('spotifyIframe');
 const ytIframe = document.getElementById('ytIframe');
 
+const YT_INVIDIOUS_BASES = [
+  'https://inv.nadeko.net',
+  'https://invidious.privacyredirect.com',
+  'https://invidious.jing.rocks',
+];
+const YT_INVIDIOUS_ITAGS = [251, 250, 249, 140];
+
 let volKey = `${VOL_PREFIX}.global.player`;
 let globalVol = 1;
 let runtimeKey = '';
@@ -38,6 +45,8 @@ let ytLastProgressAt = 0;
 let ytLastProgressSec = null;
 let ytUserInteracted = false;
 const YT_VERBOSE_LOGS = false;
+let ytUsingAudioMode = false;
+let pendingAudioCandidates = null; // { candidates, posSec, loop, index }
 
 const clamp = (v, fb = 1) => {
   const n = Number(v);
@@ -155,6 +164,18 @@ function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0) {
   return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?${query.toString()}`;
 }
 
+function buildYouTubeAudioCandidates(rawUrl) {
+  const videoId = extractYtId(rawUrl);
+  if (!videoId) return [];
+  const out = [];
+  for (const base of YT_INVIDIOUS_BASES) {
+    for (const itag of YT_INVIDIOUS_ITAGS) {
+      out.push(`${base}/latest_version?id=${encodeURIComponent(videoId)}&itag=${itag}`);
+    }
+  }
+  return out;
+}
+
 function sendYouTubeCommand(func, args = []) {
   const w = ytIframe?.contentWindow;
   if (!w) return;
@@ -238,6 +259,8 @@ function stopYouTube() {
   clearYtRuntime();
   currentYtTrackId = '';
   ytIframe.src = '';
+  ytUsingAudioMode = false;
+  pendingAudioCandidates = null;
 }
 
 function stopAll() {
@@ -273,6 +296,13 @@ window.addEventListener('storage', (e) => {
     return;
   }
 
+  if (e.key === 'darqie.userInteracted' && pendingAudioCandidates) {
+    const p = pendingAudioCandidates;
+    pendingAudioCandidates = null;
+    tryPlayAudioCandidates(p.candidates, p.posSec, p.loop, p.index);
+    return;
+  }
+
   if (e.key === 'darqie.userInteracted' && pendingYouTube && ytIframe.src) {
     ytUserInteracted = true;
     // On first real user interaction, nudge play once.
@@ -299,6 +329,73 @@ window.addEventListener('storage', (e) => {
   if (e.key === volKey && bgAudio.src) {
     bgAudio.volume = effectiveVol();
   }
+});
+
+function tryPlayAudioCandidates(candidates, posSec, loop, startIndex = 0, onExhausted = null) {
+  if (!Array.isArray(candidates) || !candidates.length) {
+    console.warn('[MusicBG][YT] No direct audio candidates available');
+    return;
+  }
+
+  const next = (idx) => {
+    if (idx >= candidates.length) {
+      console.warn('[MusicBG][YT] All direct audio candidates failed; falling back to iframe mode');
+      if (typeof onExhausted === 'function') onExhausted();
+      return;
+    }
+
+    const src = candidates[idx];
+    bgAudio.loop = loop;
+    bgAudio.volume = effectiveVol();
+    bgAudio.src = src;
+    bgAudio.preload = 'auto';
+
+    const onLoaded = () => {
+      bgAudio.removeEventListener('loadedmetadata', onLoaded);
+      try {
+        const drift = Math.abs((bgAudio.currentTime || 0) - posSec);
+        if (drift > 2) bgAudio.currentTime = posSec;
+      } catch (_) {}
+      ytUsingAudioMode = true;
+      currentYtTrackId && writeYtRuntime(bgAudio.currentTime || 0, bgAudio.duration);
+      console.info('[MusicBG][YT] Direct audio mode active');
+    };
+
+    const onErr = () => {
+      bgAudio.removeEventListener('loadedmetadata', onLoaded);
+      next(idx + 1);
+    };
+
+    bgAudio.addEventListener('loadedmetadata', onLoaded, { once: true });
+    bgAudio.addEventListener('error', onErr, { once: true });
+
+    bgAudio.play().then(() => {
+      bgAudio.removeEventListener('error', onErr);
+      ytUsingAudioMode = true;
+    }).catch((e) => {
+      bgAudio.removeEventListener('error', onErr);
+      bgAudio.removeEventListener('loadedmetadata', onLoaded);
+      const msg = String(e?.message || e || '');
+      if (msg.toLowerCase().includes('didn\'t interact') || msg.toLowerCase().includes('user didn')) {
+        pendingAudioCandidates = { candidates, posSec, loop, index: idx };
+        console.warn('[MusicBG][YT] Direct audio blocked by autoplay; waiting for user interaction');
+        return;
+      }
+      next(idx + 1);
+    });
+  };
+
+  next(startIndex);
+}
+
+bgAudio.addEventListener('timeupdate', () => {
+  if (!ytUsingAudioMode || !currentYtTrackId) return;
+  writeYtRuntime(bgAudio.currentTime || 0, bgAudio.duration);
+});
+
+bgAudio.addEventListener('loadedmetadata', () => {
+  if (!ytUsingAudioMode || !currentYtTrackId) return;
+  writeYtRuntime(bgAudio.currentTime || 0, bgAudio.duration);
 });
 
 ytIframe?.addEventListener('load', () => {
@@ -385,13 +482,24 @@ function applyMusic(metadata) {
       pendingYouTube = { embedUrl, retryCount: 0 };
       ytLastProgressAt = 0;
       ytLastProgressSec = null;
-      ytIframe.src = embedUrl;
+      ytUsingAudioMode = false;
+      const ytCandidates = buildYouTubeAudioCandidates(track.url);
+      if (ytCandidates.length) {
+        tryPlayAudioCandidates(ytCandidates, posSec, repeat, 0, () => {
+          ytIframe.src = embedUrl;
+          setTimeout(kickYouTubePlayback, 800);
+          setTimeout(kickYouTubePlayback, 1600);
+        });
+      } else {
+        console.warn('[MusicBG][YT] Could not build direct audio candidates, using iframe fallback');
+        ytIframe.src = embedUrl;
+        setTimeout(kickYouTubePlayback, 800);
+        setTimeout(kickYouTubePlayback, 1600);
+      }
 
-      // Give iframe a moment to initialize and then request play.
-      setTimeout(kickYouTubePlayback, 800);
-      setTimeout(kickYouTubePlayback, 1600);
       setTimeout(() => {
         if (runtimeKey !== rk) return;
+        if (ytUsingAudioMode) return;
         const noRuntimeYet = !ytLastRuntimeAt || (Date.now() - ytLastRuntimeAt > 3000);
         const noProgressYet = !ytLastProgressAt || (Date.now() - ytLastProgressAt > 3000);
         if (noRuntimeYet && Date.now() - ytLastNoRuntimeWarnAt > 3000) {
