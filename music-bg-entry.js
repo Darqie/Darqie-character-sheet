@@ -133,7 +133,6 @@ function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0) {
   const origin = window.location?.origin || '';
   const query = new URLSearchParams({
     autoplay: '1',
-    mute: '1',
     controls: '0',
     rel: '0',
     playsinline: '1',
@@ -210,12 +209,8 @@ function clearYtRuntime() {
 
 function kickYouTubePlayback() {
   if (!ytIframe?.src) return;
-  sendYouTubeCommand('mute');
   sendYouTubeCommand('playVideo');
   sendYouTubeCommand('setVolume', [100]);
-  if (ytUserInteracted) {
-    sendYouTubeCommand('unMute');
-  }
 }
 
 function localVol() {
@@ -290,8 +285,8 @@ window.addEventListener('storage', (e) => {
 
   if (e.key === 'darqie.userInteracted' && pendingYouTube && ytIframe.src) {
     ytUserInteracted = true;
-    // On first real user interaction, ask YT player to unmute/play.
-    logYt('user interaction received, retrying play/unmute');
+    // On first real user interaction, nudge play once.
+    logYt('user interaction received, retrying play');
     kickYouTubePlayback();
 
     // If still silent due autoplay policy, force one controlled reload once.
@@ -408,7 +403,7 @@ function applyMusic(metadata) {
       ytIframe.src = embedUrl;
       console.log('[MusicBG] YouTube iframe started ✓');
 
-      // Give iframe a moment to initialize and then request play/unmute.
+      // Give iframe a moment to initialize and then request play.
       setTimeout(kickYouTubePlayback, 800);
       setTimeout(kickYouTubePlayback, 1600);
       setTimeout(() => {
@@ -440,9 +435,6 @@ function applyMusic(metadata) {
           }, 80);
         }
       }, 3500);
-    } else if (ytPlayerReady) {
-      // Keep nudging play/unmute in case browser silently paused cross-origin media.
-      kickYouTubePlayback();
     }
     return;
   }
