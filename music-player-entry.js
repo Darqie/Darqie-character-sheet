@@ -103,22 +103,16 @@ async function fetchYouTubeAudioUrl(videoId) {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       if (attempt > 0) await new Promise(r => setTimeout(r, 1500 * attempt));
-      console.log(`[BgAudio] fetchYT attempt ${attempt + 1} for ${videoId}`);
       const r = await fetch(`${YT_AUDIO_ENDPOINT}?v=${encodeURIComponent(videoId)}`, {
         headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
       });
-      if (!r.ok) {
-        console.warn(`[BgAudio] fetchYT attempt ${attempt + 1} failed: HTTP ${r.status}`);
-        continue;
-      }
+      if (!r.ok) continue;
       const json = await r.json();
       if (json?.url) {
-        ytAudioCache.set(videoId, { url: json.url, expiresAt: Date.now() + 5 * 3600_000 });
+        ytAudioCache.set(videoId, { url: json.url, expiresAt: Date.now() + 30 * 60_000 });
         return json.url;
       }
-    } catch (e) {
-      console.warn(`[BgAudio] fetchYT attempt ${attempt + 1} error:`, e.message);
-    }
+    } catch (_) {}
   }
   return null;
 }
@@ -194,16 +188,13 @@ function _doPlay() {
   bgAudio.volume = effectiveVol();
   bgAudio.muted = false;
 
-  console.log('[BgAudio] _doPlay: readyState=', bgAudio.readyState, 'vol=', bgAudio.volume);
   bgAudio.play().then(() => {
     _wantPlay = false;
     _clearRetry();
-    console.log('[BgAudio] play() OK');
     if (_pendingPos > 0) {
       try { bgAudio.currentTime = _pendingPos; _pendingPos = 0; } catch (_) {}
     }
-  }).catch((e) => {
-    console.warn('[BgAudio] play() blocked:', e.message, '— will retry');
+  }).catch(() => {
     _scheduleRetry();
   });
 }
@@ -212,7 +203,6 @@ function _scheduleRetry() {
   if (_retryTimer) return;
   _retryTimer = setInterval(() => {
     if (!_wantPlay || !bgAudio.src) { _clearRetry(); return; }
-    console.log('[BgAudio] retry play attempt...');
     _doPlay();
   }, 3000);
 }
@@ -222,16 +212,10 @@ function _clearRetry() {
 }
 
 bgAudio.addEventListener('canplay', () => {
-  console.log('[BgAudio] canplay, wantPlay=', _wantPlay);
   if (_wantPlay) _doPlay();
-});
-bgAudio.addEventListener('error', () => {
-  const e = bgAudio.error;
-  console.error('[BgAudio] audio error:', e?.code, e?.message);
 });
 
 function tryPlay(posSec) {
-  console.log('[BgAudio] tryPlay pos=', posSec, 'src=', bgAudio.src?.substring(0, 80));
   _wantPlay = true;
   _pendingPos = posSec;
   _doPlay();
@@ -250,10 +234,7 @@ function applyMusic(metadata) {
   const state = normalizeState(metadata?.[STATE_KEY]);
   const track = playlist.find((t) => String(t?.id || '') === state.currentTrackId);
 
-  console.log('[BgAudio] applyMusic: trackId=', state.currentTrackId, 'isPlaying=', state.isPlaying, 'hasTrack=', !!track?.url, 'playlistLen=', playlist.length);
-
   if (!track?.url || !state.isPlaying) {
-    console.log('[BgAudio] applyMusic: stopping — no track or not playing');
     stopAll();
     return;
   }
@@ -271,14 +252,13 @@ function applyMusic(metadata) {
     if (runtimeKey !== rk) {
       runtimeKey = rk;
       currentYtTrackId = track.id;
-      console.log('[BgAudio] new YT track, streaming via Edge Function for', videoId);
-      // Use Edge Function as audio proxy to bypass CORS
-      const streamUrl = `${YT_AUDIO_ENDPOINT}?v=${encodeURIComponent(videoId)}&stream=1`;
-      console.log('[BgAudio] stream URL:', streamUrl);
       bgAudio.loop = state.repeat;
       setVol();
-      bgAudio.src = streamUrl;
-      tryPlay(posSec);
+      fetchYouTubeAudioUrl(videoId).then((audioUrl) => {
+        if (!audioUrl || runtimeKey !== rk) return;
+        bgAudio.src = audioUrl;
+        tryPlay(posSec);
+      });
     } else {
       bgAudio.loop = state.repeat;
       setVol();
@@ -361,8 +341,6 @@ OBR.onReady(async () => {
   let metadata = {};
   try { metadata = await OBR.room.getMetadata(); } catch (_) {}
 
-  // Start playback from OBR metadata immediately (don't wait for Supabase)
-  console.log('[BgAudio] OBR ready, roomId=', roomId, 'metadataKeys=', Object.keys(metadata));
   applyMusic(metadata);
 
   // Then check Supabase for fresher state and update if needed
