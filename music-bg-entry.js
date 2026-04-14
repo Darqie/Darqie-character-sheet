@@ -31,6 +31,10 @@ let pendingYouTube = null; // { embedUrl, retryCount }
 let currentRoomId = '';
 let currentYtTrackId = '';
 let ytPlayerReady = false;
+let ytLastRuntimeAt = 0;
+let ytLastRuntimeLogAt = 0;
+let ytLastNoRuntimeWarnAt = 0;
+let ytLastState = null;
 
 const clamp = (v, fb = 1) => {
   const n = Number(v);
@@ -112,9 +116,16 @@ function extractYtId(rawUrl) {
   return '';
 }
 
+function logYt(...args) {
+  console.log('[MusicBG][YT]', ...args);
+}
+
 function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0) {
   const videoId = extractYtId(rawUrl);
-  if (!videoId) return '';
+  if (!videoId) {
+    console.warn('[MusicBG][YT] Could not extract video id from URL:', rawUrl);
+    return '';
+  }
 
   const origin = window.location?.origin || '';
   const query = new URLSearchParams({
@@ -144,6 +155,7 @@ function sendYouTubeCommand(func, args = []) {
   const w = ytIframe?.contentWindow;
   if (!w) return;
   try {
+    logYt('command:', func, args.length ? args : '[]');
     w.postMessage(JSON.stringify({ event: 'command', func, args }), '*');
   } catch (_) {}
 }
@@ -152,6 +164,7 @@ function sendYouTubeListeningHandshake() {
   const w = ytIframe?.contentWindow;
   if (!w) return;
   try {
+    logYt('sending listening handshake');
     w.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), '*');
   } catch (_) {}
 }
@@ -171,7 +184,18 @@ function writeYtRuntime(currentTime, duration) {
     currentTime: Number.isFinite(c) ? Math.max(0, c) : null,
     duration: Number.isFinite(d) && d > 0 ? d : null,
   };
-  try { localStorage.setItem(key, JSON.stringify(payload)); } catch (_) {}
+  try {
+    localStorage.setItem(key, JSON.stringify(payload));
+    ytLastRuntimeAt = Date.now();
+    if (ytLastRuntimeAt - ytLastRuntimeLogAt > 5000) {
+      ytLastRuntimeLogAt = ytLastRuntimeAt;
+      logYt('runtime update', {
+        currentTime: payload.currentTime,
+        duration: payload.duration,
+        key,
+      });
+    }
+  } catch (_) {}
 }
 
 function clearYtRuntime() {
@@ -211,8 +235,12 @@ function stopSpotify() {
 }
 
 function stopYouTube() {
+  if (ytIframe.src) logYt('stop iframe');
   pendingYouTube = null;
   ytPlayerReady = false;
+  ytLastRuntimeAt = 0;
+  ytLastNoRuntimeWarnAt = 0;
+  ytLastState = null;
   clearYtRuntime();
   currentYtTrackId = '';
   ytIframe.src = '';
@@ -253,6 +281,7 @@ window.addEventListener('storage', (e) => {
 
   if (e.key === 'darqie.userInteracted' && pendingYouTube && ytIframe.src) {
     // On first real user interaction, ask YT player to unmute/play.
+    logYt('user interaction received, retrying play/unmute');
     kickYouTubePlayback();
 
     // If still silent due autoplay policy, force one controlled reload once.
@@ -261,6 +290,7 @@ window.addEventListener('storage', (e) => {
       const url = pendingYouTube.embedUrl;
       ytIframe.src = '';
       setTimeout(() => {
+        logYt('forcing one iframe reload after interaction');
         ytIframe.src = url;
         setTimeout(kickYouTubePlayback, 800);
       }, 30);
@@ -274,6 +304,7 @@ window.addEventListener('storage', (e) => {
 });
 
 ytIframe?.addEventListener('load', () => {
+  logYt('iframe loaded');
   ytPlayerReady = false;
   setTimeout(sendYouTubeListeningHandshake, 150);
   setTimeout(sendYouTubeListeningHandshake, 650);
@@ -291,12 +322,18 @@ window.addEventListener('message', (event) => {
 
   if (data.event === 'onReady') {
     ytPlayerReady = true;
+    logYt('onReady received');
     kickYouTubePlayback();
     return;
   }
 
   if (data.event === 'infoDelivery' && data.info) {
     const info = data.info;
+    const state = Number(info.playerState);
+    if (Number.isFinite(state) && state !== ytLastState) {
+      ytLastState = state;
+      logYt('playerState changed:', state);
+    }
     const currentTime = Number(info.currentTime);
     const duration = Number(info.duration);
     if (Number.isFinite(currentTime) || (Number.isFinite(duration) && duration > 0)) {
@@ -335,6 +372,12 @@ function applyMusic(metadata) {
         stopAll();
         return;
       }
+      logYt('start track', {
+        trackId: track.id,
+        name: track.name,
+        anchorPositionSec: Number(posSec.toFixed(2)),
+        repeat,
+      });
       pendingYouTube = { embedUrl, retryCount: 0 };
       ytIframe.src = embedUrl;
       console.log('[MusicBG] YouTube iframe started ✓');
@@ -342,6 +385,19 @@ function applyMusic(metadata) {
       // Give iframe a moment to initialize and then request play/unmute.
       setTimeout(kickYouTubePlayback, 800);
       setTimeout(kickYouTubePlayback, 1600);
+      setTimeout(() => {
+        if (runtimeKey !== rk) return;
+        const noRuntimeYet = !ytLastRuntimeAt || (Date.now() - ytLastRuntimeAt > 3000);
+        if (noRuntimeYet && Date.now() - ytLastNoRuntimeWarnAt > 3000) {
+          ytLastNoRuntimeWarnAt = Date.now();
+          console.warn('[MusicBG][YT] No runtime telemetry after start. Track may be blocked/silent.', {
+            trackId: track.id,
+            ytPlayerReady,
+            iframeHasSrc: Boolean(ytIframe.src),
+            pendingRetry: pendingYouTube?.retryCount ?? 0,
+          });
+        }
+      }, 3500);
     } else if (ytPlayerReady) {
       // Keep nudging play/unmute in case browser silently paused cross-origin media.
       kickYouTubePlayback();

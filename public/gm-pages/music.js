@@ -350,6 +350,7 @@ export function initPage({ root }) {
   let seekTimerId = null;
   let isSeeking = false;
   let knownDuration = null;
+  let ytNoRuntimeWarnAt = 0;
 
   function getYtRuntimeStorageKey(trackId) {
     if (!roomId || !trackId) return '';
@@ -389,8 +390,24 @@ export function initPage({ root }) {
     let currentPos = getStatePositionSec(playbackState);
     if (track.type === TRACK_TYPE_YOUTUBE) {
       const yt = readYtRuntime(track.id);
-      if (yt?.duration) knownDuration = yt.duration;
-      if (Number.isFinite(yt?.currentTime)) currentPos = yt.currentTime;
+      if (yt?.duration) {
+        knownDuration = yt.duration;
+      }
+
+      if (Number.isFinite(yt?.currentTime)) {
+        currentPos = yt.currentTime;
+      } else {
+        // Do not show synthetic movement for YouTube when real runtime is missing.
+        currentPos = Math.max(0, Number(playbackState.anchorPositionSec || 0));
+        if (Date.now() - ytNoRuntimeWarnAt > 5000) {
+          ytNoRuntimeWarnAt = Date.now();
+          console.warn('[Music][YT] No runtime telemetry from background player yet; seek is frozen until telemetry appears.', {
+            trackId: track.id,
+            roomId,
+            isPlaying: playbackState.isPlaying,
+          });
+        }
+      }
     }
     if (knownDuration) {
       seekBar.max = String(Math.ceil(knownDuration));
@@ -566,6 +583,12 @@ export function initPage({ root }) {
       if (currentRuntimeKey !== ytKey) {
         currentRuntimeKey = ytKey;
         knownDuration = null;
+        ytNoRuntimeWarnAt = 0;
+        console.log('[Music][YT] Syncing YouTube UI runtime key:', {
+          trackId: track.id,
+          trackName: track.name,
+          roomId,
+        });
         audioPlayer.pause();
         audioPlayer.removeAttribute('src');
         audioPlayer.load();
