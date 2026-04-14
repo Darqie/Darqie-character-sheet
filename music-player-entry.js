@@ -8,42 +8,17 @@ const DEFAULT_VOL = 0.7;
 const SUPABASE_URL = 'https://yoaazfbttqfanxackrvv.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlvYWF6ZmJ0dHFmYW54YWNrcnZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwOTYwMDIsImV4cCI6MjA4OTY3MjAwMn0.NnU7pE9CsVKduI6ZPUmoTql1Vxxw4YFcbXRvJiOUu8E';
 const SUPABASE_TABLE = 'room_music_state';
+const YT_AUDIO_ENDPOINT = `${SUPABASE_URL}/functions/v1/yt-audio`;
 
 const bgAudio = document.getElementById('bgAudio');
 const spotifyIframe = document.getElementById('spotifyIframe');
 
-// Debug: log all audio element events
-['loadstart', 'loadeddata', 'loadedmetadata', 'canplay', 'canplaythrough',
- 'play', 'playing', 'pause', 'ended', 'error', 'stalled', 'suspend',
- 'waiting', 'abort', 'emptied'].forEach(evt => {
-  bgAudio.addEventListener(evt, () => {
-    const info = {
-      event: evt,
-      paused: bgAudio.paused,
-      muted: bgAudio.muted,
-      readyState: bgAudio.readyState,
-      networkState: bgAudio.networkState,
-      currentTime: bgAudio.currentTime,
-      duration: bgAudio.duration,
-      src: bgAudio.src?.substring(0, 80),
-    };
-    if (evt === 'error') {
-      const e = bgAudio.error;
-      info.errorCode = e?.code;
-      info.errorMsg = e?.message;
-      console.error('[MusicPlayer][audio]', info);
-    } else {
-      console.info('[MusicPlayer][audio]', info);
-    }
-  });
-});
-
 let volKey = `${VOL_PREFIX}.global.player`;
 let globalVol = 1;
 let runtimeKey = '';
-
 let currentRoomId = '';
-let ytAudioCache = new Map(); // videoId -> { url, expiresAt }
+let currentYtTrackId = '';
+let ytAudioCache = new Map();
 
 const clamp = (v, fb = 1) => {
   const n = Number(v);
@@ -108,46 +83,33 @@ function extractYtId(rawUrl) {
   try {
     const url = new URL(String(rawUrl || '').trim());
     const host = url.hostname.toLowerCase();
-
     if (host === 'youtu.be') return url.pathname.replace(/^\//, '').trim();
-
     if (host.includes('youtube.com') || host.includes('music.youtube.com')) {
       const fromSearch = url.searchParams.get('v');
       if (fromSearch) return fromSearch.trim();
-
       const pathMatch =
         url.pathname.match(/\/embed\/([^/?]+)/i) ||
         url.pathname.match(/\/shorts\/([^/?]+)/i);
       if (pathMatch?.[1]) return pathMatch[1].trim();
     }
   } catch (_) {}
-
   return '';
 }
-
-const YT_AUDIO_ENDPOINT = `${SUPABASE_URL}/functions/v1/yt-audio`;
 
 async function fetchYouTubeAudioUrl(videoId) {
   const cached = ytAudioCache.get(videoId);
   if (cached && cached.expiresAt > Date.now()) return cached.url;
-
   try {
     const r = await fetch(`${YT_AUDIO_ENDPOINT}?v=${encodeURIComponent(videoId)}`, {
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
     });
-    if (!r.ok) {
-      console.error('[MusicPlayer][YT] Edge function returned', r.status);
-      return null;
-    }
+    if (!r.ok) return null;
     const json = await r.json();
     if (json?.url) {
       ytAudioCache.set(videoId, { url: json.url, expiresAt: Date.now() + 5 * 3600_000 });
-      console.info('[MusicPlayer][YT] Got direct audio', { bitrate: json.bitrate, codec: json.codec });
       return json.url;
     }
-  } catch (e) {
-    console.error('[MusicPlayer][YT] Edge function failed:', e?.message || e);
-  }
+  } catch (_) {}
   return null;
 }
 
@@ -187,10 +149,6 @@ window.addEventListener('storage', (e) => {
   }
 });
 
-// YouTube is now handled via direct audio stream (Piped API), no iframe needed
-
-let currentYtTrackId = '';
-
 function writeYtRuntime(currentTime, duration) {
   if (!currentRoomId || !currentYtTrackId) return;
   const key = `darqie.v2.ytRuntime.${currentRoomId}.${currentYtTrackId}`;
@@ -213,35 +171,23 @@ bgAudio.addEventListener('loadedmetadata', () => {
 });
 
 function tryPlay(posSec) {
-  console.info('[MusicPlayer] tryPlay called', {
-    src: bgAudio.src?.substring(0, 80),
-    paused: bgAudio.paused,
-    readyState: bgAudio.readyState,
-    muted: bgAudio.muted,
-    posSec,
-  });
-  // First attempt: play muted then unmute (bypasses some autoplay policies)
   const vol = bgAudio.volume;
   bgAudio.muted = true;
   bgAudio.play().then(() => {
-    console.info('[MusicPlayer] muted play() succeeded, unmuting');
     bgAudio.muted = false;
     bgAudio.volume = vol;
     const drift = Math.abs((bgAudio.currentTime || 0) - posSec);
     if (drift > 2) {
       try { bgAudio.currentTime = posSec; } catch (_) {}
     }
-  }).catch((mErr) => {
-    console.warn('[MusicPlayer] muted play() failed:', mErr?.message);
+  }).catch(() => {
     bgAudio.muted = false;
-    // Unmuted retry
     bgAudio.play().then(() => {
-      console.info('[MusicPlayer] unmuted play() succeeded');
       const drift = Math.abs((bgAudio.currentTime || 0) - posSec);
       if (drift > 2) {
         try { bgAudio.currentTime = posSec; } catch (_) {}
       }
-    }).catch(e => console.warn('[MusicPlayer] play() blocked:', e?.message || e));
+    }).catch(() => {});
   });
 }
 
@@ -262,7 +208,6 @@ function applyMusic(metadata) {
 
   if (type === 'youtube') {
     stopSpotify();
-
     const videoId = extractYtId(track.url);
     if (!videoId) { stopAll(); return; }
 
@@ -270,28 +215,17 @@ function applyMusic(metadata) {
     if (runtimeKey !== rk) {
       runtimeKey = rk;
       currentYtTrackId = track.id;
-      console.info('[MusicPlayer][YT] start track', {
-        trackId: track.id, name: track.name,
-        anchorPositionSec: Number(posSec.toFixed(2)), repeat,
-      });
-
       fetchYouTubeAudioUrl(videoId).then(audioUrl => {
-        if (runtimeKey !== rk) { console.warn('[MusicPlayer][YT] stale runtimeKey, ignoring'); return; }
-        if (!audioUrl) { console.error('[MusicPlayer][YT] No audio URL'); stopAll(); return; }
-
-        console.info('[MusicPlayer][YT] Setting bgAudio.src', { url: audioUrl.substring(0, 100) });
+        if (runtimeKey !== rk) return;
+        if (!audioUrl) { stopAll(); return; }
         bgAudio.loop = repeat;
         bgAudio.volume = effectiveVol();
         bgAudio.src = audioUrl;
         tryPlay(posSec);
-      }).catch(e => console.error('[MusicPlayer][YT] fetchYouTubeAudioUrl threw:', e));
+      });
     } else {
       bgAudio.volume = effectiveVol();
-      // Retry play if autoplay was previously blocked
-      if (bgAudio.src && bgAudio.paused) {
-        console.info('[MusicPlayer][YT] retry play (was paused)', { src: bgAudio.src?.substring(0, 80) });
-        tryPlay(posSec);
-      }
+      if (bgAudio.src && bgAudio.paused) tryPlay(posSec);
     }
     return;
   }
@@ -309,7 +243,6 @@ function applyMusic(metadata) {
       tryPlay(posSec);
     } else {
       bgAudio.volume = effectiveVol();
-      // Retry play if autoplay was previously blocked
       if (bgAudio.src && bgAudio.paused) tryPlay(posSec);
     }
     return;
@@ -317,14 +250,12 @@ function applyMusic(metadata) {
 
   if (type === 'spotify') {
     stopAudio();
+    currentYtTrackId = '';
     const rk = `${track.id}|spotify`;
     if (runtimeKey !== rk) {
       runtimeKey = rk;
       const u = toSpotifyUrl(track.url);
-      if (!u) {
-        stopAll();
-        return;
-      }
+      if (!u) { stopAll(); return; }
       spotifyIframe.src = u;
     }
     return;
@@ -354,8 +285,6 @@ async function loadFromSupabase(roomId) {
 }
 
 OBR.onReady(async () => {
-  console.info('[MusicPlayer] OBR ready');
-
   const roomId = OBR.room?.id || '';
   currentRoomId = roomId;
 
