@@ -19,6 +19,14 @@ let runtimeKey = '';
 let currentRoomId = '';
 let currentYtTrackId = '';
 let ytAudioCache = new Map();
+let _currentBlobUrl = null;
+
+function _revokeBlobUrl() {
+  if (_currentBlobUrl) {
+    URL.revokeObjectURL(_currentBlobUrl);
+    _currentBlobUrl = null;
+  }
+}
 
 const clamp = (v, fb = 1) => {
   const n = Number(v);
@@ -136,15 +144,14 @@ function effectiveVol() {
 }
 
 function setVol() {
-  const v = effectiveVol();
-  if (_gainNode) _gainNode.gain.value = v;
-  else bgAudio.volume = v;
+  bgAudio.volume = effectiveVol();
 }
 
 function stopAudio() {
   bgAudio.pause();
   bgAudio.removeAttribute('src');
   bgAudio.load();
+  _revokeBlobUrl();
 }
 
 function stopSpotify() {
@@ -161,7 +168,7 @@ function stopAll() {
 
 window.addEventListener('storage', (e) => {
   if (e.key === volKey && bgAudio.src) {
-    setVol();
+    bgAudio.volume = effectiveVol();
   }
 });
 
@@ -190,44 +197,16 @@ let _wantPlay = false;
 let _pendingPos = 0;
 let _retryTimer = null;
 
-// Web Audio API context — has looser autoplay restrictions than <audio>.play()
-let _audioCtx = null;
-let _sourceNode = null;
-let _gainNode = null;
-
-function _ensureAudioCtx() {
-  if (_audioCtx) return;
-  try {
-    _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    _sourceNode = _audioCtx.createMediaElementSource(bgAudio);
-    _gainNode = _audioCtx.createGain();
-    _sourceNode.connect(_gainNode);
-    _gainNode.connect(_audioCtx.destination);
-    console.log('[BgAudio] AudioContext created, state=', _audioCtx.state);
-  } catch (e) {
-    console.error('[BgAudio] AudioContext creation failed:', e.message);
-  }
-}
-
 function _doPlay() {
   if (!_wantPlay || !bgAudio.src) return;
-  _ensureAudioCtx();
-
-  // Set volume via GainNode (bypasses muted state)
-  if (_gainNode) _gainNode.gain.value = effectiveVol();
-  bgAudio.volume = 1; // full volume on element, gain controls real volume
+  bgAudio.volume = effectiveVol();
   bgAudio.muted = false;
 
-  // Resume AudioContext (often succeeds even without user gesture)
-  const ctxResumed = _audioCtx ? _audioCtx.resume().catch(() => {}) : Promise.resolve();
-
-  ctxResumed.then(() => {
-    console.log('[BgAudio] _doPlay: ctx=', _audioCtx?.state, 'readyState=', bgAudio.readyState);
-    return bgAudio.play();
-  }).then(() => {
+  console.log('[BgAudio] _doPlay: readyState=', bgAudio.readyState, 'vol=', bgAudio.volume);
+  bgAudio.play().then(() => {
     _wantPlay = false;
     _clearRetry();
-    console.log('[BgAudio] play() OK, vol=', effectiveVol());
+    console.log('[BgAudio] play() OK');
     if (_pendingPos > 0) {
       try { bgAudio.currentTime = _pendingPos; _pendingPos = 0; } catch (_) {}
     }
@@ -301,14 +280,32 @@ function applyMusic(metadata) {
       runtimeKey = rk;
       currentYtTrackId = track.id;
       console.log('[BgAudio] new YT track, fetching audio URL for', videoId);
-      fetchYouTubeAudioUrl(videoId).then(audioUrl => {
+      fetchYouTubeAudioUrl(videoId).then(async (audioUrl) => {
         if (runtimeKey !== rk) return;
         if (!audioUrl) { console.error('[BgAudio] fetchYouTubeAudioUrl returned null'); stopAll(); return; }
         console.log('[BgAudio] got audioUrl:', audioUrl.substring(0, 100));
-        bgAudio.loop = state.repeat;
-        setVol();
-        bgAudio.src = audioUrl;
-        tryPlay(posSec);
+        // Fetch audio as blob to bypass Content-Encoding issues with Invidious proxy
+        try {
+          console.log('[BgAudio] fetching audio blob...');
+          const resp = await fetch(audioUrl);
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          const blob = await resp.blob();
+          if (runtimeKey !== rk) return;
+          _revokeBlobUrl();
+          _currentBlobUrl = URL.createObjectURL(blob);
+          console.log('[BgAudio] blob ready, size=', blob.size, 'type=', blob.type);
+          bgAudio.loop = state.repeat;
+          setVol();
+          bgAudio.src = _currentBlobUrl;
+          tryPlay(posSec);
+        } catch (e) {
+          console.error('[BgAudio] blob fetch failed:', e.message);
+          // Fallback: try direct URL
+          bgAudio.loop = state.repeat;
+          setVol();
+          bgAudio.src = audioUrl;
+          tryPlay(posSec);
+        }
       });
     } else {
       bgAudio.loop = state.repeat;
