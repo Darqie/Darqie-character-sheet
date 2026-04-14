@@ -212,17 +212,20 @@ function _clearRetry() {
 }
 
 // Single place to apply a pending seek — fires when audio has enough data
+let _isSeeking = false;
+
+bgAudio.addEventListener('seeking', () => { _isSeeking = true; });
+bgAudio.addEventListener('seeked', () => {
+  _isSeeking = false;
+  if (_wantPlay) _doPlay();
+});
+
 bgAudio.addEventListener('canplay', () => {
-  if (_seekTarget !== null && _seekTarget > 0) {
+  if (!_isSeeking && _seekTarget !== null && _seekTarget > 0) {
     const target = _seekTarget;
     _seekTarget = null;
     try { bgAudio.currentTime = target; } catch (_) {}
   }
-  if (_wantPlay) _doPlay();
-});
-
-// After a seek completes, ensure playback continues
-bgAudio.addEventListener('seeked', () => {
   if (_wantPlay) _doPlay();
 });
 
@@ -270,8 +273,8 @@ function applyMusic(metadata) {
         _lastAnchorTs = state.anchorTimestampMs;
         const drift = Math.abs((bgAudio.currentTime || 0) - posSec);
         if (drift > 2) {
+          // Only set _seekTarget — canplay will apply it once data is ready
           _seekTarget = posSec;
-          try { bgAudio.currentTime = posSec; } catch (_) {}
         }
       }
       // If paused but should be playing, resume

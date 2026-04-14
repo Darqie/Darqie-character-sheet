@@ -26,6 +26,11 @@ async function fetchFromInstance(instance: string, videoId: string): Promise<{ u
     const best = formats
       .filter((f: any) => f.url && f.type?.startsWith("audio/"))
       .sort((a: any, b: any) => {
+        // Prefer mp4/m4a over webm — mp4 has seeking index at the start of the file,
+        // while webm Cues are at the end, making seeking through a proxy impossible.
+        const aIsMp4 = a.type?.includes("mp4") ? 1 : 0;
+        const bIsMp4 = b.type?.includes("mp4") ? 1 : 0;
+        if (bIsMp4 !== aIsMp4) return bIsMp4 - aIsMp4;
         const ba = parseInt(String(a.bitrate || "0"), 10);
         const bb = parseInt(String(b.bitrate || "0"), 10);
         return bb - ba;
