@@ -135,6 +135,12 @@ function effectiveVol() {
   return localVol() * globalVol;
 }
 
+function setVol() {
+  const v = effectiveVol();
+  if (_gainNode) _gainNode.gain.value = v;
+  else bgAudio.volume = v;
+}
+
 function stopAudio() {
   bgAudio.pause();
   bgAudio.removeAttribute('src');
@@ -155,7 +161,7 @@ function stopAll() {
 
 window.addEventListener('storage', (e) => {
   if (e.key === volKey && bgAudio.src) {
-    bgAudio.volume = effectiveVol();
+    setVol();
   }
 });
 
@@ -182,41 +188,71 @@ bgAudio.addEventListener('loadedmetadata', () => {
 
 let _wantPlay = false;
 let _pendingPos = 0;
+let _retryTimer = null;
+
+// Web Audio API context — has looser autoplay restrictions than <audio>.play()
+let _audioCtx = null;
+let _sourceNode = null;
+let _gainNode = null;
+
+function _ensureAudioCtx() {
+  if (_audioCtx) return;
+  try {
+    _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    _sourceNode = _audioCtx.createMediaElementSource(bgAudio);
+    _gainNode = _audioCtx.createGain();
+    _sourceNode.connect(_gainNode);
+    _gainNode.connect(_audioCtx.destination);
+    console.log('[BgAudio] AudioContext created, state=', _audioCtx.state);
+  } catch (e) {
+    console.error('[BgAudio] AudioContext creation failed:', e.message);
+  }
+}
 
 function _doPlay() {
-  if (!_wantPlay || !bgAudio.src) {
-    console.log('[BgAudio] _doPlay skip: wantPlay=', _wantPlay, 'src=', !!bgAudio.src);
-    return;
-  }
-  console.log('[BgAudio] _doPlay: attempting muted play, pos=', _pendingPos, 'readyState=', bgAudio.readyState);
-  const vol = bgAudio.volume;
-  bgAudio.muted = true;
-  bgAudio.play().then(() => {
+  if (!_wantPlay || !bgAudio.src) return;
+  _ensureAudioCtx();
+
+  // Set volume via GainNode (bypasses muted state)
+  if (_gainNode) _gainNode.gain.value = effectiveVol();
+  bgAudio.volume = 1; // full volume on element, gain controls real volume
+  bgAudio.muted = false;
+
+  // Resume AudioContext (often succeeds even without user gesture)
+  const ctxResumed = _audioCtx ? _audioCtx.resume().catch(() => {}) : Promise.resolve();
+
+  ctxResumed.then(() => {
+    console.log('[BgAudio] _doPlay: ctx=', _audioCtx?.state, 'readyState=', bgAudio.readyState);
+    return bgAudio.play();
+  }).then(() => {
     _wantPlay = false;
-    bgAudio.muted = false;
-    bgAudio.volume = vol;
-    console.log('[BgAudio] muted play() OK, unmuted, vol=', vol);
+    _clearRetry();
+    console.log('[BgAudio] play() OK, vol=', effectiveVol());
     if (_pendingPos > 0) {
-      try { bgAudio.currentTime = _pendingPos; } catch (_) {}
+      try { bgAudio.currentTime = _pendingPos; _pendingPos = 0; } catch (_) {}
     }
-  }).catch((e1) => {
-    console.warn('[BgAudio] muted play() failed:', e1.message, '— retrying unmuted');
-    bgAudio.muted = false;
-    bgAudio.play().then(() => {
-      _wantPlay = false;
-      console.log('[BgAudio] unmuted play() OK');
-      if (_pendingPos > 0) {
-        try { bgAudio.currentTime = _pendingPos; } catch (_) {}
-      }
-    }).catch((e2) => {
-      console.error('[BgAudio] play() completely failed:', e2.message);
-    });
+  }).catch((e) => {
+    console.warn('[BgAudio] play() blocked:', e.message, '— will retry');
+    _scheduleRetry();
   });
 }
 
+function _scheduleRetry() {
+  if (_retryTimer) return;
+  _retryTimer = setInterval(() => {
+    if (!_wantPlay || !bgAudio.src) { _clearRetry(); return; }
+    console.log('[BgAudio] retry play attempt...');
+    _doPlay();
+  }, 3000);
+}
+
+function _clearRetry() {
+  if (_retryTimer) { clearInterval(_retryTimer); _retryTimer = null; }
+}
+
 bgAudio.addEventListener('canplay', () => {
-  console.log('[BgAudio] canplay event, wantPlay=', _wantPlay, 'readyState=', bgAudio.readyState);
-  _doPlay();
+  console.log('[BgAudio] canplay, wantPlay=', _wantPlay);
+  if (_wantPlay) _doPlay();
 });
 bgAudio.addEventListener('error', () => {
   const e = bgAudio.error;
@@ -224,7 +260,7 @@ bgAudio.addEventListener('error', () => {
 });
 
 function tryPlay(posSec) {
-  console.log('[BgAudio] tryPlay called, pos=', posSec, 'src=', bgAudio.src?.substring(0, 80));
+  console.log('[BgAudio] tryPlay pos=', posSec, 'src=', bgAudio.src?.substring(0, 80));
   _wantPlay = true;
   _pendingPos = posSec;
   _doPlay();
@@ -270,13 +306,13 @@ function applyMusic(metadata) {
         if (!audioUrl) { console.error('[BgAudio] fetchYouTubeAudioUrl returned null'); stopAll(); return; }
         console.log('[BgAudio] got audioUrl:', audioUrl.substring(0, 100));
         bgAudio.loop = state.repeat;
-        bgAudio.volume = effectiveVol();
+        setVol();
         bgAudio.src = audioUrl;
         tryPlay(posSec);
       });
     } else {
       bgAudio.loop = state.repeat;
-      bgAudio.volume = effectiveVol();
+      setVol();
       if (bgAudio.src && bgAudio.paused) {
         tryPlay(posSec);
       } else {
@@ -294,12 +330,12 @@ function applyMusic(metadata) {
     if (runtimeKey !== rk) {
       runtimeKey = rk;
       bgAudio.loop = state.repeat;
-      bgAudio.volume = effectiveVol();
+      setVol();
       bgAudio.src = url;
       tryPlay(posSec);
     } else {
       bgAudio.loop = state.repeat;
-      bgAudio.volume = effectiveVol();
+      setVol();
       if (bgAudio.src && bgAudio.paused) {
         tryPlay(posSec);
       } else {

@@ -3,6 +3,9 @@
   Access-Control-Allow-Origin: *
   Cache-Control: no-cache
 
+/audio-bg.html
+  Permissions-Policy: autoplay=*
+
 /icon.svg
   Content-Type: image/svg+xml
   Access-Control-Allow-Origin: *
