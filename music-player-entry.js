@@ -105,32 +105,39 @@ const PIPED_INSTANCES = [
   'https://api.piped.projectsegfau.lt',
 ];
 
+const CORS_PROXIES = [
+  (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+  (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+];
+
 async function fetchYouTubeAudioUrl(videoId) {
   const cached = ytAudioCache.get(videoId);
   if (cached && cached.expiresAt > Date.now()) return cached.url;
 
   for (const instance of PIPED_INSTANCES) {
-    try {
-      const r = await fetch(`${instance}/streams/${encodeURIComponent(videoId)}`);
-      if (!r.ok) continue;
-      const json = await r.json();
-      const streams = Array.isArray(json.audioStreams) ? json.audioStreams : [];
-      // prefer highest bitrate audio-only stream
-      const sorted = streams
-        .filter(s => s.url && s.mimeType?.startsWith('audio/'))
-        .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
-      const best = sorted[0];
-      if (best?.url) {
-        // cache for 5 hours (piped URLs typically last 6h)
-        ytAudioCache.set(videoId, { url: best.url, expiresAt: Date.now() + 5 * 3600_000 });
-        console.info('[MusicPlayer][YT] Got direct audio from', instance, { bitrate: best.bitrate, codec: best.codec });
-        return best.url;
+    const directUrl = `${instance}/streams/${encodeURIComponent(videoId)}`;
+
+    // Try each CORS proxy for this Piped instance
+    for (const proxyFn of CORS_PROXIES) {
+      try {
+        const r = await fetch(proxyFn(directUrl));
+        if (!r.ok) continue;
+        const json = await r.json();
+        const streams = Array.isArray(json.audioStreams) ? json.audioStreams : [];
+        const best = streams
+          .filter(s => s.url && s.mimeType?.startsWith('audio/'))
+          .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0];
+        if (best?.url) {
+          ytAudioCache.set(videoId, { url: best.url, expiresAt: Date.now() + 5 * 3600_000 });
+          console.info('[MusicPlayer][YT] Got direct audio via proxy', { instance, bitrate: best.bitrate, codec: best.codec });
+          return best.url;
+        }
+      } catch (e) {
+        console.warn('[MusicPlayer][YT] Proxy failed:', instance, e?.message || e);
       }
-    } catch (e) {
-      console.warn('[MusicPlayer][YT] Piped instance failed:', instance, e?.message || e);
     }
   }
-  console.error('[MusicPlayer][YT] All Piped instances failed for videoId:', videoId);
+  console.error('[MusicPlayer][YT] All Piped instances + proxies failed for videoId:', videoId);
   return null;
 }
 
