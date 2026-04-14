@@ -30,17 +30,10 @@ async function fetchFromInstance(instance: string, videoId: string): Promise<{ u
         return bb - ba;
       })[0];
     if (!best?.url) throw new Error("no audio streams");
-    let audioUrl = best.url;
-    const urlHost = new URL(audioUrl).hostname;
-    if (urlHost.includes("googlevideo.com")) {
-      const itag = best.itag || audioUrl.match(/itag=(\d+)/)?.[1];
-      if (itag) {
-        audioUrl = `${instance}/latest_version?id=${encodeURIComponent(videoId)}&itag=${itag}&local=true`;
-      }
-    }
-    if (audioUrl.startsWith("http://")) {
-      audioUrl = "https://" + audioUrl.slice(7);
-    }
+    const itag = best.itag || best.url.match(/itag=(\d+)/)?.[1];
+    if (!itag) throw new Error("no itag found");
+    // Always use /latest_version — the /videoplayback proxy returns 403
+    const audioUrl = `${instance}/latest_version?id=${encodeURIComponent(videoId)}&itag=${itag}&local=true`;
     const codec = best.encoding || best.type?.match(/codecs="([^"]+)"/)?.[1] || "unknown";
     return { url: audioUrl, bitrate: parseInt(String(best.bitrate || "0"), 10), codec };
   } catch (e: any) {
