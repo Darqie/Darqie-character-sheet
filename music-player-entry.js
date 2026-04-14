@@ -126,8 +126,9 @@ function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0) {
 
   if (origin) query.set('origin', origin);
 
-  const normalizedStart = Math.max(0, Math.floor(Number(startSec) || 0));
-  if (normalizedStart > 0) query.set('start', String(normalizedStart));
+  // In OBR webview, large start offsets can leave YT embed in state -1 (unstarted).
+  // Start from 0 for reliability; timeline still uses shared anchor metadata.
+  void startSec;
 
   if (repeat) {
     query.set('loop', '1');

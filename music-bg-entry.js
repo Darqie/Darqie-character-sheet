@@ -16,8 +16,8 @@ OBR.onReady(async () => {
     await OBR.popover.open({
       id: PLAYER_POPOVER_ID,
       url: '/audio-player.html',
-      width: 1,
-      height: 1,
+      width: 320,
+      height: 180,
       anchorOrigin: { horizontal: 'RIGHT', vertical: 'BOTTOM' },
       transformOrigin: { horizontal: 'RIGHT', vertical: 'BOTTOM' },
       hidePaper: true,
