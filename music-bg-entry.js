@@ -120,7 +120,6 @@ function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0) {
     playsinline: '1',
     modestbranding: '1',
     iv_load_policy: '3',
-    enablejsapi: '1',
   });
 
   if (origin) query.set('origin', origin);
@@ -133,7 +132,7 @@ function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0) {
     query.set('playlist', videoId);
   }
 
-  return `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?${query.toString()}`;
+  return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?${query.toString()}`;
 }
 
 function localVol() {
