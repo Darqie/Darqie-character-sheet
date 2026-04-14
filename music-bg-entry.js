@@ -312,7 +312,10 @@ ytIframe?.addEventListener('load', () => {
 
 window.addEventListener('message', (event) => {
   const origin = String(event.origin || '');
-  if (!origin.includes('youtube.com')) return;
+  const isYouTubeOrigin =
+    origin.includes('youtube.com') ||
+    origin.includes('youtube-nocookie.com');
+  if (!isYouTubeOrigin) return;
 
   let data = event.data;
   if (typeof data === 'string') {
