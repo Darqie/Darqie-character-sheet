@@ -32,12 +32,12 @@ let currentRoomId = '';
 let currentYtTrackId = '';
 let ytPlayerReady = false;
 let ytLastRuntimeAt = 0;
-let ytLastRuntimeLogAt = 0;
 let ytLastNoRuntimeWarnAt = 0;
 let ytLastState = null;
 let ytLastProgressAt = 0;
 let ytLastProgressSec = null;
 let ytUserInteracted = false;
+const YT_VERBOSE_LOGS = false;
 
 const clamp = (v, fb = 1) => {
   const n = Number(v);
@@ -120,6 +120,7 @@ function extractYtId(rawUrl) {
 }
 
 function logYt(...args) {
+  if (!YT_VERBOSE_LOGS) return;
   console.log('[MusicBG][YT]', ...args);
 }
 
@@ -158,7 +159,6 @@ function sendYouTubeCommand(func, args = []) {
   const w = ytIframe?.contentWindow;
   if (!w) return;
   try {
-    logYt('command:', func, args.length ? args : '[]');
     w.postMessage(JSON.stringify({ event: 'command', func, args }), '*');
   } catch (_) {}
 }
@@ -167,7 +167,6 @@ function sendYouTubeListeningHandshake() {
   const w = ytIframe?.contentWindow;
   if (!w) return;
   try {
-    logYt('sending listening handshake');
     w.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), '*');
   } catch (_) {}
 }
@@ -190,14 +189,6 @@ function writeYtRuntime(currentTime, duration) {
   try {
     localStorage.setItem(key, JSON.stringify(payload));
     ytLastRuntimeAt = Date.now();
-    if (ytLastRuntimeAt - ytLastRuntimeLogAt > 5000) {
-      ytLastRuntimeLogAt = ytLastRuntimeAt;
-      logYt('runtime update', {
-        currentTime: payload.currentTime,
-        duration: payload.duration,
-        key,
-      });
-    }
   } catch (_) {}
 }
 
@@ -237,7 +228,6 @@ function stopSpotify() {
 }
 
 function stopYouTube() {
-  if (ytIframe.src) logYt('stop iframe');
   pendingYouTube = null;
   ytPlayerReady = false;
   ytLastRuntimeAt = 0;
@@ -286,7 +276,6 @@ window.addEventListener('storage', (e) => {
   if (e.key === 'darqie.userInteracted' && pendingYouTube && ytIframe.src) {
     ytUserInteracted = true;
     // On first real user interaction, nudge play once.
-    logYt('user interaction received, retrying play');
     kickYouTubePlayback();
 
     // If still silent due autoplay policy, force one controlled reload once.
@@ -295,7 +284,6 @@ window.addEventListener('storage', (e) => {
       const url = pendingYouTube.embedUrl;
       ytIframe.src = '';
       setTimeout(() => {
-        logYt('forcing one iframe reload after interaction');
         ytIframe.src = url;
         setTimeout(kickYouTubePlayback, 800);
       }, 30);
@@ -314,7 +302,6 @@ window.addEventListener('storage', (e) => {
 });
 
 ytIframe?.addEventListener('load', () => {
-  logYt('iframe loaded');
   ytPlayerReady = false;
   setTimeout(sendYouTubeListeningHandshake, 150);
   setTimeout(sendYouTubeListeningHandshake, 650);
@@ -335,7 +322,7 @@ window.addEventListener('message', (event) => {
 
   if (data.event === 'onReady') {
     ytPlayerReady = true;
-    logYt('onReady received');
+    console.info('[MusicBG][YT] onReady received');
     kickYouTubePlayback();
     return;
   }
@@ -345,7 +332,7 @@ window.addEventListener('message', (event) => {
     const state = Number(info.playerState);
     if (Number.isFinite(state) && state !== ytLastState) {
       ytLastState = state;
-      logYt('playerState changed:', state);
+      console.info('[MusicBG][YT] playerState changed:', state);
     }
     const currentTime = Number(info.currentTime);
     const duration = Number(info.duration);
@@ -365,8 +352,6 @@ function applyMusic(metadata) {
   const playlist = Array.isArray(metadata?.[PLAYLIST_KEY]) ? metadata[PLAYLIST_KEY] : [];
   const state = normalizeState(metadata?.[STATE_KEY]);
   const track = playlist.find((t) => String(t?.id || '') === state.currentTrackId);
-
-  console.log('[MusicBG] applyMusic — isPlaying:', state.isPlaying, '| track:', track?.name || 'none');
 
   if (!track?.url || !state.isPlaying) {
     stopAll();
@@ -391,7 +376,7 @@ function applyMusic(metadata) {
         stopAll();
         return;
       }
-      logYt('start track', {
+      console.info('[MusicBG][YT] start track', {
         trackId: track.id,
         name: track.name,
         anchorPositionSec: Number(posSec.toFixed(2)),
@@ -401,7 +386,6 @@ function applyMusic(metadata) {
       ytLastProgressAt = 0;
       ytLastProgressSec = null;
       ytIframe.src = embedUrl;
-      console.log('[MusicBG] YouTube iframe started ✓');
 
       // Give iframe a moment to initialize and then request play.
       setTimeout(kickYouTubePlayback, 800);
@@ -423,7 +407,7 @@ function applyMusic(metadata) {
         if ((noRuntimeYet || noProgressYet) && pendingYouTube && pendingYouTube.retryCount < 2) {
           pendingYouTube.retryCount += 1;
           const retryUrl = `${pendingYouTube.embedUrl}${pendingYouTube.embedUrl.includes('?') ? '&' : '?'}r=${Date.now()}`;
-          logYt('runtime/progress missing, forcing iframe retry', {
+          console.warn('[MusicBG][YT] runtime/progress missing, forcing iframe retry', {
             retry: pendingYouTube.retryCount,
             noRuntimeYet,
             noProgressYet,

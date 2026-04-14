@@ -399,7 +399,7 @@ export function initPage({ root }) {
       } else {
         // Do not show synthetic movement for YouTube when real runtime is missing.
         currentPos = Math.max(0, Number(playbackState.anchorPositionSec || 0));
-        if (Date.now() - ytNoRuntimeWarnAt > 5000) {
+        if (playbackState.isPlaying && Date.now() - ytNoRuntimeWarnAt > 30000) {
           ytNoRuntimeWarnAt = Date.now();
           console.warn('[Music][YT] No runtime telemetry from background player yet; seek is frozen until telemetry appears.', {
             trackId: track.id,
@@ -584,11 +584,6 @@ export function initPage({ root }) {
         currentRuntimeKey = ytKey;
         knownDuration = null;
         ytNoRuntimeWarnAt = 0;
-        console.log('[Music][YT] Syncing YouTube UI runtime key:', {
-          trackId: track.id,
-          trackName: track.name,
-          roomId,
-        });
         audioPlayer.pause();
         audioPlayer.removeAttribute('src');
         audioPlayer.load();
