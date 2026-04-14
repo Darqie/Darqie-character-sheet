@@ -27,6 +27,7 @@ let volKey = `${VOL_PREFIX}.global.player`;
 let globalVol = 1;
 let runtimeKey = '';
 let pendingPlay = null; // { src, posSec, loop }
+let pendingYouTube = null; // { embedUrl, retryCount }
 
 const clamp = (v, fb = 1) => {
   const n = Number(v);
@@ -120,6 +121,7 @@ function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0) {
     playsinline: '1',
     modestbranding: '1',
     iv_load_policy: '3',
+    enablejsapi: '1',
   });
 
   if (origin) query.set('origin', origin);
@@ -133,6 +135,20 @@ function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0) {
   }
 
   return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?${query.toString()}`;
+}
+
+function sendYouTubeCommand(func, args = []) {
+  const w = ytIframe?.contentWindow;
+  if (!w) return;
+  try {
+    w.postMessage(JSON.stringify({ event: 'command', func, args }), '*');
+  } catch (_) {}
+}
+
+function kickYouTubePlayback() {
+  sendYouTubeCommand('playVideo');
+  sendYouTubeCommand('unMute');
+  sendYouTubeCommand('setVolume', [100]);
 }
 
 function localVol() {
@@ -159,6 +175,7 @@ function stopSpotify() {
 }
 
 function stopYouTube() {
+  pendingYouTube = null;
   ytIframe.src = '';
 }
 
@@ -192,6 +209,23 @@ window.addEventListener('storage', (e) => {
     const { src, posSec, loop } = pendingPlay;
     pendingPlay = null;
     attemptPlay(src, posSec, loop);
+    return;
+  }
+
+  if (e.key === 'darqie.userInteracted' && pendingYouTube && ytIframe.src) {
+    // On first real user interaction, ask YT player to unmute/play.
+    kickYouTubePlayback();
+
+    // If still silent due autoplay policy, force one controlled reload once.
+    if (pendingYouTube.retryCount < 1) {
+      pendingYouTube.retryCount += 1;
+      const url = pendingYouTube.embedUrl;
+      ytIframe.src = '';
+      setTimeout(() => {
+        ytIframe.src = url;
+        setTimeout(kickYouTubePlayback, 800);
+      }, 30);
+    }
     return;
   }
 
@@ -229,8 +263,13 @@ function applyMusic(metadata) {
         stopAll();
         return;
       }
+      pendingYouTube = { embedUrl, retryCount: 0 };
       ytIframe.src = embedUrl;
       console.log('[MusicBG] YouTube iframe started ✓');
+
+      // Give iframe a moment to initialize and then request play/unmute.
+      setTimeout(kickYouTubePlayback, 800);
+      setTimeout(kickYouTubePlayback, 1600);
     }
     return;
   }

@@ -6,7 +6,25 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 1px; height: 1px; overflow: hidden; background: transparent; }
-    #spotifyIframe, #ytIframe { position: absolute; left: 0; top: 0; width: 1px; height: 1px; border: none; }
+    #spotifyIframe {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 1px;
+      height: 1px;
+      border: none;
+    }
+    #ytIframe {
+      position: fixed;
+      right: 0;
+      bottom: 0;
+      width: 320px;
+      height: 180px;
+      border: none;
+      opacity: 0;
+      pointer-events: none;
+      z-index: -1;
+    }
   </style>
 </head>
 <body>

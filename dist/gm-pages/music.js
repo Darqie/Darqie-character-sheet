@@ -355,7 +355,7 @@ export function initPage({ root }) {
   function updateSeekBar() {
     if (isSeeking || !seekBar) return;
     const track = getCurrentTrack();
-    if (!track || !playbackState.isPlaying) {
+    if (!track) {
       seekBar.value = '0';
       if (currentTimeEl) currentTimeEl.textContent = '0:00';
       if (durationEl) durationEl.textContent = '—';
@@ -488,7 +488,12 @@ export function initPage({ root }) {
     if (!isPlaying) {
       playPauseButton.innerHTML = '<i class="fas fa-play"></i>';
       nowPlaying.textContent = track ? `Пауза: ${track.name}` : 'Відтворення зупинено';
-      stopAllPlayback();
+      if (!track) {
+        stopAllPlayback();
+      } else {
+        // Keep metadata loaded so duration stays visible while paused.
+        audioPlayer.pause();
+      }
       return;
     }
 
