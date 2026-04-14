@@ -351,6 +351,31 @@ export function initPage({ root }) {
   let isSeeking = false;
   let knownDuration = null;
 
+  function getYtRuntimeStorageKey(trackId) {
+    if (!roomId || !trackId) return '';
+    return `darqie.v2.ytRuntime.${roomId}.${trackId}`;
+  }
+
+  function readYtRuntime(trackId) {
+    const key = getYtRuntimeStorageKey(trackId);
+    if (!key) return null;
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      const ts = Number(data?.ts || 0);
+      const currentTime = Number(data?.currentTime);
+      const duration = Number(data?.duration);
+      if (!Number.isFinite(ts) || Date.now() - ts > 12000) return null;
+      return {
+        currentTime: Number.isFinite(currentTime) ? Math.max(0, currentTime) : null,
+        duration: Number.isFinite(duration) && duration > 0 ? duration : null,
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
   // ── Seek bar ─────────────────────────────────────────────────────────────
   function updateSeekBar() {
     if (isSeeking || !seekBar) return;
@@ -361,7 +386,12 @@ export function initPage({ root }) {
       if (durationEl) durationEl.textContent = '—';
       return;
     }
-    const currentPos = getStatePositionSec(playbackState);
+    let currentPos = getStatePositionSec(playbackState);
+    if (track.type === TRACK_TYPE_YOUTUBE) {
+      const yt = readYtRuntime(track.id);
+      if (yt?.duration) knownDuration = yt.duration;
+      if (Number.isFinite(yt?.currentTime)) currentPos = yt.currentTime;
+    }
     if (knownDuration) {
       seekBar.max = String(Math.ceil(knownDuration));
       if (durationEl) durationEl.textContent = formatTime(knownDuration);
