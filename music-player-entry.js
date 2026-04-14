@@ -224,8 +224,16 @@ function tryPlay(posSec) {
 function syncPosition(posSec) {
   if (!bgAudio.src || bgAudio.paused) return;
   const drift = Math.abs((bgAudio.currentTime || 0) - posSec);
-  if (drift > 2) {
-    try { bgAudio.currentTime = posSec; } catch (_) {}
+  if (drift > 5) {
+    // Only seek if target is within a buffered range
+    const buf = bgAudio.buffered;
+    for (let i = 0; i < buf.length; i++) {
+      if (posSec >= buf.start(i) && posSec <= buf.end(i)) {
+        try { bgAudio.currentTime = posSec; } catch (_) {}
+        return;
+      }
+    }
+    // Target not buffered — don't seek (would restart the stream)
   }
 }
 
@@ -257,7 +265,7 @@ function applyMusic(metadata) {
       fetchYouTubeAudioUrl(videoId).then((audioUrl) => {
         if (!audioUrl || runtimeKey !== rk) return;
         bgAudio.src = audioUrl;
-        tryPlay(posSec);
+        tryPlay(0); // start from 0 — seeking to unbuffered position breaks streaming
       });
     } else {
       bgAudio.loop = state.repeat;

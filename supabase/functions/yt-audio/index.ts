@@ -1,3 +1,4 @@
+// @ts-ignore Deno module
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const INVIDIOUS_INSTANCES = [
@@ -65,7 +66,7 @@ async function resolveAudioUrl(videoId: string): Promise<{ url: string; bitrate:
   throw new Error(`All instances failed: ${errors.join("; ")}`);
 }
 
-serve(async (req) => {
+serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
