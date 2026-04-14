@@ -8,7 +8,7 @@ const INVIDIOUS_INSTANCES = [
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, range",
 };
 
 async function fetchFromInstance(instance: string, videoId: string): Promise<{ url: string; bitrate: number; codec: string }> {
@@ -93,24 +93,40 @@ serve(async (req: Request) => {
     }
 
     // Stream mode: proxy the audio bytes back to the client
-    const audioResp = await fetch(result.url);
-    if (!audioResp.ok || !audioResp.body) {
+    const fetchHeaders: Record<string, string> = {};
+    const rangeHeader = req.headers.get("range");
+    if (rangeHeader) fetchHeaders["Range"] = rangeHeader;
+
+    const audioResp = await fetch(result.url, { headers: fetchHeaders });
+    if (!audioResp.ok && audioResp.status !== 206) {
       return new Response(
         JSON.stringify({ error: `Audio fetch failed: HTTP ${audioResp.status}` }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    if (!audioResp.body) {
+      return new Response(
+        JSON.stringify({ error: "No response body" }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const contentType = audioResp.headers.get("content-type") || "audio/webm";
     const contentLength = audioResp.headers.get("content-length");
+    const contentRange = audioResp.headers.get("content-range");
     const headers: Record<string, string> = {
       ...corsHeaders,
       "Content-Type": contentType,
+      "Accept-Ranges": "bytes",
       "Cache-Control": "public, max-age=3600",
     };
     if (contentLength) headers["Content-Length"] = contentLength;
+    if (contentRange) headers["Content-Range"] = contentRange;
 
-    return new Response(audioResp.body, { headers });
+    return new Response(audioResp.body, {
+      status: audioResp.status, // 200 or 206
+      headers,
+    });
   } catch (e: any) {
     return new Response(
       JSON.stringify({ error: e?.message || "unknown" }),
