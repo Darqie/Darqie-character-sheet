@@ -11,20 +11,13 @@ const SUPABASE_TABLE = 'room_music_state';
 
 const bgAudio = document.getElementById('bgAudio');
 const spotifyIframe = document.getElementById('spotifyIframe');
-const ytIframe = document.getElementById('ytIframe');
 
 let volKey = `${VOL_PREFIX}.global.player`;
 let globalVol = 1;
 let runtimeKey = '';
 
 let currentRoomId = '';
-let currentYtTrackId = '';
-let ytPlayerReady = false;
-let ytLastRuntimeAt = 0;
-let ytLastNoRuntimeWarnAt = 0;
-let ytLastState = null;
-let ytLastProgressAt = 0;
-let ytLastProgressSec = null;
+let ytAudioCache = new Map(); // videoId -> { url, expiresAt }
 
 const clamp = (v, fb = 1) => {
   const n = Number(v);
@@ -106,85 +99,39 @@ function extractYtId(rawUrl) {
   return '';
 }
 
-function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0) {
-  const videoId = extractYtId(rawUrl);
-  if (!videoId) {
-    console.warn('[MusicPlayer][YT] Could not extract video id from URL:', rawUrl);
-    return '';
+const PIPED_INSTANCES = [
+  'https://pipedapi.kavin.rocks',
+  'https://pipedapi.adminforge.de',
+  'https://api.piped.projectsegfau.lt',
+];
+
+async function fetchYouTubeAudioUrl(videoId) {
+  const cached = ytAudioCache.get(videoId);
+  if (cached && cached.expiresAt > Date.now()) return cached.url;
+
+  for (const instance of PIPED_INSTANCES) {
+    try {
+      const r = await fetch(`${instance}/streams/${encodeURIComponent(videoId)}`);
+      if (!r.ok) continue;
+      const json = await r.json();
+      const streams = Array.isArray(json.audioStreams) ? json.audioStreams : [];
+      // prefer highest bitrate audio-only stream
+      const sorted = streams
+        .filter(s => s.url && s.mimeType?.startsWith('audio/'))
+        .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+      const best = sorted[0];
+      if (best?.url) {
+        // cache for 5 hours (piped URLs typically last 6h)
+        ytAudioCache.set(videoId, { url: best.url, expiresAt: Date.now() + 5 * 3600_000 });
+        console.info('[MusicPlayer][YT] Got direct audio from', instance, { bitrate: best.bitrate, codec: best.codec });
+        return best.url;
+      }
+    } catch (e) {
+      console.warn('[MusicPlayer][YT] Piped instance failed:', instance, e?.message || e);
+    }
   }
-
-  const origin = window.location?.origin || '';
-  const query = new URLSearchParams({
-    autoplay: '1',
-    controls: '0',
-    rel: '0',
-    playsinline: '1',
-    modestbranding: '1',
-    iv_load_policy: '3',
-    enablejsapi: '1',
-  });
-
-  if (origin) query.set('origin', origin);
-
-  // In OBR webview, large start offsets can leave YT embed in state -1 (unstarted).
-  // Start from 0 for reliability; timeline still uses shared anchor metadata.
-  void startSec;
-
-  if (repeat) {
-    query.set('loop', '1');
-    query.set('playlist', videoId);
-  }
-
-  return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?${query.toString()}`;
-}
-
-function sendYouTubeCommand(func, args = []) {
-  const w = ytIframe?.contentWindow;
-  if (!w) return;
-  try {
-    w.postMessage(JSON.stringify({ event: 'command', func, args }), '*');
-  } catch (_) {}
-}
-
-function sendYouTubeListeningHandshake() {
-  const w = ytIframe?.contentWindow;
-  if (!w) return;
-  try {
-    w.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), '*');
-  } catch (_) {}
-}
-
-function kickYouTubePlayback() {
-  if (!ytIframe?.src) return;
-  sendYouTubeCommand('playVideo');
-  sendYouTubeCommand('setVolume', [100]);
-}
-
-function ytRuntimeStorageKey() {
-  if (!currentRoomId || !currentYtTrackId) return '';
-  return `darqie.v2.ytRuntime.${currentRoomId}.${currentYtTrackId}`;
-}
-
-function writeYtRuntime(currentTime, duration) {
-  const key = ytRuntimeStorageKey();
-  if (!key) return;
-  const c = Number(currentTime);
-  const d = Number(duration);
-  const payload = {
-    ts: Date.now(),
-    currentTime: Number.isFinite(c) ? Math.max(0, c) : null,
-    duration: Number.isFinite(d) && d > 0 ? d : null,
-  };
-  try {
-    localStorage.setItem(key, JSON.stringify(payload));
-    ytLastRuntimeAt = Date.now();
-  } catch (_) {}
-}
-
-function clearYtRuntime() {
-  const key = ytRuntimeStorageKey();
-  if (!key) return;
-  try { localStorage.removeItem(key); } catch (_) {}
+  console.error('[MusicPlayer][YT] All Piped instances failed for videoId:', videoId);
+  return null;
 }
 
 function localVol() {
@@ -210,23 +157,11 @@ function stopSpotify() {
   spotifyIframe.src = '';
 }
 
-function stopYouTube() {
-  ytPlayerReady = false;
-  ytLastRuntimeAt = 0;
-  ytLastProgressAt = 0;
-  ytLastProgressSec = null;
-  ytLastNoRuntimeWarnAt = 0;
-  ytLastState = null;
-  clearYtRuntime();
-  currentYtTrackId = '';
-  ytIframe.src = '';
-}
-
 function stopAll() {
   runtimeKey = '';
+  currentYtTrackId = '';
   stopAudio();
   stopSpotify();
-  stopYouTube();
 }
 
 window.addEventListener('storage', (e) => {
@@ -235,53 +170,29 @@ window.addEventListener('storage', (e) => {
   }
 });
 
-ytIframe?.addEventListener('load', () => {
-  ytPlayerReady = false;
-  setTimeout(sendYouTubeListeningHandshake, 120);
-  setTimeout(sendYouTubeListeningHandshake, 500);
+// YouTube is now handled via direct audio stream (Piped API), no iframe needed
+
+let currentYtTrackId = '';
+
+function writeYtRuntime(currentTime, duration) {
+  if (!currentRoomId || !currentYtTrackId) return;
+  const key = `darqie.v2.ytRuntime.${currentRoomId}.${currentYtTrackId}`;
+  const c = Number(currentTime);
+  const d = Number(duration);
+  try {
+    localStorage.setItem(key, JSON.stringify({
+      ts: Date.now(),
+      currentTime: Number.isFinite(c) ? Math.max(0, c) : null,
+      duration: Number.isFinite(d) && d > 0 ? d : null,
+    }));
+  } catch (_) {}
+}
+
+bgAudio.addEventListener('timeupdate', () => {
+  if (currentYtTrackId) writeYtRuntime(bgAudio.currentTime, bgAudio.duration);
 });
-
-window.addEventListener('message', (event) => {
-  const origin = String(event.origin || '');
-  const isYouTubeOrigin =
-    origin.includes('youtube.com') ||
-    origin.includes('youtube-nocookie.com');
-  if (!isYouTubeOrigin) return;
-
-  let data = event.data;
-  if (typeof data === 'string') {
-    try { data = JSON.parse(data); } catch (_) { return; }
-  }
-  if (!data || typeof data !== 'object') return;
-
-  if (data.event === 'onReady') {
-    ytPlayerReady = true;
-    console.info('[MusicPlayer][YT] onReady received');
-    kickYouTubePlayback();
-    return;
-  }
-
-  if (data.event === 'infoDelivery' && data.info) {
-    const info = data.info;
-    const state = Number(info.playerState);
-    if (Number.isFinite(state) && state !== ytLastState) {
-      ytLastState = state;
-      console.info('[MusicPlayer][YT] playerState changed:', state);
-    }
-
-    const currentTime = Number(info.currentTime);
-    const duration = Number(info.duration);
-    if (Number.isFinite(currentTime)) {
-      if (!Number.isFinite(ytLastProgressSec) || currentTime > (ytLastProgressSec + 0.15)) {
-        ytLastProgressSec = currentTime;
-        ytLastProgressAt = Date.now();
-      }
-    }
-
-    if (Number.isFinite(currentTime) || (Number.isFinite(duration) && duration > 0)) {
-      writeYtRuntime(currentTime, duration);
-    }
-  }
+bgAudio.addEventListener('loadedmetadata', () => {
+  if (currentYtTrackId) writeYtRuntime(bgAudio.currentTime, bgAudio.duration);
 });
 
 function applyMusic(metadata) {
@@ -300,55 +211,43 @@ function applyMusic(metadata) {
   const repeat = state.repeat;
 
   if (type === 'youtube') {
-    stopAudio();
     stopSpotify();
+
+    const videoId = extractYtId(track.url);
+    if (!videoId) { stopAll(); return; }
 
     const rk = `${track.id}|yt|${state.anchorTimestampMs}`;
     if (runtimeKey !== rk) {
       runtimeKey = rk;
       currentYtTrackId = track.id;
-      const embedUrl = toYouTubeEmbedUrl(track.url, repeat, posSec);
-      if (!embedUrl) {
-        stopAll();
-        return;
-      }
-
       console.info('[MusicPlayer][YT] start track', {
-        trackId: track.id,
-        name: track.name,
-        anchorPositionSec: Number(posSec.toFixed(2)),
-        repeat,
+        trackId: track.id, name: track.name,
+        anchorPositionSec: Number(posSec.toFixed(2)), repeat,
       });
 
-      ytIframe.src = embedUrl;
-      setTimeout(kickYouTubePlayback, 700);
-      setTimeout(kickYouTubePlayback, 1500);
+      fetchYouTubeAudioUrl(videoId).then(audioUrl => {
+        if (runtimeKey !== rk) return; // stale
+        if (!audioUrl) { console.error('[MusicPlayer][YT] No audio URL'); stopAll(); return; }
 
-      setTimeout(() => {
-        if (runtimeKey !== rk) return;
-        const noRuntimeYet = !ytLastRuntimeAt || (Date.now() - ytLastRuntimeAt > 3000);
-        const noProgressYet = !ytLastProgressAt || (Date.now() - ytLastProgressAt > 3000);
-        if ((noRuntimeYet || noProgressYet) && Date.now() - ytLastNoRuntimeWarnAt > 3000) {
-          ytLastNoRuntimeWarnAt = Date.now();
-          console.warn('[MusicPlayer][YT] No runtime/progress after start.', {
-            trackId: track.id,
-            ytPlayerReady,
-            iframeHasSrc: Boolean(ytIframe.src),
-            noRuntimeYet,
-            noProgressYet,
-          });
-        }
-      }, 3500);
-    } else if (ytPlayerReady) {
-      kickYouTubePlayback();
+        bgAudio.loop = repeat;
+        bgAudio.volume = effectiveVol();
+        bgAudio.src = audioUrl;
+        bgAudio.play().then(() => {
+          const drift = Math.abs((bgAudio.currentTime || 0) - posSec);
+          if (drift > 2) {
+            try { bgAudio.currentTime = posSec; } catch (_) {}
+          }
+        }).catch(e => console.warn('[MusicPlayer][YT] play() blocked:', e?.message || e));
+      });
+    } else {
+      bgAudio.volume = effectiveVol();
     }
     return;
   }
 
-  stopYouTube();
-
   if (type === 'audio' || type === 'dropbox') {
     stopSpotify();
+    currentYtTrackId = '';
     const url = type === 'dropbox' ? normalizeDropbox(track.url) : String(track.url).trim();
     const rk = `${track.id}|${type}|${state.anchorTimestampMs}`;
     if (runtimeKey !== rk) {
