@@ -182,6 +182,7 @@ bgAudio.addEventListener('loadedmetadata', () => {
 let _wantPlay = false;
 let _pendingPos = 0;
 let _retryTimer = null;
+let _lastAnchorTs = 0; // track anchorTimestampMs to detect deliberate seeks
 
 function _doPlay() {
   if (!_wantPlay || !bgAudio.src) return;
@@ -219,16 +220,37 @@ bgAudio.addEventListener('canplay', () => {
   if (_wantPlay) _doPlay();
 });
 
+// For large files: if seek failed because data wasn't buffered yet, retry on progress
+bgAudio.addEventListener('progress', () => {
+  if (_pendingPos > 1 && bgAudio.readyState >= 1) {
+    const target = _pendingPos;
+    try {
+      bgAudio.currentTime = target;
+      _pendingPos = 0;
+    } catch (_) {}
+  }
+});
+
 function tryPlay(posSec) {
   _wantPlay = true;
   _pendingPos = posSec;
   _doPlay();
 }
 
-function syncPosition(posSec) {
+function syncPosition(posSec, anchorTimestampMs) {
   if (!bgAudio.src || bgAudio.paused) return;
-  // Don't sync position for Edge Function streams — seeking re-fetches the whole stream
-  if (currentYtTrackId) return;
+  if (currentYtTrackId) {
+    // For YT streams: only seek when the GM explicitly seeked (anchor timestamp changed)
+    if (anchorTimestampMs && anchorTimestampMs !== _lastAnchorTs) {
+      _lastAnchorTs = anchorTimestampMs;
+      const drift = Math.abs((bgAudio.currentTime || 0) - posSec);
+      if (drift > 2) {
+        _pendingPos = posSec;
+        try { bgAudio.currentTime = posSec; } catch (_) {}
+      }
+    }
+    return;
+  }
   const drift = Math.abs((bgAudio.currentTime || 0) - posSec);
   if (drift > 5) {
     try { bgAudio.currentTime = posSec; } catch (_) {}
@@ -258,6 +280,7 @@ function applyMusic(metadata) {
     if (runtimeKey !== rk) {
       runtimeKey = rk;
       currentYtTrackId = track.id;
+      _lastAnchorTs = state.anchorTimestampMs;
       bgAudio.loop = state.repeat;
       setVol();
       // Stream through Edge Function to avoid ERR_CONTENT_DECODING_FAILED
@@ -269,7 +292,7 @@ function applyMusic(metadata) {
       if (bgAudio.src && bgAudio.paused) {
         tryPlay(posSec);
       } else {
-        syncPosition(posSec);
+        syncPosition(posSec, state.anchorTimestampMs);
       }
     }
     return;

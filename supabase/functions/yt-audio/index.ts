@@ -121,7 +121,16 @@ serve(async (req: Request) => {
     const rangeHeader = req.headers.get("range");
     if (rangeHeader) fetchHeaders["Range"] = rangeHeader;
 
-    const audioResp = await fetch(result.url, { headers: fetchHeaders });
+    let audioResp = await fetch(result.url, { headers: fetchHeaders });
+
+    // If cached URL expired (403/410), invalidate cache and re-resolve
+    if ((audioResp.status === 403 || audioResp.status === 410) && audioUrl) {
+      urlCache.delete(videoId);
+      const fresh = await resolveAudioUrl(videoId);
+      setCachedUrl(videoId, fresh.url);
+      audioResp = await fetch(fresh.url, { headers: fetchHeaders });
+    }
+
     if (!audioResp.ok && audioResp.status !== 206) {
       return new Response(
         JSON.stringify({ error: `Audio fetch failed: HTTP ${audioResp.status}` }),
