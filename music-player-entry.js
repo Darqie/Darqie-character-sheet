@@ -12,6 +12,32 @@ const SUPABASE_TABLE = 'room_music_state';
 const bgAudio = document.getElementById('bgAudio');
 const spotifyIframe = document.getElementById('spotifyIframe');
 
+// Debug: log all audio element events
+['loadstart', 'loadeddata', 'loadedmetadata', 'canplay', 'canplaythrough',
+ 'play', 'playing', 'pause', 'ended', 'error', 'stalled', 'suspend',
+ 'waiting', 'abort', 'emptied'].forEach(evt => {
+  bgAudio.addEventListener(evt, () => {
+    const info = {
+      event: evt,
+      paused: bgAudio.paused,
+      muted: bgAudio.muted,
+      readyState: bgAudio.readyState,
+      networkState: bgAudio.networkState,
+      currentTime: bgAudio.currentTime,
+      duration: bgAudio.duration,
+      src: bgAudio.src?.substring(0, 80),
+    };
+    if (evt === 'error') {
+      const e = bgAudio.error;
+      info.errorCode = e?.code;
+      info.errorMsg = e?.message;
+      console.error('[MusicPlayer][audio]', info);
+    } else {
+      console.info('[MusicPlayer][audio]', info);
+    }
+  });
+});
+
 let volKey = `${VOL_PREFIX}.global.player`;
 let globalVol = 1;
 let runtimeKey = '';
@@ -187,20 +213,30 @@ bgAudio.addEventListener('loadedmetadata', () => {
 });
 
 function tryPlay(posSec) {
+  console.info('[MusicPlayer] tryPlay called', {
+    src: bgAudio.src?.substring(0, 80),
+    paused: bgAudio.paused,
+    readyState: bgAudio.readyState,
+    muted: bgAudio.muted,
+    posSec,
+  });
   // First attempt: play muted then unmute (bypasses some autoplay policies)
   const vol = bgAudio.volume;
   bgAudio.muted = true;
   bgAudio.play().then(() => {
+    console.info('[MusicPlayer] muted play() succeeded, unmuting');
     bgAudio.muted = false;
     bgAudio.volume = vol;
     const drift = Math.abs((bgAudio.currentTime || 0) - posSec);
     if (drift > 2) {
       try { bgAudio.currentTime = posSec; } catch (_) {}
     }
-  }).catch(() => {
+  }).catch((mErr) => {
+    console.warn('[MusicPlayer] muted play() failed:', mErr?.message);
     bgAudio.muted = false;
     // Unmuted retry
     bgAudio.play().then(() => {
+      console.info('[MusicPlayer] unmuted play() succeeded');
       const drift = Math.abs((bgAudio.currentTime || 0) - posSec);
       if (drift > 2) {
         try { bgAudio.currentTime = posSec; } catch (_) {}
@@ -240,18 +276,22 @@ function applyMusic(metadata) {
       });
 
       fetchYouTubeAudioUrl(videoId).then(audioUrl => {
-        if (runtimeKey !== rk) return; // stale
+        if (runtimeKey !== rk) { console.warn('[MusicPlayer][YT] stale runtimeKey, ignoring'); return; }
         if (!audioUrl) { console.error('[MusicPlayer][YT] No audio URL'); stopAll(); return; }
 
+        console.info('[MusicPlayer][YT] Setting bgAudio.src', { url: audioUrl.substring(0, 100) });
         bgAudio.loop = repeat;
         bgAudio.volume = effectiveVol();
         bgAudio.src = audioUrl;
         tryPlay(posSec);
-      });
+      }).catch(e => console.error('[MusicPlayer][YT] fetchYouTubeAudioUrl threw:', e));
     } else {
       bgAudio.volume = effectiveVol();
       // Retry play if autoplay was previously blocked
-      if (bgAudio.src && bgAudio.paused) tryPlay(posSec);
+      if (bgAudio.src && bgAudio.paused) {
+        console.info('[MusicPlayer][YT] retry play (was paused)', { src: bgAudio.src?.substring(0, 80) });
+        tryPlay(posSec);
+      }
     }
     return;
   }
