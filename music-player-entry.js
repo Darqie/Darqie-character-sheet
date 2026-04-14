@@ -191,9 +191,6 @@ function _doPlay() {
   bgAudio.play().then(() => {
     _wantPlay = false;
     _clearRetry();
-    if (_pendingPos > 0) {
-      try { bgAudio.currentTime = _pendingPos; _pendingPos = 0; } catch (_) {}
-    }
   }).catch(() => {
     _scheduleRetry();
   });
@@ -212,6 +209,10 @@ function _clearRetry() {
 }
 
 bgAudio.addEventListener('canplay', () => {
+  if (_pendingPos > 0) {
+    try { bgAudio.currentTime = _pendingPos; } catch (_) {}
+    _pendingPos = 0;
+  }
   if (_wantPlay) _doPlay();
 });
 
@@ -225,15 +226,7 @@ function syncPosition(posSec) {
   if (!bgAudio.src || bgAudio.paused) return;
   const drift = Math.abs((bgAudio.currentTime || 0) - posSec);
   if (drift > 5) {
-    // Only seek if target is within a buffered range
-    const buf = bgAudio.buffered;
-    for (let i = 0; i < buf.length; i++) {
-      if (posSec >= buf.start(i) && posSec <= buf.end(i)) {
-        try { bgAudio.currentTime = posSec; } catch (_) {}
-        return;
-      }
-    }
-    // Target not buffered — don't seek (would restart the stream)
+    try { bgAudio.currentTime = posSec; } catch (_) {}
   }
 }
 
@@ -265,7 +258,7 @@ function applyMusic(metadata) {
       fetchYouTubeAudioUrl(videoId).then((audioUrl) => {
         if (!audioUrl || runtimeKey !== rk) return;
         bgAudio.src = audioUrl;
-        tryPlay(0); // start from 0 — seeking to unbuffered position breaks streaming
+        tryPlay(posSec);
       });
     } else {
       bgAudio.loop = state.repeat;
