@@ -1,149 +1,52 @@
 import OBR from '@owlbear-rodeo/sdk';
 
-/**
- * Music Player — runs inside OBR 1×1 popover (audio-player.html).
- * OBR grants allow="autoplay" to the popover → bgAudio.play() works.
- * All users (GM + players) hear audio here.
- *
- * YouTube  → Cobalt API (new → old format) → Piped fallback → bgAudio
- * Dropbox/audio → bgAudio directly
- * Spotify  → hidden <iframe>
- */
+const PLAYLIST_KEY = 'darqie.v2.musicPlaylist';
+const STATE_KEY = 'darqie.v2.musicState';
+const VOL_PREFIX = 'darqie.v2.musicVolume';
+const DEFAULT_VOL = 0.7;
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-
-const PLAYLIST_KEY   = 'darqie.v2.musicPlaylist';
-const STATE_KEY      = 'darqie.v2.musicState';
-const VOL_PREFIX     = 'darqie.v2.musicVolume';
-const DEFAULT_VOL    = 0.7;
-
-const SUPABASE_URL   = 'https://yoaazfbttqfanxackrvv.supabase.co';
-const SUPABASE_KEY   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlvYWF6ZmJ0dHFmYW54YWNrcnZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwOTYwMDIsImV4cCI6MjA4OTY3MjAwMn0.NnU7pE9CsVKduI6ZPUmoTql1Vxxw4YFcbXRvJiOUu8E';
+const SUPABASE_URL = 'https://yoaazfbttqfanxackrvv.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlvYWF6ZmJ0dHFmYW54YWNrcnZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwOTYwMDIsImV4cCI6MjA4OTY3MjAwMn0.NnU7pE9CsVKduI6ZPUmoTql1Vxxw4YFcbXRvJiOUu8E';
 const SUPABASE_TABLE = 'room_music_state';
 
-// ── YouTube audio resolver: Cobalt → Piped ────────────────────────────────────
-
-const ytAudioCache = new Map(); // url → { audioUrl, ts }
-const YT_CACHE_TTL = 45 * 60 * 1000;
-
-function extractYtId(u) {
-  try {
-    const url = new URL(String(u || '').trim());
-    const h   = url.hostname.toLowerCase();
-    if (h === 'youtu.be') return url.pathname.replace(/^\//, '').trim();
-    if (h.includes('youtube.com')) {
-      const v = url.searchParams.get('v');
-      if (v) return v.trim();
-      const m = url.pathname.match(/\/embed\/([^/?]+)/i) || url.pathname.match(/\/shorts\/([^/?]+)/i);
-      if (m?.[1]) return m[1].trim();
-    }
-  } catch (_) {}
-  return '';
-}
-
-async function resolveYouTubeAudio(ytUrl) {
-  const cached = ytAudioCache.get(ytUrl);
-  if (cached && Date.now() - cached.ts < YT_CACHE_TTL) {
-    console.log('[Music] YT cache hit');
-    return cached.audioUrl;
-  }
-
-  // 1️⃣ Cobalt new API (v10+)
-  try {
-    const res = await fetch('https://api.cobalt.tools/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ url: ytUrl, downloadMode: 'audio', audioFormat: 'best' }),
-    });
-    if (res.ok) {
-      const d = await res.json().catch(() => null);
-      if ((d?.status === 'tunnel' || d?.status === 'redirect') && d.url) {
-        ytAudioCache.set(ytUrl, { audioUrl: d.url, ts: Date.now() });
-        console.log('[Music] Cobalt v10 resolved ✓');
-        return d.url;
-      }
-      console.warn('[Music] Cobalt v10 status:', d?.status, d?.error?.code);
-    } else {
-      console.warn('[Music] Cobalt v10 HTTP', res.status);
-    }
-  } catch (e) { console.warn('[Music] Cobalt v10 error:', e.message); }
-
-  // 2️⃣ Cobalt old API (v1)
-  try {
-    const res = await fetch('https://api.cobalt.tools/api/json', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ url: ytUrl, isAudioOnly: true, aFormat: 'mp3' }),
-    });
-    if (res.ok) {
-      const d = await res.json().catch(() => null);
-      if ((d?.status === 'stream' || d?.status === 'redirect' || d?.status === 'tunnel') && d.url) {
-        ytAudioCache.set(ytUrl, { audioUrl: d.url, ts: Date.now() });
-        console.log('[Music] Cobalt v1 resolved ✓');
-        return d.url;
-      }
-      console.warn('[Music] Cobalt v1 status:', d?.status);
-    } else {
-      console.warn('[Music] Cobalt v1 HTTP', res.status);
-    }
-  } catch (e) { console.warn('[Music] Cobalt v1 error:', e.message); }
-
-  // 3️⃣ Piped fallback
-  const videoId = extractYtId(ytUrl);
-  if (videoId) {
-    const pipedInstances = [
-      'https://pipedapi.kavin.rocks',
-      'https://piped-api.garudalinux.org',
-      'https://api.piped.projectsegfau.lt',
-    ];
-    for (const base of pipedInstances) {
-      try {
-        const res = await fetch(`${base}/streams/${encodeURIComponent(videoId)}`);
-        if (!res.ok) continue;
-        const d = await res.json().catch(() => null);
-        const stream = d?.audioStreams?.find(s =>
-          s.mimeType?.includes('audio') && (s.mimeType?.includes('mp4') || s.mimeType?.includes('webm'))
-        ) || d?.audioStreams?.[0];
-        if (stream?.url) {
-          ytAudioCache.set(ytUrl, { audioUrl: stream.url, ts: Date.now() });
-          console.log('[Music] Piped resolved via', base, '✓');
-          return stream.url;
-        }
-      } catch (e) { console.warn('[Music] Piped error:', base, e.message); }
-    }
-  }
-
-  console.error('[Music] All YouTube resolvers failed:', ytUrl.slice(-40));
-  return null;
-}
-
-// ── DOM ───────────────────────────────────────────────────────────────────────
-
-const bgAudio       = document.getElementById('bgAudio');
+const bgAudio = document.getElementById('bgAudio');
 const spotifyIframe = document.getElementById('spotifyIframe');
+const ytIframe = document.getElementById('ytIframe');
 
-// ── State ─────────────────────────────────────────────────────────────────────
-
-let volKey     = `${VOL_PREFIX}.global.player`;
-let globalVol  = 1;
+let volKey = `${VOL_PREFIX}.global.player`;
+let globalVol = 1;
 let runtimeKey = '';
 
-// ── Utilities ─────────────────────────────────────────────────────────────────
+let currentRoomId = '';
+let currentYtTrackId = '';
+let ytPlayerReady = false;
+let ytLastRuntimeAt = 0;
+let ytLastNoRuntimeWarnAt = 0;
+let ytLastState = null;
+let ytLastProgressAt = 0;
+let ytLastProgressSec = null;
 
-const clamp = (v, fb = 1) => { const n = Number(v); return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : fb; };
-const tsMs  = (v, fb)     => { const n = Number(v); return (Number.isFinite(n) && n > 0) ? Math.floor(n) : (fb ?? Date.now()); };
+const clamp = (v, fb = 1) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : fb;
+};
+
+const tsMs = (v, fb) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : (fb ?? Date.now());
+};
 
 function normalizeState(raw) {
-  const updatedAt         = tsMs(raw?.updatedAt);
+  const updatedAt = tsMs(raw?.updatedAt);
   const anchorPositionSec = Math.max(0, Number(raw?.anchorPositionSec ?? raw?.positionSec ?? 0) || 0);
   const anchorTimestampMs = tsMs(raw?.anchorTimestampMs, updatedAt);
   return {
-    currentTrackId:   String(raw?.currentTrackId || ''),
-    isPlaying:        Boolean(raw?.isPlaying),
-    repeat:           Boolean(raw?.repeat),
+    currentTrackId: String(raw?.currentTrackId || ''),
+    isPlaying: Boolean(raw?.isPlaying),
+    repeat: Boolean(raw?.repeat),
     anchorPositionSec,
     anchorTimestampMs,
-    globalVolume:     clamp(raw?.globalVolume, 1),
+    globalVolume: clamp(raw?.globalVolume, 1),
     updatedAt,
   };
 }
@@ -156,8 +59,8 @@ function getPosSec(state) {
 function detectType(url) {
   const c = String(url || '').toLowerCase();
   if (c.includes('youtube.com/') || c.includes('youtu.be/')) return 'youtube';
-  if (c.includes('open.spotify.com/'))                        return 'spotify';
-  if (c.includes('dropbox.com/'))                             return 'dropbox';
+  if (c.includes('open.spotify.com/')) return 'spotify';
+  if (c.includes('dropbox.com/')) return 'dropbox';
   return 'audio';
 }
 
@@ -168,100 +71,314 @@ function normalizeDropbox(u) {
     url.searchParams.delete('dl');
     url.searchParams.set('raw', '1');
     return url.toString();
-  } catch (_) { return u; }
+  } catch (_) {
+    return u;
+  }
 }
 
 function toSpotifyUrl(u) {
   try {
     const parts = new URL(String(u || '').trim()).pathname.split('/').filter(Boolean);
     return parts.length >= 2 ? `https://open.spotify.com/embed/${parts[0]}/${parts[1]}` : '';
-  } catch (_) { return ''; }
+  } catch (_) {
+    return '';
+  }
+}
+
+function extractYtId(rawUrl) {
+  try {
+    const url = new URL(String(rawUrl || '').trim());
+    const host = url.hostname.toLowerCase();
+
+    if (host === 'youtu.be') return url.pathname.replace(/^\//, '').trim();
+
+    if (host.includes('youtube.com') || host.includes('music.youtube.com')) {
+      const fromSearch = url.searchParams.get('v');
+      if (fromSearch) return fromSearch.trim();
+
+      const pathMatch =
+        url.pathname.match(/\/embed\/([^/?]+)/i) ||
+        url.pathname.match(/\/shorts\/([^/?]+)/i);
+      if (pathMatch?.[1]) return pathMatch[1].trim();
+    }
+  } catch (_) {}
+
+  return '';
+}
+
+function toYouTubeEmbedUrl(rawUrl, repeat = false, startSec = 0) {
+  const videoId = extractYtId(rawUrl);
+  if (!videoId) {
+    console.warn('[MusicPlayer][YT] Could not extract video id from URL:', rawUrl);
+    return '';
+  }
+
+  const origin = window.location?.origin || '';
+  const query = new URLSearchParams({
+    autoplay: '1',
+    controls: '0',
+    rel: '0',
+    playsinline: '1',
+    modestbranding: '1',
+    iv_load_policy: '3',
+    enablejsapi: '1',
+  });
+
+  if (origin) query.set('origin', origin);
+
+  const normalizedStart = Math.max(0, Math.floor(Number(startSec) || 0));
+  if (normalizedStart > 0) query.set('start', String(normalizedStart));
+
+  if (repeat) {
+    query.set('loop', '1');
+    query.set('playlist', videoId);
+  }
+
+  return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?${query.toString()}`;
+}
+
+function sendYouTubeCommand(func, args = []) {
+  const w = ytIframe?.contentWindow;
+  if (!w) return;
+  try {
+    w.postMessage(JSON.stringify({ event: 'command', func, args }), '*');
+  } catch (_) {}
+}
+
+function sendYouTubeListeningHandshake() {
+  const w = ytIframe?.contentWindow;
+  if (!w) return;
+  try {
+    w.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), '*');
+  } catch (_) {}
+}
+
+function kickYouTubePlayback() {
+  if (!ytIframe?.src) return;
+  sendYouTubeCommand('playVideo');
+  sendYouTubeCommand('setVolume', [100]);
+}
+
+function ytRuntimeStorageKey() {
+  if (!currentRoomId || !currentYtTrackId) return '';
+  return `darqie.v2.ytRuntime.${currentRoomId}.${currentYtTrackId}`;
+}
+
+function writeYtRuntime(currentTime, duration) {
+  const key = ytRuntimeStorageKey();
+  if (!key) return;
+  const c = Number(currentTime);
+  const d = Number(duration);
+  const payload = {
+    ts: Date.now(),
+    currentTime: Number.isFinite(c) ? Math.max(0, c) : null,
+    duration: Number.isFinite(d) && d > 0 ? d : null,
+  };
+  try {
+    localStorage.setItem(key, JSON.stringify(payload));
+    ytLastRuntimeAt = Date.now();
+  } catch (_) {}
+}
+
+function clearYtRuntime() {
+  const key = ytRuntimeStorageKey();
+  if (!key) return;
+  try { localStorage.removeItem(key); } catch (_) {}
 }
 
 function localVol() {
-  try { const v = Number(localStorage.getItem(volKey)); return Number.isFinite(v) ? clamp(v) : DEFAULT_VOL; }
-  catch (_) { return DEFAULT_VOL; }
+  try {
+    const v = Number(localStorage.getItem(volKey));
+    return Number.isFinite(v) ? clamp(v) : DEFAULT_VOL;
+  } catch (_) {
+    return DEFAULT_VOL;
+  }
 }
 
-function effectiveVol() { return localVol() * globalVol; }
+function effectiveVol() {
+  return localVol() * globalVol;
+}
 
-// ── Stop helpers ──────────────────────────────────────────────────────────────
+function stopAudio() {
+  bgAudio.pause();
+  bgAudio.removeAttribute('src');
+  bgAudio.load();
+}
 
-function stopAudio()   { bgAudio.pause(); bgAudio.removeAttribute('src'); bgAudio.load(); }
-function stopSpotify() { spotifyIframe.src = ''; }
-function stopAll()     { console.log('[Music] stopAll'); runtimeKey = ''; stopAudio(); stopSpotify(); }
+function stopSpotify() {
+  spotifyIframe.src = '';
+}
 
-// ── Apply Music ───────────────────────────────────────────────────────────────
+function stopYouTube() {
+  ytPlayerReady = false;
+  ytLastRuntimeAt = 0;
+  ytLastProgressAt = 0;
+  ytLastProgressSec = null;
+  ytLastNoRuntimeWarnAt = 0;
+  ytLastState = null;
+  clearYtRuntime();
+  currentYtTrackId = '';
+  ytIframe.src = '';
+}
+
+function stopAll() {
+  runtimeKey = '';
+  stopAudio();
+  stopSpotify();
+  stopYouTube();
+}
+
+window.addEventListener('storage', (e) => {
+  if (e.key === volKey && bgAudio.src) {
+    bgAudio.volume = effectiveVol();
+  }
+});
+
+ytIframe?.addEventListener('load', () => {
+  ytPlayerReady = false;
+  setTimeout(sendYouTubeListeningHandshake, 120);
+  setTimeout(sendYouTubeListeningHandshake, 500);
+});
+
+window.addEventListener('message', (event) => {
+  const origin = String(event.origin || '');
+  const isYouTubeOrigin =
+    origin.includes('youtube.com') ||
+    origin.includes('youtube-nocookie.com');
+  if (!isYouTubeOrigin) return;
+
+  let data = event.data;
+  if (typeof data === 'string') {
+    try { data = JSON.parse(data); } catch (_) { return; }
+  }
+  if (!data || typeof data !== 'object') return;
+
+  if (data.event === 'onReady') {
+    ytPlayerReady = true;
+    console.info('[MusicPlayer][YT] onReady received');
+    kickYouTubePlayback();
+    return;
+  }
+
+  if (data.event === 'infoDelivery' && data.info) {
+    const info = data.info;
+    const state = Number(info.playerState);
+    if (Number.isFinite(state) && state !== ytLastState) {
+      ytLastState = state;
+      console.info('[MusicPlayer][YT] playerState changed:', state);
+    }
+
+    const currentTime = Number(info.currentTime);
+    const duration = Number(info.duration);
+    if (Number.isFinite(currentTime)) {
+      if (!Number.isFinite(ytLastProgressSec) || currentTime > (ytLastProgressSec + 0.15)) {
+        ytLastProgressSec = currentTime;
+        ytLastProgressAt = Date.now();
+      }
+    }
+
+    if (Number.isFinite(currentTime) || (Number.isFinite(duration) && duration > 0)) {
+      writeYtRuntime(currentTime, duration);
+    }
+  }
+});
 
 function applyMusic(metadata) {
   const playlist = Array.isArray(metadata?.[PLAYLIST_KEY]) ? metadata[PLAYLIST_KEY] : [];
-  const state    = normalizeState(metadata?.[STATE_KEY]);
-  const track    = playlist.find((t) => String(t?.id || '') === state.currentTrackId);
+  const state = normalizeState(metadata?.[STATE_KEY]);
+  const track = playlist.find((t) => String(t?.id || '') === state.currentTrackId);
 
-  console.log('[Music] applyMusic — isPlaying:', state.isPlaying, '| track:', track?.name || 'none');
+  if (!track?.url || !state.isPlaying) {
+    stopAll();
+    return;
+  }
 
-  if (!track?.url || !state.isPlaying) { stopAll(); return; }
-
-  const type   = track.type || detectType(track.url);
+  const type = track.type || detectType(track.url);
   const posSec = getPosSec(state);
-  globalVol    = state.globalVolume;
+  globalVol = state.globalVolume;
   const repeat = state.repeat;
 
-  // ── YouTube → Cobalt/Piped → bgAudio ──────────────────────────────────────
   if (type === 'youtube') {
+    stopAudio();
     stopSpotify();
+
     const rk = `${track.id}|yt|${state.anchorTimestampMs}`;
     if (runtimeKey !== rk) {
       runtimeKey = rk;
-      stopAudio();
-      console.log('[Music] Resolving YouTube:', track.url.slice(-40));
-      resolveYouTubeAudio(track.url).then((audioUrl) => {
-        if (!audioUrl || runtimeKey !== rk) return;
-        bgAudio.loop   = repeat;
-        bgAudio.volume = effectiveVol();
-        bgAudio.src    = audioUrl;
-        bgAudio.play().then(() => {
-          const drift = Math.abs((bgAudio.currentTime || 0) - posSec);
-          if (drift > 2) { try { bgAudio.currentTime = posSec; } catch (_) {} }
-          console.log('[Music] YouTube audio playing ✓');
-        }).catch((e) => console.warn('[Music] play() rejected:', e?.message || e));
-      }).catch(() => {});
-    } else {
-      bgAudio.volume = effectiveVol();
+      currentYtTrackId = track.id;
+      const embedUrl = toYouTubeEmbedUrl(track.url, repeat, posSec);
+      if (!embedUrl) {
+        stopAll();
+        return;
+      }
+
+      console.info('[MusicPlayer][YT] start track', {
+        trackId: track.id,
+        name: track.name,
+        anchorPositionSec: Number(posSec.toFixed(2)),
+        repeat,
+      });
+
+      ytIframe.src = embedUrl;
+      setTimeout(kickYouTubePlayback, 700);
+      setTimeout(kickYouTubePlayback, 1500);
+
+      setTimeout(() => {
+        if (runtimeKey !== rk) return;
+        const noRuntimeYet = !ytLastRuntimeAt || (Date.now() - ytLastRuntimeAt > 3000);
+        const noProgressYet = !ytLastProgressAt || (Date.now() - ytLastProgressAt > 3000);
+        if ((noRuntimeYet || noProgressYet) && Date.now() - ytLastNoRuntimeWarnAt > 3000) {
+          ytLastNoRuntimeWarnAt = Date.now();
+          console.warn('[MusicPlayer][YT] No runtime/progress after start.', {
+            trackId: track.id,
+            ytPlayerReady,
+            iframeHasSrc: Boolean(ytIframe.src),
+            noRuntimeYet,
+            noProgressYet,
+          });
+        }
+      }, 3500);
+    } else if (ytPlayerReady) {
+      kickYouTubePlayback();
     }
     return;
   }
 
-  // ── Audio / Dropbox ───────────────────────────────────────────────────────
+  stopYouTube();
+
   if (type === 'audio' || type === 'dropbox') {
     stopSpotify();
     const url = type === 'dropbox' ? normalizeDropbox(track.url) : String(track.url).trim();
-    const rk  = `${track.id}|${type}|${state.anchorTimestampMs}`;
+    const rk = `${track.id}|${type}|${state.anchorTimestampMs}`;
     if (runtimeKey !== rk) {
-      runtimeKey     = rk;
-      bgAudio.loop   = repeat;
+      runtimeKey = rk;
+      bgAudio.loop = repeat;
       bgAudio.volume = effectiveVol();
-      bgAudio.src    = url;
-      console.log('[Music] Loading audio:', url.slice(-60));
+      bgAudio.src = url;
       bgAudio.play().then(() => {
         const drift = Math.abs((bgAudio.currentTime || 0) - posSec);
-        if (drift > 2) { try { bgAudio.currentTime = posSec; } catch (_) {} }
-        console.log('[Music] Audio playing ✓');
-      }).catch((e) => console.warn('[Music] play() rejected:', e?.message || e));
+        if (drift > 2) {
+          try { bgAudio.currentTime = posSec; } catch (_) {}
+        }
+      }).catch((e) => {
+        console.warn('[MusicPlayer] play() blocked:', e?.message || e);
+      });
     } else {
       bgAudio.volume = effectiveVol();
     }
     return;
   }
 
-  // ── Spotify ───────────────────────────────────────────────────────────────
   if (type === 'spotify') {
     stopAudio();
     const rk = `${track.id}|spotify`;
     if (runtimeKey !== rk) {
       runtimeKey = rk;
       const u = toSpotifyUrl(track.url);
-      if (!u) { stopAll(); return; }
+      if (!u) {
+        stopAll();
+        return;
+      }
       spotifyIframe.src = u;
     }
     return;
@@ -269,8 +386,6 @@ function applyMusic(metadata) {
 
   stopAll();
 }
-
-// ── Supabase snapshot ─────────────────────────────────────────────────────────
 
 async function loadFromSupabase(roomId) {
   try {
@@ -280,42 +395,35 @@ async function loadFromSupabase(roomId) {
     );
     if (!r.ok) return null;
     const rows = await r.json().catch(() => []);
-    const row  = Array.isArray(rows) ? rows[0] : null;
+    const row = Array.isArray(rows) ? rows[0] : null;
     if (!row) return null;
     return {
-      playlist:    Array.isArray(row.playlist_json) ? row.playlist_json : [],
-      state:       normalizeState(row.state_json || {}),
+      playlist: Array.isArray(row.playlist_json) ? row.playlist_json : [],
+      state: normalizeState(row.state_json || {}),
       updatedAtMs: tsMs(Date.parse(row.updated_at || ''), 0),
     };
-  } catch (_) { return null; }
+  } catch (_) {
+    return null;
+  }
 }
 
-// ── Volume sync ───────────────────────────────────────────────────────────────
-
-window.addEventListener('storage', (e) => {
-  if (e.key !== volKey) return;
-  if (bgAudio.src) bgAudio.volume = effectiveVol();
-});
-
-// ── Boot ──────────────────────────────────────────────────────────────────────
-
 OBR.onReady(async () => {
-  console.log('[Music] OBR ready — booting music player');
+  console.info('[MusicPlayer] OBR ready');
 
-  const roomId     = OBR.room?.id || '';
+  const roomId = OBR.room?.id || '';
+  currentRoomId = roomId;
+
   const playerName = await OBR.player.getName().catch(() => 'player');
-  console.log('[Music] roomId:', roomId, '| player:', playerName);
-  volKey    = `${VOL_PREFIX}.${roomId}.${playerName}`;
+  volKey = `${VOL_PREFIX}.${roomId}.${playerName}`;
   globalVol = 1;
 
   let metadata = {};
   try { metadata = await OBR.room.getMetadata(); } catch (_) {}
 
   if (roomId) {
-    const snap   = await loadFromSupabase(roomId);
+    const snap = await loadFromSupabase(roomId);
     const metaTs = tsMs(metadata?.[STATE_KEY]?.updatedAt, 0);
     if (snap && snap.updatedAtMs > metaTs) {
-      console.log('[Music] Using Supabase snapshot (newer)');
       metadata = { ...metadata, [PLAYLIST_KEY]: snap.playlist, [STATE_KEY]: snap.state };
     }
   }
