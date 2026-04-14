@@ -176,19 +176,25 @@ function tryPlay(posSec) {
   bgAudio.play().then(() => {
     bgAudio.muted = false;
     bgAudio.volume = vol;
-    const drift = Math.abs((bgAudio.currentTime || 0) - posSec);
-    if (drift > 2) {
+    if (posSec > 0) {
       try { bgAudio.currentTime = posSec; } catch (_) {}
     }
   }).catch(() => {
     bgAudio.muted = false;
     bgAudio.play().then(() => {
-      const drift = Math.abs((bgAudio.currentTime || 0) - posSec);
-      if (drift > 2) {
+      if (posSec > 0) {
         try { bgAudio.currentTime = posSec; } catch (_) {}
       }
     }).catch(() => {});
   });
+}
+
+function syncPosition(posSec) {
+  if (!bgAudio.src || bgAudio.paused) return;
+  const drift = Math.abs((bgAudio.currentTime || 0) - posSec);
+  if (drift > 2) {
+    try { bgAudio.currentTime = posSec; } catch (_) {}
+  }
 }
 
 function applyMusic(metadata) {
@@ -204,28 +210,32 @@ function applyMusic(metadata) {
   const type = track.type || detectType(track.url);
   const posSec = getPosSec(state);
   globalVol = state.globalVolume;
-  const repeat = state.repeat;
 
   if (type === 'youtube') {
     stopSpotify();
     const videoId = extractYtId(track.url);
     if (!videoId) { stopAll(); return; }
 
-    const rk = `${track.id}|yt|${state.anchorTimestampMs}`;
+    const rk = `${track.id}|yt`;
     if (runtimeKey !== rk) {
       runtimeKey = rk;
       currentYtTrackId = track.id;
       fetchYouTubeAudioUrl(videoId).then(audioUrl => {
         if (runtimeKey !== rk) return;
         if (!audioUrl) { stopAll(); return; }
-        bgAudio.loop = repeat;
+        bgAudio.loop = state.repeat;
         bgAudio.volume = effectiveVol();
         bgAudio.src = audioUrl;
         tryPlay(posSec);
       });
     } else {
+      bgAudio.loop = state.repeat;
       bgAudio.volume = effectiveVol();
-      if (bgAudio.src && bgAudio.paused) tryPlay(posSec);
+      if (bgAudio.src && bgAudio.paused) {
+        tryPlay(posSec);
+      } else {
+        syncPosition(posSec);
+      }
     }
     return;
   }
@@ -234,16 +244,21 @@ function applyMusic(metadata) {
     stopSpotify();
     currentYtTrackId = '';
     const url = type === 'dropbox' ? normalizeDropbox(track.url) : String(track.url).trim();
-    const rk = `${track.id}|${type}|${state.anchorTimestampMs}`;
+    const rk = `${track.id}|${type}`;
     if (runtimeKey !== rk) {
       runtimeKey = rk;
-      bgAudio.loop = repeat;
+      bgAudio.loop = state.repeat;
       bgAudio.volume = effectiveVol();
       bgAudio.src = url;
       tryPlay(posSec);
     } else {
+      bgAudio.loop = state.repeat;
       bgAudio.volume = effectiveVol();
-      if (bgAudio.src && bgAudio.paused) tryPlay(posSec);
+      if (bgAudio.src && bgAudio.paused) {
+        tryPlay(posSec);
+      } else {
+        syncPosition(posSec);
+      }
     }
     return;
   }
