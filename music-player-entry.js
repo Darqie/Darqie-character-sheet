@@ -175,30 +175,47 @@ let _wantPlay = false;
 let _pendingPos = 0;
 
 function _doPlay() {
-  if (!_wantPlay || !bgAudio.src) return;
+  if (!_wantPlay || !bgAudio.src) {
+    console.log('[BgAudio] _doPlay skip: wantPlay=', _wantPlay, 'src=', !!bgAudio.src);
+    return;
+  }
+  console.log('[BgAudio] _doPlay: attempting muted play, pos=', _pendingPos, 'readyState=', bgAudio.readyState);
   const vol = bgAudio.volume;
   bgAudio.muted = true;
   bgAudio.play().then(() => {
     _wantPlay = false;
     bgAudio.muted = false;
     bgAudio.volume = vol;
+    console.log('[BgAudio] muted play() OK, unmuted, vol=', vol);
     if (_pendingPos > 0) {
       try { bgAudio.currentTime = _pendingPos; } catch (_) {}
     }
-  }).catch(() => {
+  }).catch((e1) => {
+    console.warn('[BgAudio] muted play() failed:', e1.message, '— retrying unmuted');
     bgAudio.muted = false;
     bgAudio.play().then(() => {
       _wantPlay = false;
+      console.log('[BgAudio] unmuted play() OK');
       if (_pendingPos > 0) {
         try { bgAudio.currentTime = _pendingPos; } catch (_) {}
       }
-    }).catch(() => {});
+    }).catch((e2) => {
+      console.error('[BgAudio] play() completely failed:', e2.message);
+    });
   });
 }
 
-bgAudio.addEventListener('canplay', _doPlay);
+bgAudio.addEventListener('canplay', () => {
+  console.log('[BgAudio] canplay event, wantPlay=', _wantPlay, 'readyState=', bgAudio.readyState);
+  _doPlay();
+});
+bgAudio.addEventListener('error', () => {
+  const e = bgAudio.error;
+  console.error('[BgAudio] audio error:', e?.code, e?.message);
+});
 
 function tryPlay(posSec) {
+  console.log('[BgAudio] tryPlay called, pos=', posSec, 'src=', bgAudio.src?.substring(0, 80));
   _wantPlay = true;
   _pendingPos = posSec;
   _doPlay();
@@ -217,7 +234,10 @@ function applyMusic(metadata) {
   const state = normalizeState(metadata?.[STATE_KEY]);
   const track = playlist.find((t) => String(t?.id || '') === state.currentTrackId);
 
+  console.log('[BgAudio] applyMusic: trackId=', state.currentTrackId, 'isPlaying=', state.isPlaying, 'hasTrack=', !!track?.url, 'playlistLen=', playlist.length);
+
   if (!track?.url || !state.isPlaying) {
+    console.log('[BgAudio] applyMusic: stopping — no track or not playing');
     stopAll();
     return;
   }
@@ -235,9 +255,11 @@ function applyMusic(metadata) {
     if (runtimeKey !== rk) {
       runtimeKey = rk;
       currentYtTrackId = track.id;
+      console.log('[BgAudio] new YT track, fetching audio URL for', videoId);
       fetchYouTubeAudioUrl(videoId).then(audioUrl => {
         if (runtimeKey !== rk) return;
-        if (!audioUrl) { stopAll(); return; }
+        if (!audioUrl) { console.error('[BgAudio] fetchYouTubeAudioUrl returned null'); stopAll(); return; }
+        console.log('[BgAudio] got audioUrl:', audioUrl.substring(0, 100));
         bgAudio.loop = state.repeat;
         bgAudio.volume = effectiveVol();
         bgAudio.src = audioUrl;
@@ -326,6 +348,7 @@ OBR.onReady(async () => {
   try { metadata = await OBR.room.getMetadata(); } catch (_) {}
 
   // Start playback from OBR metadata immediately (don't wait for Supabase)
+  console.log('[BgAudio] OBR ready, roomId=', roomId, 'metadataKeys=', Object.keys(metadata));
   applyMusic(metadata);
 
   // Then check Supabase for fresher state and update if needed
