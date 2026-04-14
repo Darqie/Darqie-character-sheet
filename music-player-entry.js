@@ -209,8 +209,11 @@ function _clearRetry() {
 }
 
 bgAudio.addEventListener('canplay', () => {
-  if (_pendingPos > 0) {
-    try { bgAudio.currentTime = _pendingPos; } catch (_) {}
+  if (_pendingPos > 1) {
+    const target = _pendingPos;
+    _pendingPos = 0;
+    try { bgAudio.currentTime = target; } catch (_) {}
+  } else {
     _pendingPos = 0;
   }
   if (_wantPlay) _doPlay();
@@ -224,6 +227,8 @@ function tryPlay(posSec) {
 
 function syncPosition(posSec) {
   if (!bgAudio.src || bgAudio.paused) return;
+  // Don't sync position for Edge Function streams — seeking re-fetches the whole stream
+  if (currentYtTrackId) return;
   const drift = Math.abs((bgAudio.currentTime || 0) - posSec);
   if (drift > 5) {
     try { bgAudio.currentTime = posSec; } catch (_) {}

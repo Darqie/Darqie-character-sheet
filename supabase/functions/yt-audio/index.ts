@@ -66,6 +66,21 @@ async function resolveAudioUrl(videoId: string): Promise<{ url: string; bitrate:
   throw new Error(`All instances failed: ${errors.join("; ")}`);
 }
 
+// In-memory cache for resolved URLs (persists across invocations in same isolate)
+const urlCache = new Map<string, { url: string; expiresAt: number }>();
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+function getCachedUrl(videoId: string): string | null {
+  const entry = urlCache.get(videoId);
+  if (entry && entry.expiresAt > Date.now()) return entry.url;
+  urlCache.delete(videoId);
+  return null;
+}
+
+function setCachedUrl(videoId: string, url: string) {
+  urlCache.set(videoId, { url, expiresAt: Date.now() + CACHE_TTL });
+}
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -83,7 +98,16 @@ serve(async (req: Request) => {
   }
 
   try {
-    const result = await resolveAudioUrl(videoId);
+    // Use cached URL for stream requests (Range seeks) to avoid re-resolving
+    let audioUrl = stream ? getCachedUrl(videoId) : null;
+    let result: { url: string; bitrate: number; codec: string };
+
+    if (audioUrl) {
+      result = { url: audioUrl, bitrate: 0, codec: "cached" };
+    } else {
+      result = await resolveAudioUrl(videoId);
+      setCachedUrl(videoId, result.url);
+    }
 
     if (!stream) {
       return new Response(
