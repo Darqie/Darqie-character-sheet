@@ -307,36 +307,6 @@ async function loadMusicFromSupabase(roomId) {
   };
 }
 
-// ── Cobalt API — resolves YouTube URL to a direct audio stream ────────────────
-const cobaltYtCache = new Map(); // ytUrl → { url, ts }
-const COBALT_TTL_MS = 60 * 60 * 1000; // 1 hour
-
-async function resolveYouTubeAsAudio(ytUrl) {
-  const cached = cobaltYtCache.get(ytUrl);
-  if (cached && Date.now() - cached.ts < COBALT_TTL_MS) return cached.url;
-
-  const endpoints = ['https://api.cobalt.tools/'];
-  for (const base of endpoints) {
-    try {
-      const res = await fetch(base, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ url: ytUrl, downloadMode: 'audio' }),
-      });
-      if (!res.ok) continue;
-      const data = await res.json().catch(() => null);
-      if (!data) continue;
-      if ((data.status === 'tunnel' || data.status === 'redirect') && data.url) {
-        cobaltYtCache.set(ytUrl, { url: data.url, ts: Date.now() });
-        console.log('[Music] Cobalt resolved:', ytUrl.slice(-20), '→', data.url.slice(0, 60));
-        return data.url;
-      }
-    } catch (_) {}
-  }
-  console.warn('[Music] Cobalt could not resolve:', ytUrl);
-  return null;
-}
-
 export function initPage({ root }) {
   if (!root) return;
 
@@ -519,9 +489,6 @@ export function initPage({ root }) {
       playPauseButton.innerHTML = '<i class="fas fa-play"></i>';
       nowPlaying.textContent = track ? `Пауза: ${track.name}` : 'Відтворення зупинено';
       stopAllPlayback();
-      // Hide YouTube embed when stopped
-      if (gmYoutubeWrap) { gmYoutubeWrap.style.display = 'none'; if (gmYoutubeIframe) gmYoutubeIframe.src = ''; }
-      stopYtUnmuteRetry();
       return;
     }
 
@@ -557,21 +524,16 @@ export function initPage({ root }) {
       return;
     }
 
-    // YouTube: resolve via Cobalt API → background page plays; tab loads metadata for duration
+    // YouTube playback is handled by background_url iframe.
+    // In GM page we only keep timer UI; duration may remain unknown.
     if (track.type === TRACK_TYPE_YOUTUBE) {
-      const cobaltKey = `cobalt|${track.id}`;
-      if (currentRuntimeKey !== cobaltKey) {
-        currentRuntimeKey = cobaltKey;
+      const ytKey = `yt|${track.id}`;
+      if (currentRuntimeKey !== ytKey) {
+        currentRuntimeKey = ytKey;
         knownDuration = null;
         audioPlayer.pause();
         audioPlayer.removeAttribute('src');
         audioPlayer.load();
-        resolveYouTubeAsAudio(track.url).then((audioUrl) => {
-          if (!audioUrl || !ensureActive() || currentRuntimeKey !== cobaltKey) return;
-          audioPlayer.preload = 'metadata';
-          audioPlayer.src = audioUrl;
-          audioPlayer.load();
-        }).catch(() => {});
       }
       return;
     }
