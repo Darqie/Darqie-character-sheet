@@ -139,6 +139,7 @@ function stopSpotify() {
 function stopAll() {
   runtimeKey = '';
   currentYtTrackId = '';
+  _wantPlay = false;
   stopAudio();
   stopSpotify();
 }
@@ -170,23 +171,37 @@ bgAudio.addEventListener('loadedmetadata', () => {
   if (currentYtTrackId) writeYtRuntime(bgAudio.currentTime, bgAudio.duration);
 });
 
-function tryPlay(posSec) {
+let _wantPlay = false;
+let _pendingPos = 0;
+
+function _doPlay() {
+  if (!_wantPlay || !bgAudio.src) return;
   const vol = bgAudio.volume;
   bgAudio.muted = true;
   bgAudio.play().then(() => {
+    _wantPlay = false;
     bgAudio.muted = false;
     bgAudio.volume = vol;
-    if (posSec > 0) {
-      try { bgAudio.currentTime = posSec; } catch (_) {}
+    if (_pendingPos > 0) {
+      try { bgAudio.currentTime = _pendingPos; } catch (_) {}
     }
   }).catch(() => {
     bgAudio.muted = false;
     bgAudio.play().then(() => {
-      if (posSec > 0) {
-        try { bgAudio.currentTime = posSec; } catch (_) {}
+      _wantPlay = false;
+      if (_pendingPos > 0) {
+        try { bgAudio.currentTime = _pendingPos; } catch (_) {}
       }
     }).catch(() => {});
   });
+}
+
+bgAudio.addEventListener('canplay', _doPlay);
+
+function tryPlay(posSec) {
+  _wantPlay = true;
+  _pendingPos = posSec;
+  _doPlay();
 }
 
 function syncPosition(posSec) {
@@ -310,15 +325,19 @@ OBR.onReady(async () => {
   let metadata = {};
   try { metadata = await OBR.room.getMetadata(); } catch (_) {}
 
+  // Start playback from OBR metadata immediately (don't wait for Supabase)
+  applyMusic(metadata);
+
+  // Then check Supabase for fresher state and update if needed
   if (roomId) {
     const snap = await loadFromSupabase(roomId);
     const metaTs = tsMs(metadata?.[STATE_KEY]?.updatedAt, 0);
     if (snap && snap.updatedAtMs > metaTs) {
       metadata = { ...metadata, [PLAYLIST_KEY]: snap.playlist, [STATE_KEY]: snap.state };
+      applyMusic(metadata);
     }
   }
 
-  applyMusic(metadata);
   OBR.room.onMetadataChange(applyMusic);
 
   setInterval(async () => {

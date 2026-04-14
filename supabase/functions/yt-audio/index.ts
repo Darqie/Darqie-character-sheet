@@ -52,14 +52,19 @@ serve(async (req) => {
             return bb - ba;
           })[0];
         if (!best?.url) throw new Error("no audio streams");
-        // Ensure the URL goes through the Invidious proxy (not direct googlevideo.com)
         let audioUrl = best.url;
-        if (audioUrl.includes("googlevideo.com")) {
-          // Construct proxied URL through the Invidious instance
+        // Check if the URL domain (not query params) points to googlevideo.com
+        const urlHost = new URL(audioUrl).hostname;
+        if (urlHost.includes("googlevideo.com")) {
+          // Direct googlevideo URL — needs proxy through Invidious
           const itag = best.itag || audioUrl.match(/itag=(\d+)/)?.[1];
           if (itag) {
             audioUrl = `${instance}/latest_version?id=${encodeURIComponent(videoId)}&itag=${itag}&local=true`;
           }
+        }
+        // Ensure HTTPS
+        if (audioUrl.startsWith("http://")) {
+          audioUrl = "https://" + audioUrl.slice(7);
         }
         const codec = best.encoding || best.type?.match(/codecs="([^"]+)"/)?.[1] || "unknown";
         return { url: audioUrl, bitrate: parseInt(String(best.bitrate || "0"), 10), codec };
