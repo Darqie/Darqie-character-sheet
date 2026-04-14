@@ -150,6 +150,14 @@
     </button>
   </div>
 
+  <div id="gmMusicNowPlaying" class="gm-music-now-playing">Трек не вибрано</div>
+
+  <div id="gmMusicSeekWrap" class="gm-music-seek-wrap">
+    <span id="gmMusicCurrentTime" class="gm-music-time">0:00</span>
+    <input id="gmMusicSeekBar" type="range" min="0" max="100" step="1" value="0" />
+    <span id="gmMusicDuration" class="gm-music-time">—</span>
+  </div>
+
   <div class="gm-music-controls">
     <div class="gm-music-controls-left">
       <button id="gmMusicPrevButton" class="gm-music-btn" type="button" title="Попередній"><i class="fas fa-backward"></i></button>
@@ -169,14 +177,6 @@
         <span id="gmMusicVolumeValue">70%</span>
       </label>
     </div>
-  </div>
-
-  <div id="gmMusicNowPlaying" class="gm-music-now-playing">Трек не вибрано</div>
-
-  <div id="gmMusicSeekWrap" class="gm-music-seek-wrap">
-    <span id="gmMusicCurrentTime" class="gm-music-time">0:00</span>
-    <input id="gmMusicSeekBar" type="range" min="0" max="100" step="1" value="0" />
-    <span id="gmMusicDuration" class="gm-music-time">—</span>
   </div>
   <audio id="gmMusicAudioPlayer" preload="none" style="display:none;"></audio>
 
